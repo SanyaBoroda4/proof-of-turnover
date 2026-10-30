@@ -126,6 +126,18 @@ def make_test_image():
     return image
 
 
+def count_segmented_objects(output_text):
+    """Count detected objects in SAM output text.
+
+    Each detected object yields one "box" record plus one "mask" record;
+    count masks only so each object is counted once.
+    """
+    parser = meta_sam_parser.image_segmentation_format().create_parser()
+    parser.push(output_text)
+    finish = parser.finish(meta_sam_parser.CompletedOutcome())
+    return sum(1 for r in finish.result.records if r.kind == "mask")
+
+
 def check_sam(client):
     print("=== Check (c): sam-3.1 segmentation ===")
     image = make_test_image()
@@ -155,15 +167,12 @@ def check_sam(client):
         print(f"FAIL (c): sam call failed: {exc}")
         return False
     try:
-        parser = meta_sam_parser.image_segmentation_format().create_parser()
-        parser.push(response.output_text)
-        finish = parser.finish(meta_sam_parser.CompletedOutcome())
+        found = count_segmented_objects(response.output_text)
     except Exception as exc:
         print(f"FAIL (c): could not parse sam output: {exc}")
         return False
-    found = [r for r in finish.result.records if r.kind in ("mask", "box")]
-    print(f"Found {len(found)} red square(s) (expected 3)")
-    if len(found) != 3:
+    print(f"Found {found} red square(s) (expected 3)")
+    if found != 3:
         print("FAIL (c): expected 3 squares")
         return False
     print("OK (c): found all 3 squares")
