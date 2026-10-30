@@ -24,7 +24,9 @@ import numpy
 from dotenv import load_dotenv
 from openai import APIStatusError, OpenAI
 
-import meta_sam_parser
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from pot.sam import detect
 
 load_dotenv()
 
@@ -127,15 +129,8 @@ def make_test_image():
 
 
 def count_segmented_objects(output_text):
-    """Count detected objects in SAM output text.
-
-    Each detected object yields one "box" record plus one "mask" record;
-    count masks only so each object is counted once.
-    """
-    parser = meta_sam_parser.image_segmentation_format().create_parser()
-    parser.push(output_text)
-    finish = parser.finish(meta_sam_parser.CompletedOutcome())
-    return sum(1 for r in finish.result.records if r.kind == "mask")
+    """Count detected objects in SAM output text (one per object id)."""
+    return len(detect(output_text))
 
 
 def check_sam(client):
