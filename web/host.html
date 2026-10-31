@@ -15,6 +15,11 @@
   .banner.needs_input { background: #fff8c5; }
   .banner.awaiting_signoff { background: #ddf4ff; }
   .banner.done { background: #dafbe1; }
+  .news { display: flex; gap: 10px; overflow-x: auto; padding: 4px 0 12px; }
+  .news .card { flex: 0 0 200px; border: 1px solid #ddd; border-radius: 8px;
+                padding: 8px 10px; font-size: 13px; }
+  .news .card img { width: 100%; border-radius: 4px; margin-top: 6px; }
+  .news .time { color: #57606a; font-size: 12px; }
   table.items { width: 100%; border-collapse: collapse; font-size: 15px; }
   table.items td, table.items th { border-bottom: 1px solid #eee; padding: 8px 10px;
          text-align: left; vertical-align: top; }
@@ -42,7 +47,7 @@
   .sendback-list label { display: block; padding: 3px 0; font-size: 15px; }
   .error { background: #ffebe9; border-radius: 10px; padding: 14px; margin: 12px 0; }
   .small { font-size: 13px; color: #57606a; }
-  ul.runs li { margin: 8px 0; font-size: 17px; }
+  ul.runs li { margin: 8px 0; font-size: 15px; }
 </style>
 </head>
 <body>
@@ -52,7 +57,9 @@
 "use strict";
 const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
-const RUN = params.get("run") || "";
+const FOLLOW = !params.get("run");
+let RUN = params.get("run") || "";
+let status = null, calls = [], runsList = [], lastKey = null, qrRun = "";
 
 async function api(path, opts) {
   const r = await fetch(path, opts || {});
@@ -76,22 +83,37 @@ const STATE_TEXT = {
   done: "Approved",
 };
 
-function evidenceUrl(itemId) {
-  return `/api/runs/${encodeURIComponent(RUN)}/evidence/${encodeURIComponent(itemId)}`;
+function overviewUrl(photoId) {
+  return `/api/runs/${encodeURIComponent(RUN)}/photos/${encodeURIComponent(photoId)}/overview`;
 }
 
-function renderRuns(app, runs) {
-  app.innerHTML = `<h1>Turnovers</h1><ul class="runs">` + runs.map(r =>
-    `<li><a href="/host?run=${esc(r.run_id)}&code=${esc(CODE)}">${esc(r.run_id)}</a>
-     <span class="small">${esc(r.property)} · ${esc(r.agent_state)}</span></li>`
-  ).join("") + `</ul>`;
+function evidenceUrl(item) {
+  if (item.has_evidence) {
+    return `/api/runs/${encodeURIComponent(RUN)}/evidence/${encodeURIComponent(item.id)}?v=${encodeURIComponent(item.photo_id)}`;
+  }
+  if (item.photo_id) return overviewUrl(item.photo_id);
+  return "";
 }
 
-function renderStatus(app, status, calls) {
+function newsHtml() {
+  const news = status.news || [];
+  if (!news.length) return "";
+  const cards = news.map(ev => {
+    const img = ev.photo_id ? `<img src="${overviewUrl(ev.photo_id)}" alt="" loading="lazy">` : "";
+    const what = ev.item_label
+      ? `${esc(ev.room_name)} — ${esc(ev.item_label)}: ${esc(ev.status)}` : esc(ev.text);
+    return `<div class="card"><div class="time">${esc(ev.time || "")}</div>
+      <div>${what}</div>${img}</div>`;
+  }).join("");
+  return `<h2>Latest news</h2><div class="news">${cards}</div>`;
+}
+
+function renderStatus(app) {
   const rooms = status.rooms.map(room => {
     const rows = room.items.map(item => {
-      const ev = item.has_evidence
-        ? `<img class="thumb" src="${evidenceUrl(item.id)}" data-full="${evidenceUrl(item.id)}" alt="evidence" loading="lazy">`
+      const url = evidenceUrl(item);
+      const ev = url
+        ? `<img class="thumb" src="${url}" data-full="${url}" alt="evidence" loading="lazy">`
         : "";
       const req = item.request ? `<div class="small">Request: ${esc(item.request.host)}</div>` : "";
       const crit = item.critical ? "" : ` <span class="small">(optional)</span>`;
@@ -115,9 +137,15 @@ function renderStatus(app, status, calls) {
     return `<label><input type="checkbox" value="${esc(id)}"> ${esc(label)}</label>`;
   }).join("");
 
+  const older = runsList.filter(r => r.run_id !== RUN).map(r =>
+    `<li><a href="/host?run=${esc(r.run_id)}&code=${esc(CODE)}">${esc(r.run_id)}</a>
+     <span class="small">${esc(r.property)} · ${esc(r.agent_state)}</span></li>`
+  ).join("");
+
   app.innerHTML = `
     <h1>Turnover ${esc(status.run_id)}</h1>
     <div class="banner ${esc(status.agent_state)}">${esc(STATE_TEXT[status.agent_state] || status.agent_state)}</div>
+    ${newsHtml()}
     <div class="row">
       <div>
         <h2>Sign off</h2>
@@ -132,6 +160,8 @@ function renderStatus(app, status, calls) {
         <h2>Cleaner link</h2>
         <img id="qr" alt="QR code for the cleaner page">
         <div class="small" id="cleanUrl"></div>
+        <h2>Older turnovers</h2>
+        <ul class="runs">${older || "<li class='small'>None.</li>"}</ul>
       </div>
     </div>
     ${rooms}
@@ -139,12 +169,13 @@ function renderStatus(app, status, calls) {
     <table class="calls"><tr><th>Time</th><th>Model</th><th>Checked</th><th>Photo</th><th>Sec</th><th>Live/recorded</th></tr>${callRows}</table>`;
 
   document.getElementById("approve").onclick = async () => {
-    const r = await api(`/api/runs/${encodeURIComponent(RUN)}/signoff`, {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/signoff`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({decision: "approve"}),
     });
     document.getElementById("signMsg").textContent = "Approved.";
-    boot();
+    await refresh();
+    renderMaybe(true);
   };
   document.getElementById("sendback").onclick = async () => {
     const items = Array.from(document.querySelectorAll(".sendback-list input:checked"))
@@ -156,7 +187,8 @@ function renderStatus(app, status, calls) {
         body: JSON.stringify({decision: "sendback", notes: notes, item_ids: items}),
       });
       document.getElementById("signMsg").textContent = "Sent back.";
-      boot();
+      await refresh();
+      renderMaybe(true);
     } catch (e) {
       document.getElementById("signMsg").textContent = e.message;
     }
@@ -167,20 +199,29 @@ function renderStatus(app, status, calls) {
       document.getElementById("overlay").style.display = "block";
     };
   });
-  document.getElementById("overlay").onclick = () => {
-    document.getElementById("overlay").style.display = "none";
-  };
-  setQr();
+  if (qrRun !== RUN) {
+    qrRun = RUN;
+    setQr();
+  }
 }
 
-async function setQr() {
-  let host = location.hostname;
-  if (!host || host === "localhost" || host === "127.0.0.1") {
-    try { host = (await api("/api/server-ip")).ip; } catch (e) {}
-  }
-  const url = `${location.protocol}//${host}:${location.port}/clean?run=${encodeURIComponent(RUN)}&code=${encodeURIComponent(CODE)}`;
+function setQr() {
+  const url = `${location.protocol}//${location.host}/clean?code=${encodeURIComponent(CODE)}`;
   document.getElementById("qr").src = `/api/qr?text=${encodeURIComponent(url)}`;
   document.getElementById("cleanUrl").textContent = url;
+}
+
+function renderMaybe(force) {
+  if (!force) {
+    const notes = document.getElementById("notes");
+    const dirty = notes && (notes.value ||
+      document.querySelector(".sendback-list input:checked"));
+    if (dirty) return;
+  }
+  const key = JSON.stringify([RUN, status, calls]);
+  if (!force && key === lastKey) return;
+  lastKey = key;
+  renderStatus(document.getElementById("app"));
 }
 
 function fail(app, e) {
@@ -189,28 +230,55 @@ function fail(app, e) {
     : `<div class="error">${esc(e.message)}</div>`;
 }
 
+function useRun(runId) {
+  RUN = runId;
+  const url = new URL(location.href);
+  url.searchParams.set("run", RUN);
+  history.replaceState(null, "", url);
+}
+
+async function fetchRunsList() {
+  try { runsList = (await api("/api/runs")).runs; }
+  catch (e) { runsList = []; }
+}
+
+async function refresh() {
+  if (FOLLOW) {
+    const latest = (await api("/api/runs/latest")).run_id;
+    if (!latest) return false;
+    if (latest !== RUN) {
+      useRun(latest);
+      await fetchRunsList();
+    }
+  }
+  const [s, c] = await Promise.all([
+    api(`/api/runs/${encodeURIComponent(RUN)}/status`),
+    api(`/api/runs/${encodeURIComponent(RUN)}/calls`),
+  ]);
+  status = s;
+  calls = c.calls;
+  return true;
+}
+
 async function boot() {
+  document.getElementById("overlay").onclick = () => {
+    document.getElementById("overlay").style.display = "none";
+  };
   const app = document.getElementById("app");
   try {
-    if (!RUN) {
-      renderRuns(app, (await api("/api/runs")).runs);
-      return;
+    await fetchRunsList();
+    if (!(await refresh())) {
+      app.innerHTML = "<h1>Turnovers</h1><p>No turnovers yet — start one from the cleaner page.</p>";
+    } else {
+      renderMaybe();
     }
-    const [status, callData] = await Promise.all([
-      api(`/api/runs/${encodeURIComponent(RUN)}/status`),
-      api(`/api/runs/${encodeURIComponent(RUN)}/calls`),
-    ]);
-    renderStatus(app, status, callData.calls);
     setInterval(async () => {
       try {
-        const [s, c] = await Promise.all([
-          api(`/api/runs/${encodeURIComponent(RUN)}/status`),
-          api(`/api/runs/${encodeURIComponent(RUN)}/calls`),
-        ]);
-        const notes = document.getElementById("notes");
-        const dirty = notes && (notes.value ||
-          document.querySelector(".sendback-list input:checked"));
-        if (!dirty) renderStatus(app, s, c.calls);
+        if (await refresh()) renderMaybe();
+        else {
+          app.innerHTML = "<h1>Turnovers</h1><p>No turnovers yet — start one from the cleaner page.</p>";
+          lastKey = null;
+        }
       } catch (e) {}
     }, 2000);
   } catch (e) { fail(app, e); }

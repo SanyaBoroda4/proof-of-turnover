@@ -8,13 +8,16 @@ item in at least one shot; a missed item gets its own shot added at the
 end of its room.
 """
 
+import argparse
 import base64
 import json
+import sys
+from datetime import datetime
 from pathlib import Path
 
 from pot import prompts
-from pot.checklist import DEFAULT_PROPERTIES_DIR, PropertyError
-from pot.meta_client import MetaClientError
+from pot.checklist import DEFAULT_PROPERTIES_DIR, PropertyError, build_checklist, load_property
+from pot.meta_client import MetaClient, MetaClientError
 
 TOUR_FILENAME = "tour.json"
 HOUSE_PLAN_FILENAME = "house-plan.png"
@@ -31,11 +34,13 @@ def tour_schema():
                     "properties": {
                         "shot_id": {"type": "string"},
                         "room_id": {"type": "string"},
+                        "room_name_es": {"type": "string"},
                         "item_ids": {"type": "array", "items": {"type": "string"}},
                         "instruction_es": {"type": "string"},
                         "instruction_en": {"type": "string"},
                     },
-                    "required": ["shot_id", "room_id", "item_ids", "instruction_es", "instruction_en"],
+                    "required": ["shot_id", "room_id", "room_name_es", "item_ids",
+                                 "instruction_es", "instruction_en"],
                     "additionalProperties": False,
                 },
             }
@@ -89,6 +94,7 @@ def fixup_tour(property, checklist, shots):
         fixed.append({
             "shot_id": shot_id,
             "room_id": room_id,
+            "room_name_es": entry.get("room_name_es") or rooms[room_id]["name"],
             "item_ids": list(item_ids),
             "instruction_es": entry.get("instruction_es") or "",
             "instruction_en": entry.get("instruction_en") or "",
@@ -114,6 +120,7 @@ def fixup_tour(property, checklist, shots):
         fixed.append({
             "shot_id": shot_id,
             "room_id": item.room_id,
+            "room_name_es": rooms[item.room_id]["name"],
             "item_ids": [item.id],
             "instruction_es": f"Foto: {item.label}",
             "instruction_en": item.requirement,
@@ -140,10 +147,13 @@ def fixup_tour(property, checklist, shots):
     return result, notes
 
 
-def save_tour(property_id, shots, properties_dir=None):
+def save_tour(property_id, shots, properties_dir=None, meta=None):
     path = _property_dir(property_id, properties_dir) / TOUR_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"shots": shots}, indent=2), encoding="utf-8")
+    data = {"shots": shots}
+    if meta:
+        data.update(meta)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return path
 
 
@@ -186,5 +196,35 @@ def generate_tour(client, property, checklist, effort=None, properties_dir=None)
     shots, notes = fixup_tour(property, checklist, raw)
     if not shots:
         raise PropertyError(f"Property '{property['id']}': tour has no usable shots")
-    save_tour(property["id"], shots, properties_dir)
+    save_tour(property["id"], shots, properties_dir, meta={
+        "model": getattr(client, "reasoning_model", "unknown"),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+    })
     return shots, notes
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(prog="pot.tour")
+    parser.add_argument("property")
+    args = parser.parse_args(argv[1:])
+    try:
+        property = load_property(args.property)
+    except PropertyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    try:
+        shots, notes = generate_tour(MetaClient(), property, build_checklist(property))
+    except (PropertyError, MetaClientError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Tour for {property['name']}: {len(shots)} shots")
+    for shot in shots:
+        print(f"  {shot['shot_id']} [{shot['room_id']}] "
+              f"{shot['instruction_en']} ({len(shot['item_ids'])} items)")
+    for note in notes:
+        print(f"  note: {note}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

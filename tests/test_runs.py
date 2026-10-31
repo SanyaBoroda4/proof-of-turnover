@@ -249,6 +249,66 @@ def test_approve_marks_done(tmp_path):
     assert signoff["time"]
 
 
+def test_older_photo_stores_nothing_when_verdict_kept(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    first, _ = state.claim_photo(str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    second, _ = state.claim_photo(str(_photo_file(tmp_path / "u2", "b.jpg", "green")), "bed-1")
+    state.merge_result(second.id, _fresh_problem(second.id, item, "mess everywhere"))
+    state.merge_result(first.id, _fresh_problem(first.id, item, "a stain"))
+    assert state.claims[item].photo_id == second.id
+    assert state.seconds[item].reason == "mess everywhere"
+    saved = json.loads((state.run_dir / "proof.json").read_text(encoding="utf-8"))
+    entry = saved["items"][item]
+    assert entry["claim"]["photo_id"] == second.id
+    assert entry["second_look"]["photo_id"] == second.id
+    assert entry["second_look"]["reason"] == "mess everywhere"
+
+
+def test_unclear_result_keeps_old_second_look(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    first, _ = state.claim_photo(str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    state.merge_result(first.id, _fresh_done(first.id, [item]))
+    second, _ = state.claim_photo(str(_photo_file(tmp_path / "u2", "b.jpg", "green")), "bed-1")
+    state.merge_result(second.id, _fresh_unclear(second.id, item))
+    assert state.seconds[item].photo_id == first.id
+    assert state.seconds[item].verdict == "done"
+    saved = json.loads((state.run_dir / "proof.json").read_text(encoding="utf-8"))
+    assert saved["items"][item]["second_look"]["photo_id"] == first.id
+
+
+def test_old_photo_allows_15_minutes_clock_grace(tmp_path):
+    state = _state(tmp_path)
+    close = (state.started_at - timedelta(minutes=5)).strftime("%Y:%m:%d %H:%M:%S")
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u1", "a.jpg", taken=close)), "bed-1"
+    )
+    assert photo.id == "P01"
+    far = (state.started_at - timedelta(minutes=16)).strftime("%Y:%m:%d %H:%M:%S")
+    with pytest.raises(OldPhotoError, match="foto antigua"):
+        state.claim_photo(str(_photo_file(tmp_path / "u2", "b.jpg", taken=far)), "bed-1")
+
+
+def test_news_reports_changes_requests_and_signoff(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item, "mess everywhere"))
+    state.store_requests(
+        [{"item_id": item, "room_id": "bed", "room_name": "Bed",
+          "status": PROBLEM, "cleaner": "Limpia", "host": "Clean"}], [],
+    )
+    state.approve()
+    news = state.status()["news"]
+    assert [e["kind"] for e in news] == ["signoff", "request", "status"]
+    assert news[0]["text"] == "Host approved the turnover"
+    assert news[1]["item_id"] == item and news[1]["photo_id"] == photo.id
+    assert news[1]["text"] == "Limpia"
+    assert news[2]["status"] == PROBLEM and news[2]["room_name"] == "Bed"
+    assert news[2]["photo_id"] == photo.id
+
+
 def test_load_roundtrip_restores_state(tmp_path):
     from pot.checklist import load_property
     from pot.tour import load_tour

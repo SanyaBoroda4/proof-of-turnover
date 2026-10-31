@@ -216,4 +216,6 @@ Rules:
 - Do not list coverage items: a room counts as photographed as soon as any photo of it arrives.
 - Whole-house items belong in a suitable room's shot, not in their own shot.
 - Every critical item must appear in at least one shot.
-- instruction_es: one short Spanish sentence telling the cleaner what to photograph (it is read aloud to her); instruction_en: the English version for the host."""
+- room_name_es: the room's name in Spanish (for example "Baño principal"), so the cleaner can tell similar rooms apart.
+- instruction_es: one short Spanish sentence telling the cleaner what to photograph (it is read aloud to her); name the room in it, since some rooms need the same photo.
+- instruction_en: the English version for the host."""

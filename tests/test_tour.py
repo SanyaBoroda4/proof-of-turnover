@@ -121,3 +121,49 @@ def test_save_and_load_roundtrip(tmp_path):
     shots = [_shot("s1", "bed", ["bed.beds_made"])]
     save_tour("tiny", shots, tmp_path)
     assert load_tour("tiny", tmp_path) == shots
+
+
+def test_fixup_keeps_spanish_room_names():
+    property = tiny_property()
+    checklist = build_checklist(property)
+    given = [_shot("s1", "bed", ["bed.beds_made"])]
+    given[0]["room_name_es"] = "Dormitorio"
+    shots, _notes = fixup_tour(property, checklist, given)
+    assert shots[0]["room_name_es"] == "Dormitorio"
+    extras = [s for s in shots if "-extra-" in s["shot_id"]]
+    assert extras and all(s["room_name_es"] for s in extras)
+
+
+def test_generate_tour_records_model_and_time(tmp_path):
+    property = tiny_property()
+    checklist = build_checklist(property)
+    bed_items = [i.id for i in checklist if i.room_id == "bed" and i.key != "coverage"]
+    shot = _shot("bed-1", "bed", bed_items)
+    shot["room_name_es"] = "Dormitorio"
+    client = FakeSpark(tour=lambda call: {"shots": [shot]})
+    shots, _notes = generate_tour(client, property, checklist, properties_dir=tmp_path)
+    saved = json.loads((tmp_path / "tiny" / "tour.json").read_text(encoding="utf-8"))
+    assert saved["model"] == "unknown"
+    assert saved["generated_at"]
+    assert saved["shots"][0]["room_name_es"] == "Dormitorio"
+
+
+def test_cli_writes_tour(tmp_path, monkeypatch, capsys):
+    from pathlib import Path
+
+    import pot.tour as tour_mod
+
+    props = tmp_path / "properties" / "tiny"
+    props.mkdir(parents=True)
+    definition = json.loads(Path("properties/demo-house/property.json").read_text(encoding="utf-8"))
+    definition["id"] = "tiny"
+    (props / "property.json").write_text(json.dumps(definition), encoding="utf-8")
+    monkeypatch.setattr("pot.checklist.DEFAULT_PROPERTIES_DIR", tmp_path / "properties")
+    monkeypatch.setattr("pot.tour.DEFAULT_PROPERTIES_DIR", tmp_path / "properties")
+    monkeypatch.setattr(tour_mod, "MetaClient", lambda *a, **k: FakeSpark(
+        tour=lambda call: {"shots": []}))
+    assert tour_mod.main(["pot.tour", "tiny"]) == 0
+    out = capsys.readouterr().out
+    assert "shots" in out
+    assert (props / "tour.json").is_file()
+    assert tour_mod.main(["pot.tour", "nope"]) == 1

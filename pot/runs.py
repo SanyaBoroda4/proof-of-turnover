@@ -15,7 +15,7 @@ import os
 import tempfile
 import threading
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from pot.checklist import build_checklist, load_property
@@ -97,6 +97,7 @@ class RunState:
         self.calls = []
         self.checking = set()
         self.photo_seconds = {}
+        self.events = []
         self.signoff = {
             "decision": None,
             "notes": "",
@@ -241,7 +242,8 @@ class RunState:
             if room_id not in self.rooms:
                 raise ValueError(f"Shot '{shot_id}' names unknown room '{room_id}'")
             taken = read_taken_at(upload_path)
-            if taken is not None and taken < self.started_at:
+            # 15 minutes of grace: the phone's clock may differ from the PC's.
+            if taken is not None and taken < self.started_at - timedelta(minutes=15):
                 raise OldPhotoError(
                     "foto antigua: this photo was taken before the tour started, "
                     "take a new one"
@@ -305,19 +307,27 @@ class RunState:
         with self.lock:
             seq = self.photo_seq[photo_id]
             fresh_ids = [i for i in fresh["fresh_ids"] if i in self.items_by_id]
+            # Candidate verdicts come from temporary copies: the claim,
+            # second look and SAM are stored only together with a verdict,
+            # never next to another photo's kept verdict.
+            acc_claims = dict(self.claims)
+            acc_seconds = dict(self.seconds)
+            acc_sams = dict(self.sams)
             for item_id in fresh_ids:
                 if item_id in fresh["claims"]:
-                    self.claims[item_id] = fresh["claims"][item_id]
+                    acc_claims[item_id] = fresh["claims"][item_id]
                 if item_id in fresh["seconds"]:
-                    self.seconds[item_id] = fresh["seconds"][item_id]
+                    acc_seconds[item_id] = fresh["seconds"][item_id]
                 if item_id in fresh["sams"]:
-                    self.sams[item_id] = fresh["sams"][item_id]
-            self.decisions.update(fresh.get("decisions", {}))
+                    acc_sams[item_id] = fresh["sams"][item_id]
+            acc_decisions = dict(self.decisions)
+            acc_decisions.update(fresh.get("decisions", {}))
             computed = prove_all(
-                self.checklist, self.claims, self.seconds, self.sams,
+                self.checklist, acc_claims, acc_seconds, acc_sams,
                 self.assignments, self.coverage,
-                [photo.id for photo in self.photos], self.decisions, self.rooms,
+                [photo.id for photo in self.photos], acc_decisions, self.rooms,
             )
+            self.decisions.update(fresh.get("decisions", {}))
             changes = {}
             for item_id in fresh_ids:
                 new = computed[item_id]
@@ -325,10 +335,18 @@ class RunState:
                 if seq < self.decided_seq.get(item_id, -1):
                     continue
                 if new.status in (PROVEN, PROBLEM) or current.status not in (PROVEN, PROBLEM):
+                    if item_id in fresh["claims"]:
+                        self.claims[item_id] = fresh["claims"][item_id]
+                    if item_id in fresh["seconds"]:
+                        self.seconds[item_id] = fresh["seconds"][item_id]
+                    if item_id in fresh["sams"]:
+                        self.sams[item_id] = fresh["sams"][item_id]
                     self.proofs[item_id] = new
                     self.decided_seq[item_id] = seq
                     if new.status != current.status:
                         changes[item_id] = (current.status, new.status)
+                        self._event_locked("status", item_id, new.status,
+                                           new.photo_id, new.reason)
             shot_id = self.photo_shot.get(photo_id, "")
             if shot_id:
                 try:
@@ -400,6 +418,9 @@ class RunState:
         with self.lock:
             for request in requests:
                 self.requests[request["item_id"]] = request
+                proof = self.proofs.get(request["item_id"])
+                self._event_locked("request", request["item_id"], request["status"],
+                                   proof.photo_id if proof else "", request["cleaner"])
             self.requests = {
                 item_id: request for item_id, request in self.requests.items()
                 if self.proofs.get(item_id) is not None
@@ -412,6 +433,22 @@ class RunState:
         """Append one model-call log entry (memory side of calls.jsonl)."""
         with self.lock:
             self.calls.append(entry)
+
+    def _event_locked(self, kind, item_id=None, status=None, photo_id=None, text=""):
+        """Append a news event (callers hold the lock); keeps the last 50."""
+        item = self.items_by_id.get(item_id) if item_id else None
+        self.events.append({
+            "time": datetime.now().isoformat(timespec="seconds"),
+            "kind": kind,  # status | request | signoff
+            "room_id": item.room_id if item else "",
+            "room_name": item.room_name if item else "",
+            "item_id": item_id or "",
+            "item_label": item.label if item else "",
+            "status": status or "",
+            "photo_id": photo_id or "",
+            "text": text or "",
+        })
+        del self.events[:-50]
 
     # -- sign-off ---------------------------------------------------------
 
@@ -427,6 +464,7 @@ class RunState:
                 "open_items": host_verdict.problems + host_verdict.need_photo,
             }
             self.notes.append("Host approved the turnover")
+            self._event_locked("signoff", text="Host approved the turnover")
             self._save_locked()
             return dict(self.signoff)
 
@@ -440,6 +478,8 @@ class RunState:
                 )
                 self.decided_seq[item_id] = len(self.photos)
                 self.requests.pop(item_id, None)
+                self._event_locked("status", item_id, NEEDS_PROOF, "",
+                                   notes or "Host asked for a new photo")
                 stale = self.run_dir / "evidence" / f"{item_id}.jpg"
                 try:
                     stale.unlink()
@@ -454,6 +494,8 @@ class RunState:
                 "open_items": host_verdict.problems + host_verdict.need_photo,
             }
             self.notes.append(f"Host sent back {len(known)} items: {notes}")
+            self._event_locked(
+                "signoff", text=f"Host sent back {len(known)} items: {notes}")
             self._save_locked()
             return dict(self.signoff)
 
@@ -512,6 +554,13 @@ class RunState:
                 room_shots = [s for s in self.tour["shots"] if s["room_id"] == room["id"]]
                 if room_shots and all(s["shot_id"] in taken for s in room_shots):
                     rooms_done += 1
+            recent = []
+            seen_shots = set()
+            for photo in reversed(self.photos):
+                shot_id = self.photo_shot.get(photo.id, "")
+                if shot_id and shot_id not in seen_shots:
+                    seen_shots.add(shot_id)
+                    recent.append({"shot_id": shot_id, "photo_id": photo.id})
             return {
                 "run_id": self.run_dir.name,
                 "property": self.property["id"],
@@ -536,6 +585,8 @@ class RunState:
                 "open": host_verdict.problems + host_verdict.need_photo,
                 "checking": sorted(self.checking),
                 "photo_seconds": dict(self.photo_seconds),
+                "recent": recent,
+                "news": list(reversed(self.events[-8:])),
                 "signoff": dict(self.signoff),
             }
 
@@ -586,6 +637,14 @@ class RunState:
             if not path.is_file():
                 return None
             return path.read_bytes()
+
+    def read_overview(self, photo_id):
+        """A photo's 768 px overview bytes, read under the lock."""
+        with self.lock:
+            photo = self.photos_by_id.get(photo_id)
+            if photo is None or not photo.overview_path.is_file():
+                return None
+            return photo.overview_path.read_bytes()
 
     # -- persistence (callers hold the lock) --------------------------------
 

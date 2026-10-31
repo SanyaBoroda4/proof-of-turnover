@@ -11,6 +11,7 @@ import argparse
 import io
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -36,6 +37,45 @@ from pot.runs import OldPhotoError, RunState
 from pot.tour import fixup_tour, generate_tour, load_tour
 
 COOKIE_NAME = "pot_code"
+ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
+RUN_NAME_PATTERN = re.compile(r"^run-(\d{8})-(\d{6})(?:_(\d+))?$")
+LONG_CACHE = {"Cache-Control": "public, max-age=31536000"}
+
+
+def _checked_id(value, what):
+    """Ids for URLs: letters, digits, dot, dash, underscore only.
+
+    On Windows a backslash in an id is a folder separator, so anything
+    else is rejected before it ever reaches a path.
+    """
+    if not isinstance(value, str) or not ID_PATTERN.match(value):
+        raise HTTPException(400, f"Invalid {what} {value!r}")
+    return value
+
+
+def latest_run_id():
+    """Newest run folder by timestamp, without loading any run."""
+    best, best_key = None, None
+    if config.RUNS_DIR.is_dir():
+        for path in config.RUNS_DIR.iterdir():
+            match = RUN_NAME_PATTERN.match(path.name)
+            if match is None or not (path / "first_look.json").is_file():
+                continue
+            key = (match.group(1) + match.group(2), int(match.group(3) or 0))
+            if best_key is None or key > best_key:
+                best, best_key = path.name, key
+    return best
+
+
+def startup_lines(port, code):
+    """What main() prints: host/cleaner links plus the tunnel recipe."""
+    return [
+        f"Host:    http://127.0.0.1:{port}/host?code={code}",
+        f"Cleaner: http://{local_ip()}:{port}/clean?code={code} "
+        f"(start with --host 0.0.0.0, same Wi-Fi as the phone)",
+        f"Or keep 127.0.0.1 and run: cloudflared tunnel --url http://localhost:{port}",
+        f"   then open https://<tunnel-url>/clean?code={code} on the phone.",
+    ]
 
 
 def access_code():
@@ -173,6 +213,7 @@ def create_app(client=None):
     app.state.server = server
 
     def need_state(run_id):
+        _checked_id(run_id, "run")
         state = server.get_state(run_id)
         if state is None:
             raise HTTPException(404, f"Unknown run '{run_id}'")
@@ -249,6 +290,7 @@ def create_app(client=None):
     @app.post("/api/runs/{run_id}/photos")
     def _upload_photo(run_id: str, shot_id: str = Form(...), image: UploadFile = File(...)):
         state = need_state(run_id)
+        _checked_id(shot_id, "shot")
         suffix = Path(image.filename or "upload.jpg").suffix.lower() or ".jpg"
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         try:
@@ -277,10 +319,20 @@ def create_app(client=None):
 
     @app.get("/api/runs/{run_id}/evidence/{item_id}")
     def _get_evidence(run_id: str, item_id: str):
+        _checked_id(item_id, "item")
         blob = need_state(run_id).read_evidence(item_id)
         if blob is None:
             raise HTTPException(404, f"No evidence for '{item_id}'")
-        return Response(blob, media_type="image/jpeg")
+        # Pages add ?v=<photo id>: cache long, retakes change the URL.
+        return Response(blob, media_type="image/jpeg", headers=dict(LONG_CACHE))
+
+    @app.get("/api/runs/{run_id}/photos/{photo_id}/overview")
+    def _get_overview(run_id: str, photo_id: str):
+        _checked_id(photo_id, "photo")
+        blob = need_state(run_id).read_overview(photo_id)
+        if blob is None:
+            raise HTTPException(404, f"No photo '{photo_id}'")
+        return Response(blob, media_type="image/jpeg", headers=dict(LONG_CACHE))
 
     @app.post("/api/runs/{run_id}/signoff")
     def _signoff(run_id: str, body: SignoffBody):
@@ -332,6 +384,10 @@ def create_app(client=None):
                 found.append({"id": data.get("id", path.name),
                               "name": data.get("name", path.name)})
         return {"properties": found}
+
+    @app.get("/api/runs/latest")
+    def _latest_run():
+        return {"run_id": latest_run_id()}
 
     @app.get("/api/runs")
     def _list_runs():
@@ -401,9 +457,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     app = create_app()
     code = app.state.server.code
-    print(f"Host:    http://127.0.0.1:{args.port}/host?code={code}", flush=True)
-    print(f"Cleaner: http://{local_ip()}:{args.port}/clean?code={code}", flush=True)
-    print("Open the cleaner link on the phone (same Wi-Fi as this PC).", flush=True)
+    for line in startup_lines(args.port, code):
+        print(line, flush=True)
     import uvicorn
 
     uvicorn.run(app, host=args.host, port=args.port)

@@ -307,6 +307,78 @@ def test_demo_photos_empty_without_bundle(tmp_path, monkeypatch):
     assert test.get(f"/api/demo-photos?code={code}").json() == {"photos": []}
 
 
+def test_latest_run_without_loading(tmp_path):
+    from pot.server import latest_run_id
+
+    assert latest_run_id() is None
+    runs = tmp_path / "data" / "runs"
+    for name in ("run-20261031-101241", "run-20261031-101242", "run-20261031-101241_2"):
+        folder = runs / name
+        folder.mkdir(parents=True)
+        (folder / "first_look.json").write_text("{}", encoding="utf-8")
+    (runs / "scratch").mkdir()
+    # Lexicographic max would be the _2 suffixed older run; time wins.
+    assert latest_run_id() == "run-20261031-101242"
+    test, code = _client()
+    assert test.get(f"/api/runs/latest?code={code}").json() == {
+        "run_id": "run-20261031-101242"}
+
+
+def test_overview_endpoint_and_cache_headers():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    response = test.get(f"/api/runs/{run_id}/photos/P01/overview?code={code}")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.headers["cache-control"] == "public, max-age=31536000"
+    assert response.content[:2] == b"\xff\xd8"
+    assert test.get(f"/api/runs/{run_id}/photos/P99/overview?code={code}").status_code == 404
+    evidence = test.get(
+        f"/api/runs/{run_id}/evidence/master-bedroom.beds_made?code={code}&v=P01")
+    assert evidence.status_code == 200
+    assert evidence.headers["cache-control"] == "public, max-age=31536000"
+
+
+def test_backslash_ids_rejected():
+    test, code = _client()
+    assert test.get(f"/api/runs/a%5Cb/status?code={code}").status_code == 400
+    run_id = _create_run(test, code)
+    response = test.post(
+        f"/api/runs/{run_id}/photos?code={code}",
+        data={"shot_id": "..\\x"},
+        files={"image": ("pic.jpg", _jpeg(), "image/jpeg")},
+    )
+    assert response.status_code == 400
+    assert test.get(f"/api/runs/{run_id}/evidence/a%5Cb?code={code}").status_code == 400
+    assert test.get(
+        f"/api/runs/{run_id}/photos/P%5C1/overview?code={code}").status_code == 400
+
+
+def test_startup_lines_mention_tunnel():
+    from pot.server import startup_lines
+
+    lines = startup_lines(8000, "c0de")
+    assert any("cloudflared tunnel --url http://localhost:8000" in line for line in lines)
+    assert any("--host 0.0.0.0" in line for line in lines)
+    assert any("c0de" in line for line in lines)
+
+
+def test_status_news_covers_problem_request_and_signoff():
+    test, code = _client(inspector=_problem, verifier=_not_done)
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id)
+    kinds = [e["kind"] for e in status["news"]]
+    assert kinds[0] == "request"
+    assert "status" in kinds
+    assert status["news"][0]["photo_id"] == "P01"
+    test.post(f"/api/runs/{run_id}/signoff?code={code}", json={"decision": "approve"})
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["news"][0]["kind"] == "signoff"
+
+
 def test_generate_tour_endpoint(tmp_path, monkeypatch):
     import shutil
 
