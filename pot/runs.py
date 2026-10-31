@@ -98,6 +98,7 @@ class RunState:
         self.checking = set()
         self.photo_seconds = {}
         self.events = []
+        self.evidence = set()
         self.signoff = {
             "decision": None,
             "notes": "",
@@ -213,6 +214,12 @@ class RunState:
                     state.calls.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
+        evidence_dir = run_dir / "evidence"
+        if evidence_dir.is_dir():
+            state.evidence = {
+                path.name[:-len(".jpg")] for path in evidence_dir.iterdir()
+                if path.is_file() and path.suffix.lower() == ".jpg"
+            }
         return state
 
     # -- phase (a): claim a photo number and save it, under the lock --------
@@ -379,10 +386,11 @@ class RunState:
                 self.photo_seconds[photo_id] = elapsed
                 self.notes.append(f"Photo {photo_id} checked in {elapsed:.1f} s")
             if changes:
-                save_evidence(
+                saved = save_evidence(
                     self.run_dir, self.proofs, self.items_by_id, self.photos_by_id,
                     self.sams, self.problem_sams, item_ids=set(changes),
                 )
+                self.evidence.update(saved)
             self._save_locked()
             shot_id = self.photo_shot.get(photo_id)
             failed = self._shot_failed_locked(shot_id) if shot_id else []
@@ -420,7 +428,8 @@ class RunState:
                 self.requests[request["item_id"]] = request
                 proof = self.proofs.get(request["item_id"])
                 self._event_locked("request", request["item_id"], request["status"],
-                                   proof.photo_id if proof else "", request["cleaner"])
+                                   proof.photo_id if proof else "",
+                                   f"request sent: {request['host']}")
             self.requests = {
                 item_id: request for item_id, request in self.requests.items()
                 if self.proofs.get(item_id) is not None
@@ -438,7 +447,7 @@ class RunState:
         """Append a news event (callers hold the lock); keeps the last 50."""
         item = self.items_by_id.get(item_id) if item_id else None
         self.events.append({
-            "time": datetime.now().isoformat(timespec="seconds"),
+            "time": datetime.now().strftime("%H:%M:%S"),
             "kind": kind,  # status | request | signoff
             "room_id": item.room_id if item else "",
             "room_name": item.room_name if item else "",
@@ -478,6 +487,7 @@ class RunState:
                 )
                 self.decided_seq[item_id] = len(self.photos)
                 self.requests.pop(item_id, None)
+                self.evidence.discard(item_id)
                 self._event_locked("status", item_id, NEEDS_PROOF, "",
                                    notes or "Host asked for a new photo")
                 stale = self.run_dir / "evidence" / f"{item_id}.jpg"
@@ -616,7 +626,7 @@ class RunState:
             "status": display,
             "reason": proof.reason,
             "photo_id": proof.photo_id,
-            "has_evidence": proof.status in (PROVEN, PROBLEM) and bool(proof.photo_id),
+            "has_evidence": item.id in self.evidence,
             "request": request,
         }
 

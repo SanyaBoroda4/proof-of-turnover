@@ -1,293 +1,380 @@
 {
   "shots": [
     {
-      "shot_id": "porch-01",
+      "shot_id": "porch-1",
       "room_id": "porch",
-      "room_name_es": "Porche cubierto",
+      "room_name_es": "Porche delantero",
+      "short_es": "porche completo",
       "item_ids": [
         "porch.area_tidy",
         "porch.pillows"
       ],
-      "instruction_es": "Fotograf\u00eda el porche cubierto limpio con los cojines en su sitio.",
-      "instruction_en": "Photograph the covered front porch tidy with pillows in place."
+      "instruction_es": "Fotograf\u00eda el porche delantero con los cojines en su lugar.",
+      "instruction_en": "Photograph the front porch with the pillows in place."
     },
     {
-      "shot_id": "foyer-01",
+      "shot_id": "foyer-1",
       "room_id": "foyer",
-      "room_name_es": "Recibidor",
+      "room_name_es": "Vest\u00edbulo",
+      "short_es": "suelo y escalera",
       "item_ids": [
         "foyer.floor_clear"
       ],
-      "instruction_es": "Fotograf\u00eda el recibidor y la escalera con el piso despejado.",
-      "instruction_en": "Photograph the foyer and staircase floor clear and clean."
+      "instruction_es": "Fotograf\u00eda el suelo del vest\u00edbulo y la escalera despejados.",
+      "instruction_en": "Photograph the foyer floor and staircase clear."
     },
     {
-      "shot_id": "powder-room-01",
+      "shot_id": "powder-room-1",
       "room_id": "powder-room",
       "room_name_es": "Aseo",
+      "short_es": "inodoro y papel",
       "item_ids": [
         "powder-room.toilet",
         "powder-room.toilet_paper",
+        "powder-room.spare_toilet_paper"
+      ],
+      "instruction_es": "Fotograf\u00eda el inodoro del aseo con los rollos de papel.",
+      "instruction_en": "Photograph the powder room toilet with the paper rolls."
+    },
+    {
+      "shot_id": "powder-room-2",
+      "room_id": "powder-room",
+      "room_name_es": "Aseo",
+      "short_es": "lavabo y espejo",
+      "item_ids": [
         "powder-room.sink",
         "powder-room.hand_towel",
-        "powder-room.spare_toilet_paper",
         "powder-room.no_guest_items"
       ],
-      "instruction_es": "Fotograf\u00eda el aseo mostrando el lavabo y el inodoro.",
-      "instruction_en": "Photograph the powder room sink and toilet with paper and towel in place."
+      "instruction_es": "Fotograf\u00eda el lavabo y el espejo del aseo.",
+      "instruction_en": "Photograph the powder room sink and mirror."
     },
     {
-      "shot_id": "laundry-01",
+      "shot_id": "laundry-1",
       "room_id": "laundry",
       "room_name_es": "Lavander\u00eda",
+      "short_es": "lavadora abierta",
       "item_ids": [
-        "laundry.machines",
-        "laundry.lint_filter",
+        "laundry.machines"
+      ],
+      "instruction_es": "Fotograf\u00eda la lavadora abierta vac\u00eda en la lavander\u00eda.",
+      "instruction_en": "Photograph the empty open washer in the laundry room."
+    },
+    {
+      "shot_id": "laundry-2",
+      "room_id": "laundry",
+      "room_name_es": "Lavander\u00eda",
+      "short_es": "secadora abierta",
+      "item_ids": [
+        "laundry.dryer"
+      ],
+      "instruction_es": "Fotograf\u00eda la secadora abierta vac\u00eda en la lavander\u00eda.",
+      "instruction_en": "Photograph the empty open dryer in the laundry room."
+    },
+    {
+      "shot_id": "laundry-3",
+      "room_id": "laundry",
+      "room_name_es": "Lavander\u00eda",
+      "short_es": "filtro sin pelusa",
+      "item_ids": [
+        "laundry.lint_filter"
+      ],
+      "instruction_es": "Fotograf\u00eda el filtro de la secadora limpio en la lavander\u00eda.",
+      "instruction_en": "Photograph the clean dryer lint filter in the laundry room."
+    },
+    {
+      "shot_id": "laundry-4",
+      "room_id": "laundry",
+      "room_name_es": "Lavander\u00eda",
+      "short_es": "suelo general",
+      "item_ids": [
+        "laundry.floor_clear",
         "laundry.no_dirty_linens"
       ],
-      "instruction_es": "Fotograf\u00eda la lavander\u00eda con la lavadora y la secadora abiertas.",
-      "instruction_en": "Photograph the laundry room washer and dryer open and empty with lint filter out."
+      "instruction_es": "Fotograf\u00eda el suelo de la lavander\u00eda sin ropa sucia.",
+      "instruction_en": "Photograph the laundry room floor with no dirty linens."
     },
     {
-      "shot_id": "laundry-02",
-      "room_id": "laundry",
-      "room_name_es": "Lavander\u00eda",
-      "item_ids": [
-        "laundry.floor_clear"
-      ],
-      "instruction_es": "Fotograf\u00eda la lavander\u00eda con el piso limpio y despejado.",
-      "instruction_en": "Photograph the laundry room floor clear."
-    },
-    {
-      "shot_id": "kitchen-01",
+      "shot_id": "kitchen-1",
       "room_id": "kitchen",
       "room_name_es": "Cocina",
-      "item_ids": [
-        "kitchen.counters",
-        "kitchen.stovetop",
-        "kitchen.cabinets"
-      ],
-      "instruction_es": "Fotograf\u00eda la cocina con las encimeras y la estufa limpias.",
-      "instruction_en": "Photograph the kitchen counters and clean glass stovetop."
-    },
-    {
-      "shot_id": "kitchen-02",
-      "room_id": "kitchen",
-      "room_name_es": "Cocina",
-      "item_ids": [
-        "kitchen.trash"
-      ],
-      "instruction_es": "Fotograf\u00eda la cocina con los botes de basura vac\u00edos.",
-      "instruction_en": "Photograph the kitchen trash bins empty with new liners."
-    },
-    {
-      "shot_id": "kitchen-03",
-      "room_id": "kitchen",
-      "room_name_es": "Cocina",
+      "short_es": "nevera abierta",
       "item_ids": [
         "kitchen.fridge"
       ],
-      "instruction_es": "Fotograf\u00eda la cocina con el refrigerador abierto y vac\u00edo.",
-      "instruction_en": "Photograph the kitchen fridge open and empty."
+      "instruction_es": "Fotograf\u00eda el interior principal abierto de la nevera en la cocina.",
+      "instruction_en": "Photograph the open main fridge compartment in the kitchen."
     },
     {
-      "shot_id": "kitchen-04",
+      "shot_id": "kitchen-2",
       "room_id": "kitchen",
       "room_name_es": "Cocina",
+      "short_es": "puerta izquierda nevera",
+      "item_ids": [
+        "kitchen.fridge_left_door"
+      ],
+      "instruction_es": "Fotograf\u00eda la puerta izquierda abierta de la nevera en la cocina.",
+      "instruction_en": "Photograph the open left fridge door in the kitchen."
+    },
+    {
+      "shot_id": "kitchen-3",
+      "room_id": "kitchen",
+      "room_name_es": "Cocina",
+      "short_es": "puerta derecha nevera",
+      "item_ids": [
+        "kitchen.fridge_right_door"
+      ],
+      "instruction_es": "Fotograf\u00eda la puerta derecha abierta de la nevera en la cocina.",
+      "instruction_en": "Photograph the open right fridge door in the kitchen."
+    },
+    {
+      "shot_id": "kitchen-4",
+      "room_id": "kitchen",
+      "room_name_es": "Cocina",
+      "short_es": "congelador abierto",
       "item_ids": [
         "kitchen.freezer"
       ],
-      "instruction_es": "Fotograf\u00eda la cocina con el congelador abierto y vac\u00edo.",
-      "instruction_en": "Photograph the kitchen freezer open and empty."
+      "instruction_es": "Fotograf\u00eda el congelador abierto en la cocina.",
+      "instruction_en": "Photograph the open freezer in the kitchen."
     },
     {
-      "shot_id": "kitchen-05",
+      "shot_id": "kitchen-5",
       "room_id": "kitchen",
       "room_name_es": "Cocina",
+      "short_es": "microondas abierto",
       "item_ids": [
         "kitchen.microwave"
       ],
-      "instruction_es": "Fotograf\u00eda la cocina con el microondas abierto y limpio.",
-      "instruction_en": "Photograph the kitchen microwave open and clean inside."
+      "instruction_es": "Fotograf\u00eda el microondas abierto limpio en la cocina.",
+      "instruction_en": "Photograph the open clean microwave in the kitchen."
     },
     {
-      "shot_id": "kitchen-06",
+      "shot_id": "kitchen-6",
       "room_id": "kitchen",
       "room_name_es": "Cocina",
+      "short_es": "horno abierto",
       "item_ids": [
         "kitchen.oven"
       ],
-      "instruction_es": "Fotograf\u00eda la cocina con el horno abierto y limpio.",
-      "instruction_en": "Photograph the kitchen oven open and clean inside."
+      "instruction_es": "Fotograf\u00eda el horno abierto limpio en la cocina.",
+      "instruction_en": "Photograph the open clean oven in the kitchen."
     },
     {
-      "shot_id": "kitchen-07",
+      "shot_id": "kitchen-7",
       "room_id": "kitchen",
       "room_name_es": "Cocina",
+      "short_es": "lavavajillas abierto",
       "item_ids": [
         "kitchen.dishwasher"
       ],
-      "instruction_es": "Fotograf\u00eda la cocina con el lavavajillas abierto y vac\u00edo.",
-      "instruction_en": "Photograph the kitchen dishwasher open and empty."
+      "instruction_es": "Fotograf\u00eda el lavavajillas abierto vac\u00edo en la cocina.",
+      "instruction_en": "Photograph the open empty dishwasher in the kitchen."
     },
     {
-      "shot_id": "dining-room-01",
+      "shot_id": "kitchen-8",
+      "room_id": "kitchen",
+      "room_name_es": "Cocina",
+      "short_es": "caf\u00e9 en m\u00e1quina",
+      "item_ids": [
+        "kitchen.coffee_beans"
+      ],
+      "instruction_es": "Fotograf\u00eda la tolva con granos de caf\u00e9 en la cocina.",
+      "instruction_en": "Photograph the coffee bean hopper with beans in the kitchen."
+    },
+    {
+      "shot_id": "kitchen-9",
+      "room_id": "kitchen",
+      "room_name_es": "Cocina",
+      "short_es": "encimeras y estufa",
+      "item_ids": [
+        "kitchen.counters",
+        "kitchen.stovetop",
+        "kitchen.paper_towels"
+      ],
+      "instruction_es": "Fotograf\u00eda las encimeras, el fregadero, la estufa y el papel en la cocina.",
+      "instruction_en": "Photograph the kitchen counters, sink, stovetop and paper towels."
+    },
+    {
+      "shot_id": "kitchen-10",
+      "room_id": "kitchen",
+      "room_name_es": "Cocina",
+      "short_es": "cubos de basura",
+      "item_ids": [
+        "kitchen.trash"
+      ],
+      "instruction_es": "Fotograf\u00eda los cubos de basura vac\u00edos en la cocina.",
+      "instruction_en": "Photograph the empty trash bins with new liners in the kitchen."
+    },
+    {
+      "shot_id": "dining-room-1",
       "room_id": "dining-room",
       "room_name_es": "Comedor",
+      "short_es": "mesa y sillas",
       "item_ids": [
         "dining-room.table",
         "dining-room.chairs",
         "dining-room.floor_clear"
       ],
-      "instruction_es": "Fotograf\u00eda el comedor con la mesa despejada y las sillas en su sitio.",
-      "instruction_en": "Photograph the dining area table clear with chairs and floor clean."
+      "instruction_es": "Fotograf\u00eda la mesa despejada y las sillas en el comedor.",
+      "instruction_en": "Photograph the clear table and chairs in the dining area."
     },
     {
-      "shot_id": "living-room-01",
+      "shot_id": "living-room-1",
       "room_id": "living-room",
       "room_name_es": "Sala de estar",
+      "short_es": "mueble TV abierto",
+      "item_ids": [
+        "living-room.sofa_bed_linens"
+      ],
+      "instruction_es": "Fotograf\u00eda el mueble de TV abierto con la ropa de cama en la sala de estar.",
+      "instruction_en": "Photograph the open TV stand with sofa-bed linens in the living room."
+    },
+    {
+      "shot_id": "living-room-2",
+      "room_id": "living-room",
+      "room_name_es": "Sala de estar",
+      "short_es": "sof\u00e1 y suelo",
       "item_ids": [
         "living-room.couch",
         "living-room.no_belongings",
         "living-room.floor_clear",
-        "living-room.pillows",
-        "house.baseboards"
+        "living-room.pillows"
       ],
-      "instruction_es": "Fotograf\u00eda la sala de estar con el sof\u00e1, los cojines y el piso limpio.",
-      "instruction_en": "Photograph the living room couch with pillows and clean floor and baseboards."
+      "instruction_es": "Fotograf\u00eda el sof\u00e1 limpio con cojines en la sala de estar.",
+      "instruction_en": "Photograph the clean couch with pillows in the living room."
     },
     {
-      "shot_id": "living-room-02",
-      "room_id": "living-room",
-      "room_name_es": "Sala de estar",
-      "item_ids": [
-        "living-room.ceiling_fan"
-      ],
-      "instruction_es": "Fotograf\u00eda la sala de estar con el ventilador de techo sin polvo.",
-      "instruction_en": "Photograph the living room ceiling fan dust-free."
-    },
-    {
-      "shot_id": "patio-01",
+      "shot_id": "patio-1",
       "room_id": "patio",
-      "room_name_es": "Patio",
+      "room_name_es": "Patio trasero",
+      "short_es": "terraza completa",
       "item_ids": [
         "patio.area_tidy",
         "patio.pillows"
       ],
-      "instruction_es": "Fotograf\u00eda el patio limpio con los cojines en su sitio.",
-      "instruction_en": "Photograph the patio clean with outdoor pillows in place."
+      "instruction_es": "Fotograf\u00eda el patio trasero limpio con los cojines en su lugar.",
+      "instruction_en": "Photograph the back porch clean with pillows in place."
     },
     {
-      "shot_id": "master-bedroom-01",
+      "shot_id": "master-bedroom-1",
       "room_id": "master-bedroom",
       "room_name_es": "Dormitorio principal",
+      "short_es": "camas hechas",
       "item_ids": [
         "master-bedroom.bed_1",
         "master-bedroom.bed_2",
         "master-bedroom.no_belongings",
         "master-bedroom.floor_clear"
       ],
-      "instruction_es": "Fotograf\u00eda el dormitorio principal con las dos camas hechas.",
-      "instruction_en": "Photograph the master bedroom with both beds made and floor clear."
+      "instruction_es": "Fotograf\u00eda ambas camas hechas en el dormitorio principal.",
+      "instruction_en": "Photograph both made beds in the master bedroom."
     },
     {
-      "shot_id": "master-bathroom-01",
+      "shot_id": "master-bathroom-1",
       "room_id": "master-bathroom",
       "room_name_es": "Ba\u00f1o principal",
+      "short_es": "inodoro y estantes",
       "item_ids": [
-        "master-bathroom.towels",
-        "master-bathroom.sink",
-        "master-bathroom.no_guest_items"
-      ],
-      "instruction_es": "Fotograf\u00eda el ba\u00f1o principal con el lavabo y las toallas limpias.",
-      "instruction_en": "Photograph the master bathroom sink and counter with clean towels."
-    },
-    {
-      "shot_id": "master-bathroom-02",
-      "room_id": "master-bathroom",
-      "room_name_es": "Ba\u00f1o principal",
-      "item_ids": [
-        "master-bathroom.shower",
-        "master-bathroom.amenities",
-        "master-bathroom.no_guest_items"
-      ],
-      "instruction_es": "Fotograf\u00eda el ba\u00f1o principal con la ba\u00f1era limpia.",
-      "instruction_en": "Photograph the master bathroom tub clean with shampoo bottles."
-    },
-    {
-      "shot_id": "master-bathroom-03",
-      "room_id": "master-bathroom",
-      "room_name_es": "Ba\u00f1o principal",
-      "item_ids": [
-        "master-bathroom.toilet_paper",
         "master-bathroom.toilet",
+        "master-bathroom.toilet_paper",
         "master-bathroom.spare_toilet_paper",
         "master-bathroom.shelves"
       ],
-      "instruction_es": "Fotograf\u00eda el ba\u00f1o principal con el inodoro y las repisas surtidas.",
-      "instruction_en": "Photograph the master bathroom separate toilet room with paper and shelves stocked."
+      "instruction_es": "Fotograf\u00eda el inodoro y los estantes en el ba\u00f1o principal.",
+      "instruction_en": "Photograph the toilet room and shelves in the master bathroom."
     },
     {
-      "shot_id": "hall-bathroom-01",
+      "shot_id": "master-bathroom-2",
+      "room_id": "master-bathroom",
+      "room_name_es": "Ba\u00f1o principal",
+      "short_es": "lavabo y toallas",
+      "item_ids": [
+        "master-bathroom.sink",
+        "master-bathroom.towels",
+        "master-bathroom.no_guest_items"
+      ],
+      "instruction_es": "Fotograf\u00eda el lavabo con toallas limpias en el ba\u00f1o principal.",
+      "instruction_en": "Photograph the sink with clean towels in the master bathroom."
+    },
+    {
+      "shot_id": "master-bathroom-3",
+      "room_id": "master-bathroom",
+      "room_name_es": "Ba\u00f1o principal",
+      "short_es": "ba\u00f1era limpia",
+      "item_ids": [
+        "master-bathroom.shower",
+        "master-bathroom.no_guest_items"
+      ],
+      "instruction_es": "Fotograf\u00eda la ba\u00f1era limpia en el ba\u00f1o principal.",
+      "instruction_en": "Photograph the clean tub in the master bathroom."
+    },
+    {
+      "shot_id": "hall-bathroom-1",
       "room_id": "hall-bathroom",
       "room_name_es": "Ba\u00f1o del pasillo",
+      "short_es": "inodoro y estantes",
       "item_ids": [
-        "hall-bathroom.towels",
+        "hall-bathroom.toilet",
+        "hall-bathroom.toilet_paper",
+        "hall-bathroom.spare_toilet_paper",
+        "hall-bathroom.shelves"
+      ],
+      "instruction_es": "Fotograf\u00eda el inodoro y los estantes en el ba\u00f1o del pasillo.",
+      "instruction_en": "Photograph the toilet and shelves in the hall bathroom."
+    },
+    {
+      "shot_id": "hall-bathroom-2",
+      "room_id": "hall-bathroom",
+      "room_name_es": "Ba\u00f1o del pasillo",
+      "short_es": "lavabo y toallas",
+      "item_ids": [
         "hall-bathroom.sink",
+        "hall-bathroom.towels",
         "hall-bathroom.no_guest_items"
       ],
-      "instruction_es": "Fotograf\u00eda el ba\u00f1o del pasillo con el lavabo y las toallas limpias.",
-      "instruction_en": "Photograph the hall bathroom sink and counter with clean towels."
+      "instruction_es": "Fotograf\u00eda el lavabo con toallas limpias en el ba\u00f1o del pasillo.",
+      "instruction_en": "Photograph the sink with clean towels in the hall bathroom."
     },
     {
-      "shot_id": "hall-bathroom-02",
+      "shot_id": "hall-bathroom-3",
       "room_id": "hall-bathroom",
       "room_name_es": "Ba\u00f1o del pasillo",
+      "short_es": "ba\u00f1era limpia",
       "item_ids": [
         "hall-bathroom.shower",
         "hall-bathroom.no_guest_items"
       ],
-      "instruction_es": "Fotograf\u00eda el ba\u00f1o del pasillo con la ba\u00f1era limpia.",
-      "instruction_en": "Photograph the hall bathroom tub clean with shower curtain."
+      "instruction_es": "Fotograf\u00eda la ba\u00f1era limpia en el ba\u00f1o del pasillo.",
+      "instruction_en": "Photograph the clean tub in the hall bathroom."
     },
     {
-      "shot_id": "hall-bathroom-03",
-      "room_id": "hall-bathroom",
-      "room_name_es": "Ba\u00f1o del pasillo",
-      "item_ids": [
-        "hall-bathroom.toilet_paper",
-        "hall-bathroom.toilet",
-        "hall-bathroom.spare_toilet_paper",
-        "hall-bathroom.shelves"
-      ],
-      "instruction_es": "Fotograf\u00eda el ba\u00f1o del pasillo con el inodoro y las repisas surtidas.",
-      "instruction_en": "Photograph the hall bathroom toilet with paper and shelves stocked."
-    },
-    {
-      "shot_id": "bedroom-1-01",
+      "shot_id": "bedroom-1-1",
       "room_id": "bedroom-1",
       "room_name_es": "Dormitorio 1",
+      "short_es": "cama hecha",
       "item_ids": [
         "bedroom-1.beds_made",
         "bedroom-1.no_belongings",
         "bedroom-1.floor_clear"
       ],
-      "instruction_es": "Fotograf\u00eda el dormitorio 1 con la cama hecha.",
-      "instruction_en": "Photograph bedroom 1 with bed made and floor clear."
+      "instruction_es": "Fotograf\u00eda la cama hecha en el dormitorio 1.",
+      "instruction_en": "Photograph the made bed in bedroom 1."
     },
     {
-      "shot_id": "bedroom-2-01",
+      "shot_id": "bedroom-2-1",
       "room_id": "bedroom-2",
       "room_name_es": "Dormitorio 2",
+      "short_es": "cama hecha",
       "item_ids": [
         "bedroom-2.beds_made",
         "bedroom-2.no_belongings",
         "bedroom-2.floor_clear"
       ],
-      "instruction_es": "Fotograf\u00eda el dormitorio 2 con la cama hecha.",
-      "instruction_en": "Photograph bedroom 2 with bed made and floor clear."
+      "instruction_es": "Fotograf\u00eda la cama hecha en el dormitorio 2.",
+      "instruction_en": "Photograph the made bed in bedroom 2."
     }
   ],
   "model": "muse-spark-1.3-contributor",
-  "generated_at": "2026-10-31T11:38:24"
+  "generated_at": "2026-10-31T11:59:04"
 }

@@ -59,7 +59,7 @@ const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
 const FOLLOW = !params.get("run");
 let RUN = params.get("run") || "";
-let status = null, calls = [], runsList = [], lastKey = null, qrRun = "";
+let status = null, calls = [], runsList = [], lastKey = null, cleanerUrl = "";
 
 async function api(path, opts) {
   const r = await fetch(path, opts || {});
@@ -100,8 +100,8 @@ function newsHtml() {
   if (!news.length) return "";
   const cards = news.map(ev => {
     const img = ev.photo_id ? `<img src="${overviewUrl(ev.photo_id)}" alt="" loading="lazy">` : "";
-    const what = ev.item_label
-      ? `${esc(ev.room_name)} — ${esc(ev.item_label)}: ${esc(ev.status)}` : esc(ev.text);
+    const what = ev.kind === "request" || !ev.item_label ? esc(ev.text)
+      : `${esc(ev.room_name)} — ${esc(ev.item_label)}: ${esc(ev.status)}`;
     return `<div class="card"><div class="time">${esc(ev.time || "")}</div>
       <div>${what}</div>${img}</div>`;
   }).join("");
@@ -158,8 +158,8 @@ function renderStatus(app) {
       </div>
       <div>
         <h2>Cleaner link</h2>
-        <img id="qr" alt="QR code for the cleaner page">
-        <div class="small" id="cleanUrl"></div>
+        <img id="qr" alt="QR code for the cleaner page"${cleanerUrl ? ` src="/api/qr?text=${encodeURIComponent(cleanerUrl)}"` : ""}>
+        <div class="small" id="cleanUrl">${esc(cleanerUrl)}</div>
         <h2>Older turnovers</h2>
         <ul class="runs">${older || "<li class='small'>None.</li>"}</ul>
       </div>
@@ -199,16 +199,28 @@ function renderStatus(app) {
       document.getElementById("overlay").style.display = "block";
     };
   });
-  if (qrRun !== RUN) {
-    qrRun = RUN;
-    setQr();
-  }
+  paintQr();
 }
 
-function setQr() {
-  const url = `${location.protocol}//${location.host}/clean?code=${encodeURIComponent(CODE)}`;
-  document.getElementById("qr").src = `/api/qr?text=${encodeURIComponent(url)}`;
-  document.getElementById("cleanUrl").textContent = url;
+function paintQr() {
+  if (!cleanerUrl) return;
+  const img = document.getElementById("qr");
+  const txt = document.getElementById("cleanUrl");
+  if (img) img.src = `/api/qr?text=${encodeURIComponent(cleanerUrl)}`;
+  if (txt) txt.textContent = cleanerUrl;
+}
+
+async function resolveCleanerUrl() {
+  let hostPart = location.host;
+  if (!location.hostname || location.hostname === "localhost" ||
+      location.hostname === "127.0.0.1") {
+    try {
+      const ip = (await api("/api/server-ip")).ip;
+      hostPart = ip + (location.port ? ":" + location.port : "");
+    } catch (e) {}
+  }
+  cleanerUrl = `${location.protocol}//${hostPart}/clean?code=${encodeURIComponent(CODE)}`;
+  paintQr();
 }
 
 function renderMaybe(force) {
@@ -266,6 +278,7 @@ async function boot() {
   };
   const app = document.getElementById("app");
   try {
+    resolveCleanerUrl();
     await fetchRunsList();
     if (!(await refresh())) {
       app.innerHTML = "<h1>Turnovers</h1><p>No turnovers yet — start one from the cleaner page.</p>";

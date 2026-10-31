@@ -49,16 +49,16 @@
     {
       "id": "patio",
       "type": "outdoor",
-      "name": "Patio",
+      "name": "Back porch",
       "floor": 1,
-      "description": "uncovered patio behind the house"
+      "description": "back porch by the sliding glass door: dark brown wood loveseat with grey seat cushions and a grey back pillow, armchair with light blue-green cushions, slatted wood coffee table, small wood side table, white rain barrel by the wall"
     },
     {
       "id": "porch",
       "type": "outdoor",
-      "name": "Covered porch",
+      "name": "Front porch",
       "floor": 1,
-      "description": "covered front porch at the entrance"
+      "description": "front porch at the black front door: brown wicker loveseat with light blue-green cushions and two white shell-shaped pillows, small rattan side table, white plant pot on a wood stand, coir doormat"
     },
     {
       "id": "master-bedroom",
@@ -171,8 +171,8 @@
     {
       "room": "patio",
       "key": "area_tidy",
-      "label": "Patio clean",
-      "requirement": "Patio clean: no stains, no trash, no shoes left around",
+      "label": "Back porch clean",
+      "requirement": "Back porch clean: no stains or trash, no shoes, toys, bags, clothes or blankets left out; only the outdoor furniture and its pillows",
       "sam_prompt": null,
       "min_count": null,
       "critical": true
@@ -189,8 +189,8 @@
     {
       "room": "porch",
       "key": "area_tidy",
-      "label": "Porch clean",
-      "requirement": "Covered porch clean: no stains, no trash, no shoes left around",
+      "label": "Front porch clean",
+      "requirement": "Front porch and the walkway in front of it clean: no stains or trash, no shoes, toys, bags, clothes or blankets left out; only the outdoor furniture and its pillows",
       "sam_prompt": null,
       "min_count": null,
       "critical": true
@@ -216,8 +216,26 @@
     {
       "room": "kitchen",
       "key": "fridge",
-      "label": "Fridge empty and clean",
-      "requirement": "Fridge open: shelves and drawers empty and clean, no food left",
+      "label": "Fridge main compartment empty",
+      "requirement": "Both fridge doors open, main compartment: shelves and drawers empty and clean, no food or drinks left",
+      "sam_prompt": null,
+      "min_count": null,
+      "critical": true
+    },
+    {
+      "room": "kitchen",
+      "key": "fridge_left_door",
+      "label": "Left fridge door shelves empty",
+      "requirement": "Left fridge door open: all its door shelves empty, no food, drinks or jars left",
+      "sam_prompt": null,
+      "min_count": null,
+      "critical": true
+    },
+    {
+      "room": "kitchen",
+      "key": "fridge_right_door",
+      "label": "Right fridge door shelves empty",
+      "requirement": "Right fridge door open: all its door shelves empty, no food, drinks or jars left",
       "sam_prompt": null,
       "min_count": null,
       "critical": true
@@ -277,6 +295,33 @@
       "critical": false
     },
     {
+      "room": "kitchen",
+      "key": "coffee_beans",
+      "label": "Coffee beans in the machine",
+      "requirement": "Espresso machine bean hopper (lid off for the photo) has coffee beans in it, not empty",
+      "sam_prompt": null,
+      "min_count": null,
+      "critical": true
+    },
+    {
+      "room": "kitchen",
+      "key": "coffee_machine_clean",
+      "label": "Coffee machine wiped",
+      "requirement": "Espresso machine top and drip tray wiped: no spilled coffee grounds or coffee stains",
+      "sam_prompt": null,
+      "min_count": null,
+      "critical": false
+    },
+    {
+      "room": "kitchen",
+      "key": "paper_towels",
+      "label": "Paper towel roll on the holder",
+      "requirement": "The gold paper towel holder on the counter holds a paper towel roll, not empty",
+      "sam_prompt": "paper towel roll",
+      "min_count": 1,
+      "critical": true
+    },
+    {
       "room": "living-room",
       "key": "pillows",
       "label": "Pillows back in place",
@@ -295,10 +340,37 @@
       "critical": false
     },
     {
+      "room": "living-room",
+      "key": "sofa_bed_linens",
+      "label": "Sofa-bed linens in the TV stand",
+      "requirement": "TV stand doors opened for this photo: bed linens and a pillow for the sofa bed are inside (close the doors again after the photo)",
+      "sam_prompt": "pillow",
+      "min_count": 1,
+      "critical": true
+    },
+    {
       "room": "laundry",
       "key": "lint_filter",
       "label": "Dryer lint filter clean",
       "requirement": "Dryer lint filter pulled out and clean, no lint",
+      "sam_prompt": null,
+      "min_count": null,
+      "critical": true
+    },
+    {
+      "room": "laundry",
+      "key": "machines",
+      "label": "Washer empty",
+      "requirement": "Washer lid open: drum empty, no clothes or towels left inside",
+      "sam_prompt": null,
+      "min_count": null,
+      "critical": true
+    },
+    {
+      "room": "laundry",
+      "key": "dryer",
+      "label": "Dryer empty",
+      "requirement": "Dryer door open: drum empty, no clothes or towels left inside",
       "sam_prompt": null,
       "min_count": null,
       "critical": true

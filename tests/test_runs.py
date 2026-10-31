@@ -304,9 +304,33 @@ def test_news_reports_changes_requests_and_signoff(tmp_path):
     assert [e["kind"] for e in news] == ["signoff", "request", "status"]
     assert news[0]["text"] == "Host approved the turnover"
     assert news[1]["item_id"] == item and news[1]["photo_id"] == photo.id
-    assert news[1]["text"] == "Limpia"
+    assert news[1]["text"] == "request sent: Clean"
     assert news[2]["status"] == PROBLEM and news[2]["room_name"] == "Bed"
     assert news[2]["photo_id"] == photo.id
+    import re
+
+    assert all(re.fullmatch(r"\d{2}:\d{2}:\d{2}", e["time"]) for e in news)
+
+
+def test_has_evidence_only_when_file_exists(tmp_path):
+    state = _state(tmp_path)
+    bed_item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u", "a.jpg")), "bed-1")
+    status = state.status()
+    bed = next(r for r in status["rooms"] if r["id"] == "bed")
+    coverage = next(i for i in bed["items"] if i["id"] == "bed.coverage")
+    assert coverage["status"] == "proven"
+    assert coverage["has_evidence"] is False
+    state.merge_result(photo.id, _fresh_done(photo.id, [bed_item]))
+    status = state.status()
+    bed = next(r for r in status["rooms"] if r["id"] == "bed")
+    item = next(i for i in bed["items"] if i["id"] == bed_item)
+    assert item["has_evidence"] is True
+    state.send_back([bed_item], "again")
+    status = state.status()
+    bed = next(r for r in status["rooms"] if r["id"] == "bed")
+    item = next(i for i in bed["items"] if i["id"] == bed_item)
+    assert item["has_evidence"] is False
 
 
 def test_load_roundtrip_restores_state(tmp_path):

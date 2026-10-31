@@ -79,13 +79,28 @@ if ("speechSynthesis" in window) {
 }
 const speechQueue = [];
 let speaking = false;
+let speechTimer = null;
 function pumpSpeech() {
   if (speaking || !speechQueue.length || !("speechSynthesis" in window)) return;
   speaking = true;
   const u = new SpeechSynthesisUtterance(speechQueue.shift());
   if (voice) u.voice = voice;
   u.lang = (voice && voice.lang) || "es";
-  u.onend = u.onerror = () => { speaking = false; pumpSpeech(); };
+  u.onend = u.onerror = () => {
+    speaking = false;
+    if (speechTimer) { clearTimeout(speechTimer); speechTimer = null; }
+    pumpSpeech();
+  };
+  if (speechTimer) clearTimeout(speechTimer);
+  speechTimer = setTimeout(() => {
+    // Some Android Chrome versions never fire onend: force-advance.
+    speechTimer = null;
+    if (speaking) {
+      speaking = false;
+      try { speechSynthesis.cancel(); } catch (e) {}
+      pumpSpeech();
+    }
+  }, 15000);
   speechSynthesis.speak(u);
 }
 function say(text) { speechQueue.push(text); pumpSpeech(); }
@@ -204,24 +219,9 @@ function shotState(shot) {
   return "wait";
 }
 
-function shotResultHtml(shot) {
-  const byId = itemsById();
-  const items = (shot.item_ids || []).map(id => byId[id]).filter(Boolean);
-  const critical = items.filter(i => i.critical);
-  const state = shotState(shot);
-  if (state === "done") {
-    return `<div class="result ok">✓ Listo</div>
-      <button class="btn" id="next">Siguiente</button>`;
-  }
-  if (state === "failed") {
-    const asks = critical.filter(i => i.request)
-      .map(i => `<p>${esc(i.request.cleaner)}</p>`).join("");
-    return `<div class="result bad">${asks}</div>` + cameraHtml("Repetir foto");
-  }
-  if (status.checking.length) {
-    return `<div class="result wait">Revisando la foto…</div>`;
-  }
-  return cameraHtml("Fotografiar");
+function shortName(shot) {
+  const s = shot.short_es || roomHeading(shot);
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function cameraHtml(label) {
@@ -237,20 +237,26 @@ function cameraHtml(label) {
   return `<button class="camera" id="snapCam">${esc(label)}</button>`;
 }
 
-function recentHtml() {
-  const list = (status.recent || []).slice(0, 5);
+function recentHtml(current) {
+  const ids = [];
+  if (current && takenSet.has(current.shot_id)) ids.push(current.shot_id);
+  for (const entry of (status.recent || [])) {
+    if (ids.indexOf(entry.shot_id) < 0) ids.push(entry.shot_id);
+  }
+  const list = ids.slice(0, 5);
   if (!list.length) return "";
   const byId = itemsById();
   const shotById = {};
   tour.shots.forEach(s => { shotById[s.shot_id] = s; });
-  const rows = list.map(entry => {
-    const shot = shotById[entry.shot_id];
+  const rows = list.map(shotId => {
+    const shot = shotById[shotId];
     if (!shot) return "";
     const room = esc(roomHeading(shot));
+    const short = esc(shortName(shot));
     const items = (shot.item_ids || []).map(id => byId[id]).filter(Boolean);
     const critical = items.filter(i => i.critical);
     if (critical.length && critical.every(i => i.status === "proven")) {
-      return `<div class="result ok">✓ ${room}: listo</div>`;
+      return `<div class="result ok">✓ ${room}: ${short}</div>`;
     }
     const failed = critical.filter(i => i.request);
     if (failed.length) {
@@ -269,19 +275,15 @@ function renderShot(app) {
     html += `<h2 class="room">${esc(roomHeading(shot))}</h2>
       <div class="instruction">${esc(shot.instruction_es)}</div>
       <button class="btn secondary" id="repeat">Repetir</button>`;
-    if (takenSet.has(shot.shot_id)) {
-      html += shotResultHtml(shot);
-    } else {
+    if (!takenSet.has(shot.shot_id)) {
       html += cameraHtml("Fotografiar");
+    } else if (shotState(shot) === "done") {
+      html += `<div class="result ok">✓ Listo</div>
+        <button class="btn" id="next">Siguiente</button>`;
+    } else if (status.checking.length) {
+      html += `<div class="result wait">Revisando la foto…</div>`;
     }
-    html += recentHtml();
-  }
-  const byId = itemsById();
-  const pending = status.open.map(id => byId[id]).filter(i => i && i.request);
-  if (pending.length) {
-    html += `<div class="pending"><h1>Pendientes</h1><ul>` + pending.map(i =>
-      `<li>${esc(i.request.cleaner)} <button data-shot-for="${esc(i.id)}">Fotografiar</button></li>`
-    ).join("") + `</ul></div>`;
+    html += recentHtml(shot);
   }
   if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
   app.innerHTML = html;
@@ -292,12 +294,6 @@ function renderShot(app) {
     if (next) next.onclick = () => { overrideShot = null; renderMaybe(); };
     wireCamera(shot);
   }
-  app.querySelectorAll("[data-shot-for]").forEach(b => {
-    b.onclick = () => {
-      const s = shotOfItem(b.getAttribute("data-shot-for"));
-      if (s) { overrideShot = s.shot_id; renderMaybe(); }
-    };
-  });
   app.querySelectorAll("[data-retake]").forEach(b => {
     b.onclick = () => {
       overrideShot = b.getAttribute("data-retake");

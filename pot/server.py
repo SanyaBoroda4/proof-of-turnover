@@ -362,7 +362,8 @@ def create_app(client=None):
         image = qrcode.make(text)
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
-        return Response(buffer.getvalue(), media_type="image/png")
+        return Response(buffer.getvalue(), media_type="image/png",
+                        headers=dict(LONG_CACHE))
 
     @app.get("/api/server-ip")
     def _server_ip():

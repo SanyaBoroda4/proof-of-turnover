@@ -217,5 +217,8 @@ Rules:
 - Whole-house items belong in a suitable room's shot, not in their own shot.
 - Every critical item must appear in at least one shot.
 - room_name_es: the room's name in Spanish (for example "Baño principal"), so the cleaner can tell similar rooms apart.
+- short_es: 2-4 Spanish words naming the spot the photo shows (for example "lavadora", "puerta izquierda"), so two shots in one room can be told apart.
+- When an item's requirement says a door or lid must be open, that item gets its own shot.
+- When a requirement says something is opened only for the photo, that shot comes before the room's overview shot.
 - instruction_es: one short Spanish sentence telling the cleaner what to photograph (it is read aloud to her); name the room in it, since some rooms need the same photo.
 - instruction_en: the English version for the host."""

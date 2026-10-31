@@ -35,12 +35,13 @@ def tour_schema():
                         "shot_id": {"type": "string"},
                         "room_id": {"type": "string"},
                         "room_name_es": {"type": "string"},
+                        "short_es": {"type": "string"},
                         "item_ids": {"type": "array", "items": {"type": "string"}},
                         "instruction_es": {"type": "string"},
                         "instruction_en": {"type": "string"},
                     },
-                    "required": ["shot_id", "room_id", "room_name_es", "item_ids",
-                                 "instruction_es", "instruction_en"],
+                    "required": ["shot_id", "room_id", "room_name_es", "short_es",
+                                 "item_ids", "instruction_es", "instruction_en"],
                     "additionalProperties": False,
                 },
             }
@@ -91,10 +92,12 @@ def fixup_tour(property, checklist, shots):
             if item_id not in item_ids:
                 item_ids.append(item_id)
         seen_shots.add(shot_id)
+        room_es = entry.get("room_name_es") or rooms[room_id]["name"]
         fixed.append({
             "shot_id": shot_id,
             "room_id": room_id,
-            "room_name_es": entry.get("room_name_es") or rooms[room_id]["name"],
+            "room_name_es": room_es,
+            "short_es": entry.get("short_es") or room_es,
             "item_ids": list(item_ids),
             "instruction_es": entry.get("instruction_es") or "",
             "instruction_en": entry.get("instruction_en") or "",
@@ -117,10 +120,12 @@ def fixup_tour(property, checklist, shots):
             continue
         extra += 1
         shot_id = f"{item.room_id}-extra-{extra}"
+        room_es = rooms[item.room_id]["name"]
         fixed.append({
             "shot_id": shot_id,
             "room_id": item.room_id,
-            "room_name_es": rooms[item.room_id]["name"],
+            "room_name_es": room_es,
+            "short_es": room_es,
             "item_ids": [item.id],
             "instruction_es": f"Foto: {item.label}",
             "instruction_en": item.requirement,

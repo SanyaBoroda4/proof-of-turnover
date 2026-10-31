@@ -134,6 +134,33 @@ def test_fixup_keeps_spanish_room_names():
     assert extras and all(s["room_name_es"] for s in extras)
 
 
+def test_fixup_keeps_short_es_with_room_fallback():
+    from pot.tour import tour_schema
+
+    assert "short_es" in tour_schema()["properties"]["shots"]["items"]["required"]
+    property = tiny_property()
+    checklist = build_checklist(property)
+    given = [_shot("s1", "bed", ["bed.beds_made"])]
+    given[0]["room_name_es"] = "Dormitorio"
+    given[0]["short_es"] = "cama"
+    shots, _notes = fixup_tour(property, checklist, given)
+    assert shots[0]["short_es"] == "cama"
+    bare = [_shot("s1", "bed", ["bed.beds_made"])]
+    shots, _notes = fixup_tour(property, checklist, bare)
+    assert shots[0]["short_es"] == shots[0]["room_name_es"]
+
+
+def test_tour_instructions_cover_open_doors_and_short_names():
+    from pot import prompts
+
+    property = tiny_property()
+    text = prompts.tour_instructions(property, build_checklist(property), False)
+    assert "door or lid must be open" in text
+    assert "opened only for the photo" in text
+    assert "short_es" in text
+    assert "2-4 Spanish words" in text
+
+
 def test_generate_tour_records_model_and_time(tmp_path):
     property = tiny_property()
     checklist = build_checklist(property)

@@ -17,6 +17,26 @@ def _by_id(items):
     return {item.id: item for item in items}
 
 
+def test_rental_1_v3_checklist():
+    prop = load_property("rental-1")
+    items = _by_id(build_checklist(prop))
+    assert len(items) == 80
+    assert items["kitchen.coffee_beans"].critical is True
+    assert items["kitchen.coffee_machine_clean"].critical is False
+    assert items["kitchen.paper_towels"].min_count == 1
+    assert items["kitchen.fridge"].critical is True
+    assert items["kitchen.fridge_left_door"].critical is True
+    assert items["kitchen.fridge_right_door"].critical is True
+    assert items["living-room.sofa_bed_linens"].min_count == 1
+    assert items["laundry.machines"].label == "Washer empty"
+    assert items["laundry.dryer"].label == "Dryer empty"
+    rooms = {room["id"]: room for room in prop["rooms"]}
+    assert rooms["patio"]["name"] == "Back porch"
+    assert rooms["porch"]["name"] == "Front porch"
+    assert "only the outdoor furniture and its pillows" in items["patio.area_tidy"].requirement
+    assert "only the outdoor furniture and its pillows" in items["porch.area_tidy"].requirement
+
+
 def test_demo_house_checklist():
     items = _by_id(build_checklist(load_property("demo-house")))
     assert len(items) == 30
