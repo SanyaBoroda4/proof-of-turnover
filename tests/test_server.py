@@ -403,3 +403,45 @@ def test_generate_tour_endpoint(tmp_path, monkeypatch):
     assert any("-extra-" in s["shot_id"] for s in shots[1:])
     saved = json.loads((props / "tour.json").read_text(encoding="utf-8"))
     assert saved["shots"] == shots
+
+
+def test_create_run_language_accepted_and_in_status():
+    for lang in ("es", "en", "ru"):
+        test, code = _client()
+        response = test.post(
+            f"/api/runs?code={code}",
+            json={"property": "demo-house", "language": lang},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["language"] == lang
+        status = test.get(f"/api/runs/{body['run_id']}/status?code={code}")
+        assert status.status_code == 200
+        assert status.json()["language"] == lang
+
+
+def test_create_run_rejects_unsupported_language():
+    test, code = _client()
+    response = test.post(
+        f"/api/runs?code={code}",
+        json={"property": "demo-house", "language": "fr"},
+    )
+    assert response.status_code == 400
+
+
+def test_create_run_defaults_to_property_language():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    status = test.get(f"/api/runs/{run_id}/status?code={code}")
+    assert status.json()["language"] == "es"  # demo-house cleaner_language
+
+
+def test_languages_endpoint_lists_native_names():
+    test, code = _client()
+    response = test.get(f"/api/languages?code={code}")
+    assert response.status_code == 200
+    assert response.json()["languages"] == [
+        {"code": "es", "name": "Español"},
+        {"code": "en", "name": "English"},
+        {"code": "ru", "name": "Русский"},
+    ]

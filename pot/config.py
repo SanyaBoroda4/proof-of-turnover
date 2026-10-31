@@ -42,6 +42,15 @@ RUNS_DIR = _project_dir("POT_RUNS_DIR", "data/runs")
 MODEL_CACHE_DIR = _project_dir("POT_MODEL_CACHE_DIR", "data/model_cache")
 DEMO_DIR = _project_dir("POT_DEMO_DIR", "data/demo-build")
 
+#: Supported cleaner languages: (code, native name). Everything reads
+#: from this list, so a new language is one entry + one tour regeneration.
+CLEANER_LANGUAGES = (
+    ("es", "Español"),
+    ("en", "English"),
+    ("ru", "Русский"),
+)
+CLEANER_LANGUAGE_CODES = frozenset(code for code, _name in CLEANER_LANGUAGES)
+
 
 def ensure_dirs():
     RUNS_DIR.mkdir(parents=True, exist_ok=True)

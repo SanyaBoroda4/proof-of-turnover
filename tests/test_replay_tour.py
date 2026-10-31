@@ -47,6 +47,12 @@ def _answer(kwargs):
             {"item_id": i, "cleaner": f"Foto {i}", "host": f"Photo {i}"}
             for i in enum
         ]}
+    if "boxes" in props:
+        import re
+
+        match = re.search(r"(\d+) numbered boxes", kwargs.get("instructions") or "")
+        count = int(match.group(1)) if match else 0
+        return {"boxes": list(range(1, count + 1))}
     enum = props["claims"]["items"]["properties"]["item_id"]["enum"]
     pid = photo_ids_in(kwargs["input"][0]["content"])[0]
     claims = []

@@ -17,7 +17,7 @@ def _by_id(items):
     return {item.id: item for item in items}
 
 
-def test_rental_1_v3_checklist():
+def test_rental_1_v5_checklist():
     prop = load_property("rental-1")
     items = _by_id(build_checklist(prop))
     assert len(items) == 80
@@ -33,8 +33,16 @@ def test_rental_1_v3_checklist():
     rooms = {room["id"]: room for room in prop["rooms"]}
     assert rooms["patio"]["name"] == "Back porch"
     assert rooms["porch"]["name"] == "Front porch"
-    assert "only the outdoor furniture and its pillows" in items["patio.area_tidy"].requirement
-    assert "only the outdoor furniture and its pillows" in items["porch.area_tidy"].requirement
+    for room_id in ("master-bathroom", "hall-bathroom", "powder-room"):
+        toilet = items[f"{room_id}.toilet"]
+        assert "lid open" in toilet.requirement.lower()
+        assert "normal" in toilet.requirement.lower()
+        spare = items[f"{room_id}.spare_toilet_paper"]
+        assert spare.min_count == 2
+    assert "throw blanket" in items["patio.area_tidy"].requirement
+    assert "throw blanket" in items["porch.area_tidy"].requirement
+    assert "judge the inside" in items["kitchen.fridge"].requirement
+    assert "a few specks are fine" in items["laundry.lint_filter"].requirement
 
 
 def test_demo_house_checklist():

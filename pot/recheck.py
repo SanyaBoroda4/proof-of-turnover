@@ -32,6 +32,7 @@ from pot.verifier import (
     MAX_WORKERS,
     check_sam,
     check_second_look,
+    pick_problem_boxes,
     segment_problem_objects,
     verify,
 )
@@ -152,6 +153,13 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
                     sam, job_notes = future.result()
                     problem_sams[ref] = sam
                     notes.extend(job_notes)
+    for item_id, sam in list(problem_sams.items()):
+        if sam.count > 1:
+            picked, job_notes = pick_problem_boxes(
+                client, item_id, photo, sam, seconds[item_id].problem_object, effort
+            )
+            notes.extend(job_notes)
+            problem_sams[item_id] = picked
     return {
         "claims": claims,
         "seconds": seconds,
@@ -198,7 +206,7 @@ def run_photo_checks(client, state, photo_id, items, parallel, effort=None):
         }
         if candidates:
             found, problem_notes = segment_problem_objects(
-                client, candidates, acc_seconds, {photo.id: photo}
+                client, candidates, acc_seconds, {photo.id: photo}, effort
             )
             fresh["problem_sams"].update(found)
             fresh["notes"].extend(problem_notes)

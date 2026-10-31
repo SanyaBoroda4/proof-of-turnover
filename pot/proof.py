@@ -120,7 +120,7 @@ def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_pho
                 )
             return ProofItem(
                 item.id, PROVEN,
-                f"Confirmed in the photo ({best} of {item.min_count} visible)",
+                f"Confirmed in the photo ({best} seen, {item.min_count} needed)",
                 claim.photo_id,
             )
         return ProofItem(item.id, PROVEN, "Confirmed in the photo", claim.photo_id)

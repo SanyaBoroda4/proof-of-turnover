@@ -21,6 +21,26 @@ FIRST_LOOK_PHOTO_SIZE = "check"  # 1600 px copies keep small details (stains)
 VERIFY_PHOTO_SIZE = "check"  # second look also needs full detail
 
 
+def pick_boxes_schema():
+    return {
+        "type": "object",
+        "properties": {
+            "boxes": {"type": "array", "items": {"type": "integer"}},
+        },
+        "required": ["boxes"],
+        "additionalProperties": False,
+    }
+
+
+def pick_boxes_instructions(problem_object, count):
+    return (
+        f"The attached photo shows {count} numbered boxes (1 to {count}). "
+        f"The problem to report is: {problem_object}. "
+        f"Return the numbers of the boxes that show what is wrong. "
+        f"Return an empty list when none of the boxes shows the problem."
+    )
+
+
 def model_photo_path(photo, size):
     """Which saved copy of a photo to send to the model."""
     if size == "check":
@@ -147,10 +167,27 @@ Rules:
 _LANGUAGE_NAMES = {
     "es": "Spanish",
     "en": "English",
+    "ru": "Russian",
     "fr": "French",
     "de": "German",
     "pt": "Portuguese",
     "it": "Italian",
+}
+
+_REQUEST_EXAMPLES = {
+    # (problem example, photo example) in the cleaner's language.
+    "es": (
+        "Limpia la mancha del fondo del microondas y envía una foto nueva.",
+        "Envía una foto de la toalla de manos en el baño de visitas.",
+    ),
+    "en": (
+        "Clean the stain at the back of the microwave and send a new photo.",
+        "Send a photo of the hand towel in the guest bathroom.",
+    ),
+    "ru": (
+        "Очистите пятно на задней стенке микроволновки и пришлите новое фото.",
+        "Пришлите фото полотенца для рук в гостевом санузле.",
+    ),
 }
 
 
@@ -159,7 +196,9 @@ def _language_name(code):
 
 
 def requests_instructions(cleaner_language, entries):
-    cleaner = _language_name(cleaner_language)
+    code = (cleaner_language or "en").lower()
+    cleaner = _language_name(code)
+    problem_ex, photo_ex = _REQUEST_EXAMPLES.get(code, _REQUEST_EXAMPLES["en"])
     lines = []
     for entry in entries:
         lines.append(
@@ -174,7 +213,7 @@ Rules:
 - For a problem item: say what to fix and ask for a new photo afterwards.
 - For an item that needs proof: say exactly what to photograph.
 - Keep each request to one sentence.
-- Examples (in Spanish): "Limpia la mancha del fondo del microondas y envía una foto nueva." / "Envía una foto de la toalla de manos en el baño de visitas."
+- Examples (in {cleaner}): "{problem_ex}" / "{photo_ex}"
 
 Items:
 {item_lines}"""
@@ -216,9 +255,8 @@ Rules:
 - Do not list coverage items: a room counts as photographed as soon as any photo of it arrives.
 - Whole-house items belong in a suitable room's shot, not in their own shot.
 - Every critical item must appear in at least one shot.
-- room_name_es: the room's name in Spanish (for example "Baño principal"), so the cleaner can tell similar rooms apart.
-- short_es: 2-4 Spanish words naming the spot the photo shows (for example "lavadora", "puerta izquierda"), so two shots in one room can be told apart.
+- Each shot carries room_name_xx, short_xx and instruction_xx for xx = es, en, ru: short spoken sentences that name the room, so the cleaner can tell similar rooms apart. Spanish uses the tú imperative ("Fotografía…"), English the plain imperative ("Take a photo of…"), Russian the polite imperative ("Сфотографируйте…").
+- short_xx is 2-4 words naming the spot the photo shows (for example "lavadora", "puerta izquierda"), so two shots in one room can be told apart.
 - When an item's requirement says a door or lid must be open, that item gets its own shot.
 - When a requirement says something is opened only for the photo, that shot comes before the room's overview shot.
-- instruction_es: one short Spanish sentence telling the cleaner what to photograph (it is read aloud to her); name the room in it, since some rooms need the same photo.
-- instruction_en: the English version for the host."""
+- instruction_xx is one short sentence telling the cleaner what to photograph (it is read aloud to her); name the room in it, since some rooms need the same photo."""

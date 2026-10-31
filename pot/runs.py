@@ -65,9 +65,11 @@ def _write_json_atomically(path, data):
 class RunState:
     """One turnover run: in-memory proofs, requests and progress."""
 
-    def __init__(self, run_dir, property, checklist, tour=None, started_at=None, demo=False):
+    def __init__(self, run_dir, property, checklist, tour=None, started_at=None,
+                 demo=False, language=None):
         self.run_dir = Path(run_dir)
         self.property = property
+        self.language = language or property.get("cleaner_language", "es")
         self.checklist = checklist
         self.items_by_id = {item.id: item for item in checklist}
         self.rooms = {room["id"]: room for room in property["rooms"]}
@@ -108,12 +110,13 @@ class RunState:
         }
 
     @classmethod
-    def create(cls, run_dir, property_id, tour=None, demo=False):
+    def create(cls, run_dir, property_id, tour=None, demo=False, language=None):
         """Start a fresh run: seed state and write the initial files."""
         run_dir = Path(run_dir)
         run_dir.mkdir(parents=True, exist_ok=True)
         property = load_property(property_id)
-        state = cls(run_dir, property, build_checklist(property), tour=tour, demo=demo)
+        state = cls(run_dir, property, build_checklist(property), tour=tour,
+                     demo=demo, language=language)
         with state.lock:
             state._save_locked()
         return state
@@ -140,6 +143,7 @@ class RunState:
             tour={"shots": shots},
             started_at=datetime.fromisoformat(started_at) if started_at else None,
             demo=bool(first_data.get("demo", False)),
+            language=first_data.get("language"),
         )
         for entry in first_data.get("photos", []):
             photo = Photo(
@@ -574,6 +578,7 @@ class RunState:
             return {
                 "run_id": self.run_dir.name,
                 "property": self.property["id"],
+                "language": self.language,
                 "agent_state": self._agent_state_locked()
                 if self.signoff.get("decision") != "approve" else DONE,
                 "started_at": self.started_at.isoformat(timespec="seconds"),
@@ -665,6 +670,7 @@ class RunState:
             "property": self.property["id"],
             "started_at": self.started_at.isoformat(timespec="seconds"),
             "demo": self.demo,
+            "language": self.language,
             "tour": self.tour,
             "photos": [
                 {

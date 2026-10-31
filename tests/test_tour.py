@@ -10,13 +10,20 @@ from tests.fakes import FakeSpark, tiny_property
 
 
 def _shot(shot_id, room_id, item_ids):
-    return {
+    shot = {
         "shot_id": shot_id,
         "room_id": room_id,
         "item_ids": list(item_ids),
-        "instruction_es": f"Foto {shot_id}",
-        "instruction_en": f"Photo {shot_id}",
     }
+    for lang, room, short, instruction in (
+        ("es", f"Habitación {room_id}", f"punto {shot_id}", f"Foto {shot_id}"),
+        ("en", f"{room_id} room", f"spot {shot_id}", f"Photo {shot_id}"),
+        ("ru", f"комната {room_id}", f"место {shot_id}", f"Фото {shot_id}"),
+    ):
+        shot[f"room_name_{lang}"] = room
+        shot[f"short_{lang}"] = short
+        shot[f"instruction_{lang}"] = instruction
+    return shot
 
 
 def test_fixup_drops_unknown_rooms_items_and_dupes():
@@ -134,20 +141,34 @@ def test_fixup_keeps_spanish_room_names():
     assert extras and all(s["room_name_es"] for s in extras)
 
 
-def test_fixup_keeps_short_es_with_room_fallback():
+def test_tour_schema_requires_all_three_languages():
     from pot.tour import tour_schema
 
-    assert "short_es" in tour_schema()["properties"]["shots"]["items"]["required"]
+    required = tour_schema()["properties"]["shots"]["items"]["required"]
+    for field in ("room_name", "short", "instruction"):
+        for lang in ("es", "en", "ru"):
+            assert f"{field}_{lang}" in required
+
+
+def test_fixup_falls_back_to_english_with_note():
     property = tiny_property()
     checklist = build_checklist(property)
-    given = [_shot("s1", "bed", ["bed.beds_made"])]
+    bed_items = [i.id for i in checklist if i.room_id == "bed" and i.key != "coverage"]
+    bath_items = [i.id for i in checklist if i.room_id == "bath" and i.key != "coverage"]
+    given = [_shot("bed-1", "bed", bed_items), _shot("bath-1", "bath", bath_items)]
     given[0]["room_name_es"] = "Dormitorio"
     given[0]["short_es"] = "cama"
-    shots, _notes = fixup_tour(property, checklist, given)
+    shots, notes = fixup_tour(property, checklist, given)
     assert shots[0]["short_es"] == "cama"
-    bare = [_shot("s1", "bed", ["bed.beds_made"])]
-    shots, _notes = fixup_tour(property, checklist, bare)
-    assert shots[0]["short_es"] == shots[0]["room_name_es"]
+    assert notes == []
+    bare = [_shot("bed-1", "bed", bed_items), _shot("bath-1", "bath", bath_items)]
+    del bare[0]["short_es"]
+    del bare[0]["instruction_ru"]
+    shots, notes = fixup_tour(property, checklist, bare)
+    assert shots[0]["short_es"] == shots[0]["short_en"]
+    assert shots[0]["instruction_ru"] == shots[0]["instruction_en"]
+    assert any("short_es" in n and "English used" in n for n in notes)
+    assert any("instruction_ru" in n and "English used" in n for n in notes)
 
 
 def test_tour_instructions_cover_open_doors_and_short_names():
@@ -157,8 +178,10 @@ def test_tour_instructions_cover_open_doors_and_short_names():
     text = prompts.tour_instructions(property, build_checklist(property), False)
     assert "door or lid must be open" in text
     assert "opened only for the photo" in text
-    assert "short_es" in text
-    assert "2-4 Spanish words" in text
+    assert "short_xx" in text
+    assert "2-4 words" in text
+    assert "Fotografía" in text and "Take a photo of" in text
+    assert "Сфотографируйте" in text
 
 
 def test_generate_tour_records_model_and_time(tmp_path):

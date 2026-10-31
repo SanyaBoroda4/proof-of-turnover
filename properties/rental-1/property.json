@@ -115,6 +115,15 @@
       "critical": true
     },
     {
+      "room": "master-bathroom",
+      "key": "toilet",
+      "label": "Toilet clean inside (lid open)",
+      "requirement": "Toilet lid open for the photo: inside of the bowl clean (no stains or residue), water at a normal level (not clogged, no overflow), seat and rim dry and clean",
+      "sam_prompt": "toilet",
+      "min_count": 1,
+      "critical": true
+    },
+    {
       "room": "hall-bathroom",
       "key": "toilet_paper",
       "label": "New roll on the holder",
@@ -124,19 +133,37 @@
       "critical": true
     },
     {
+      "room": "hall-bathroom",
+      "key": "toilet",
+      "label": "Toilet clean inside (lid open)",
+      "requirement": "Toilet lid open for the photo: inside of the bowl clean (no stains or residue), water at a normal level (not clogged, no overflow), seat and rim dry and clean",
+      "sam_prompt": "toilet",
+      "min_count": 1,
+      "critical": true
+    },
+    {
       "room": "powder-room",
       "key": "toilet_paper",
       "label": "New roll on the holder",
       "requirement": "A new, full toilet paper roll on the holder next to the toilet",
       "sam_prompt": "toilet paper roll",
+      "min_count": 1,
+      "critical": true
+    },
+    {
+      "room": "powder-room",
+      "key": "toilet",
+      "label": "Toilet clean inside (lid open)",
+      "requirement": "Toilet lid open for the photo: inside of the bowl clean (no stains or residue), water at a normal level (not clogged, no overflow), seat and rim dry and clean",
+      "sam_prompt": "toilet",
       "min_count": 1,
       "critical": true
     },
     {
       "room": "master-bathroom",
       "key": "spare_toilet_paper",
-      "label": "Spare rolls on the shelves",
-      "requirement": "Spare toilet paper rolls on the shelves over the toilet (not on the tank)",
+      "label": "Spare roll in the bathroom",
+      "requirement": "Besides the roll on the holder, at least one spare toilet paper roll, on the shelves or on the toilet tank (the photo shows at least 2 rolls)",
       "sam_prompt": "toilet paper roll",
       "min_count": 2,
       "critical": true
@@ -144,8 +171,8 @@
     {
       "room": "hall-bathroom",
       "key": "spare_toilet_paper",
-      "label": "Spare rolls on the shelves",
-      "requirement": "Spare toilet paper rolls on the shelves over the toilet (not on the tank)",
+      "label": "Spare roll in the bathroom",
+      "requirement": "Besides the roll on the holder, at least one spare toilet paper roll, on the shelves or on the toilet tank (the photo shows at least 2 rolls)",
       "sam_prompt": "toilet paper roll",
       "min_count": 2,
       "critical": true
@@ -153,10 +180,10 @@
     {
       "room": "powder-room",
       "key": "spare_toilet_paper",
-      "label": "Spare roll on the tank",
-      "requirement": "A spare toilet paper roll on top of the toilet tank",
+      "label": "Spare roll in the bathroom",
+      "requirement": "Besides the roll on the holder, at least one spare toilet paper roll, for example on the toilet tank (the photo shows at least 2 rolls)",
       "sam_prompt": "toilet paper roll",
-      "min_count": 1,
+      "min_count": 2,
       "critical": true
     },
     {
@@ -172,7 +199,7 @@
       "room": "patio",
       "key": "area_tidy",
       "label": "Back porch clean",
-      "requirement": "Back porch clean: no stains or trash, no shoes, toys, bags, clothes or blankets left out; only the outdoor furniture and its pillows",
+      "requirement": "Back porch clean: no stains or trash, no shoes, toys, bags or clothes left out (a throw blanket on the seats is fine)",
       "sam_prompt": null,
       "min_count": null,
       "critical": true
@@ -190,7 +217,7 @@
       "room": "porch",
       "key": "area_tidy",
       "label": "Front porch clean",
-      "requirement": "Front porch and the walkway in front of it clean: no stains or trash, no shoes, toys, bags, clothes or blankets left out; only the outdoor furniture and its pillows",
+      "requirement": "Front porch and the walkway in front of it clean: no stains or trash, no shoes, toys, bags or clothes left out (a throw blanket on the seats is fine)",
       "sam_prompt": null,
       "min_count": null,
       "critical": true
@@ -217,7 +244,7 @@
       "room": "kitchen",
       "key": "fridge",
       "label": "Fridge main compartment empty",
-      "requirement": "Both fridge doors open, main compartment: shelves and drawers empty and clean, no food or drinks left",
+      "requirement": "Main compartment of the fridge (doors opened for the photo): shelves and drawers empty and clean, no food or drinks left; judge the inside, the doors need not be in the photo",
       "sam_prompt": null,
       "min_count": null,
       "critical": true
@@ -352,7 +379,7 @@
       "room": "laundry",
       "key": "lint_filter",
       "label": "Dryer lint filter clean",
-      "requirement": "Dryer lint filter pulled out and clean, no lint",
+      "requirement": "Dryer lint filter pulled out and emptied: no layer of lint on the screen (a few specks are fine)",
       "sam_prompt": null,
       "min_count": null,
       "critical": true

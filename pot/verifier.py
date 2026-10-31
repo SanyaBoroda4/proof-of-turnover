@@ -7,8 +7,12 @@ parallel, at most MAX_WORKERS calls at a time. A call that fails after
 all retries counts as unclear / not found, with a note; the run goes on.
 """
 
+import base64
+import io
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+
+from PIL import Image, ImageDraw
 
 from pot import prompts
 from pot.meta_client import MetaClientError, submit_with_context
@@ -234,8 +238,74 @@ def verify(client, checklist, claims, photos, rooms=None, assignments=None, effo
     return VerifyResult(second_looks=seconds, sams=sams, room_decisions=decisions, notes=notes)
 
 
-def segment_problem_objects(client, proofs, seconds, photos_by_id):
-    """SAM-segment each final problem's problem_object; returns {item_id: SamCheck}."""
+def _numbered_boxes_jpeg(photo, boxes):
+    """The check copy with each box drawn in red, numbered 1..N."""
+    with Image.open(photo.check_path) as handle:
+        handle.load()
+        image = handle.convert("RGB")
+    width, height = image.size
+    stroke = max(2, width // 200)
+    draw = ImageDraw.Draw(image)
+    for number, box in enumerate(boxes, start=1):
+        draw.rectangle(
+            [box["left"], box["top"], box["right"], box["bottom"]],
+            outline=(220, 38, 40), width=stroke,
+        )
+        label = str(number)
+        box_top = max(0, box["top"] - 6 * stroke)
+        draw.rectangle(
+            [box["left"], box_top, box["left"] + 8 * stroke, box["top"] + 6 * stroke],
+            fill=(255, 255, 255),
+        )
+        draw.text((box["left"] + stroke, box_top), label, fill=(220, 38, 40))
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=90)
+    return buffer.getvalue()
+
+
+def pick_problem_boxes(client, item_id, photo, sam, problem_object, effort=None):
+    """Keep only the problem boxes Muse Spark confirms; returns (SamCheck, notes).
+
+    With one box there is nothing to choose, so no call is made. With
+    several, the model sees them numbered and picks the ones showing what
+    is wrong; "none" keeps no box (the caption still explains).
+    """
+    effort = prompts.verify_effort() if effort is None else effort
+    if sam.count <= 1:
+        return sam, []
+    raw = base64.b64encode(_numbered_boxes_jpeg(photo, sam.boxes)).decode("ascii")
+    try:
+        answer = client.respond(
+            f"pick problem boxes {item_id} {photo.id} ({problem_object})",
+            [{"type": "input_image", "image_url": f"data:image/jpeg;base64,{raw}"}],
+            instructions=prompts.pick_boxes_instructions(problem_object, sam.count),
+            schema=prompts.pick_boxes_schema(),
+            effort=effort,
+        )
+        boxes = answer.get("boxes", [])
+        if not isinstance(boxes, list):
+            raise ValueError(f"boxes is not a list: {boxes!r}")
+        picked = []
+        for number in boxes:
+            if isinstance(number, bool):
+                continue
+            if isinstance(number, int) and 1 <= number <= sam.count and number not in picked:
+                picked.append(number)
+    except MetaClientError as exc:
+        return sam, [f"Box pick for {item_id} failed ({exc}); kept all {sam.count}"]
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
+        return sam, [f"Box pick for {item_id} unreadable ({exc}); kept all {sam.count}"]
+    kept = [sam.boxes[number - 1] for number in sorted(picked)]
+    note = f"Box pick for {item_id}: kept {len(kept)} of {sam.count}"
+    return SamCheck(item_id, sam.photo_id, sam.prompt, len(kept), kept), [note]
+
+
+def segment_problem_objects(client, proofs, seconds, photos_by_id, effort=None):
+    """SAM-segment each final problem's problem_object; returns {item_id: SamCheck}.
+
+    Multi-box results go through one Muse Spark pick call per item.
+    """
+    effort = prompts.verify_effort() if effort is None else effort
     jobs = []
     for item_id in sorted(proofs):
         if proofs[item_id].status != PROBLEM:
@@ -255,8 +325,23 @@ def segment_problem_objects(client, proofs, seconds, photos_by_id):
             ))
             for item_id, photo, prompt in jobs
         ]
+        sams = {}
         for item_id, future in sorted(futures):
             result, job_notes = future.result()
             notes.extend(job_notes)
-            found[item_id] = result
+            sams[item_id] = result
+        picks = [
+            (item_id, submit_with_context(
+                pool, pick_problem_boxes, client, item_id,
+                photos_by_id[proofs[item_id].photo_id], sams[item_id],
+                seconds[item_id].problem_object, effort,
+            ))
+            for item_id in sorted(sams)
+            if sams[item_id].count > 1
+        ]
+        for item_id, future in picks:
+            result, job_notes = future.result()
+            notes.extend(job_notes)
+            sams[item_id] = result
+        found.update(sams)
     return found, notes

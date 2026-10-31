@@ -94,3 +94,35 @@ def test_failed_call_falls_back_for_all(tmp_path):
     requests, notes = write_requests(FakeSpark(requester=boom), prop, checklist, proofs)
     assert len(requests) == 1
     assert any("check failed" in note for note in notes)
+
+
+def test_language_reaches_prompt_and_cleaner_text():
+    prop = tiny_property()
+    checklist = build_checklist(prop)
+    proofs = _proofs({"bed.beds_made": NEEDS_PROOF})
+
+    def russian(call):
+        assert "Russian" in call["instructions"]
+        assert "микроволновки" in call["instructions"]
+        enum = call["schema"]["properties"]["requests"]["items"]["properties"]["item_id"]["enum"]
+        assert enum == ["bed.beds_made"]
+        return {"requests": [
+            {"item_id": "bed.beds_made", "cleaner": "Сфотографируйте кровать",
+             "host": "Send a photo of the bed"}
+        ]}
+
+    requests, notes = write_requests(
+        FakeSpark(requester=russian), prop, checklist, proofs, language="ru"
+    )
+    assert requests[0]["cleaner"] == "Сфотографируйте кровать"
+    assert requests[0]["host"] == "Send a photo of the bed"
+    assert notes == []
+
+
+def test_language_defaults_to_property():
+    prop = tiny_property()
+    checklist = build_checklist(prop)
+    proofs = _proofs({"bed.beds_made": NEEDS_PROOF})
+    client = FakeSpark()
+    write_requests(client, prop, checklist, proofs)
+    assert "Spanish" in client.calls[0]["instructions"]

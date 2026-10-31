@@ -92,3 +92,23 @@ def test_final_statuses_scored_when_proof_exists(tmp_path):
     assert "PASS `bath.coverage`" in report
     assert "PASS `bed.floor_clear` in some room" in report
     assert "FAIL `bed.no_belongings`" in report
+
+
+def test_false_alarms_use_pruned_proof_issues(tmp_path):
+    run_dir, key_path = _fixture(tmp_path)
+    _write(run_dir / "proof.json", {
+        "verdict": {"ready": False},
+        "items": {},
+        "other_issues": [],  # the first-look "crack in wall" repeated an item problem
+    })
+    report = score_run(run_dir, key_path)
+    assert "crack in wall" not in report
+    _write(run_dir / "proof.json", {
+        "verdict": {"ready": False},
+        "items": {},
+        "other_issues": [
+            {"photo_id": "P02", "description": "crack in wall", "room_id": "bath"}
+        ],
+    })
+    report = score_run(run_dir, key_path)
+    assert "other issue @ `bath.jpg` (room bath)" in report

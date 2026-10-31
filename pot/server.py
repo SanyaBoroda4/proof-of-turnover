@@ -98,6 +98,7 @@ def local_ip():
 class RunCreate(BaseModel):
     property: str
     demo: bool = False
+    language: str | None = None
 
 
 class TourRequest(BaseModel):
@@ -197,6 +198,7 @@ def _check_worker(server, state, photo_id):
             requests, notes = write_requests(
                 server.client, state.property, state.checklist, state.proofs,
                 effort=prompts.RECHECK_EFFORT, item_ids=set(merged["failed"]),
+                language=state.language,
             )
             state.store_requests(requests, notes)
         state.finish_photo(photo_id)
@@ -252,8 +254,12 @@ def create_app(client=None):
         shots, notes = fixup_tour(property, checklist, saved)
         if not shots:
             raise HTTPException(400, f"Property '{body.property}': tour has no usable shots")
+        language = body.language or property.get("cleaner_language", "es")
+        if language not in config.CLEANER_LANGUAGE_CODES:
+            raise HTTPException(400, f"Unsupported language {language!r}")
         state = RunState.create(
-            new_run_dir(), body.property, tour={"shots": shots}, demo=body.demo
+            new_run_dir(), body.property, tour={"shots": shots}, demo=body.demo,
+            language=language,
         )
         server.remember(state)
         return {
@@ -261,6 +267,7 @@ def create_app(client=None):
             "started_at": state.started_at.isoformat(timespec="seconds"),
             "shots": len(shots),
             "tour_notes": notes,
+            "language": language,
         }
 
     @app.get("/api/runs/{run_id}/tour")
@@ -348,7 +355,7 @@ def create_app(client=None):
                 requests, notes = write_requests(
                     server.client, state.property, state.checklist,
                     state.proofs, effort=prompts.RECHECK_EFFORT,
-                    item_ids=set(signoff["items"]),
+                    item_ids=set(signoff["items"]), language=state.language,
                 )
             finally:
                 call_context.reset(token)
@@ -368,6 +375,12 @@ def create_app(client=None):
     @app.get("/api/server-ip")
     def _server_ip():
         return {"ip": local_ip()}
+
+    @app.get("/api/languages")
+    def _languages():
+        return {"languages": [
+            {"code": code, "name": name} for code, name in config.CLEANER_LANGUAGES
+        ]}
 
     @app.get("/api/properties")
     def _properties():

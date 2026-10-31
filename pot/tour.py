@@ -35,13 +35,20 @@ def tour_schema():
                         "shot_id": {"type": "string"},
                         "room_id": {"type": "string"},
                         "room_name_es": {"type": "string"},
+                        "room_name_en": {"type": "string"},
+                        "room_name_ru": {"type": "string"},
                         "short_es": {"type": "string"},
+                        "short_en": {"type": "string"},
+                        "short_ru": {"type": "string"},
                         "item_ids": {"type": "array", "items": {"type": "string"}},
                         "instruction_es": {"type": "string"},
                         "instruction_en": {"type": "string"},
+                        "instruction_ru": {"type": "string"},
                     },
-                    "required": ["shot_id", "room_id", "room_name_es", "short_es",
-                                 "item_ids", "instruction_es", "instruction_en"],
+                    "required": ["shot_id", "room_id", "room_name_es", "room_name_en",
+                                 "room_name_ru", "short_es", "short_en", "short_ru",
+                                 "item_ids", "instruction_es", "instruction_en",
+                                 "instruction_ru"],
                     "additionalProperties": False,
                 },
             }
@@ -92,16 +99,31 @@ def fixup_tour(property, checklist, shots):
             if item_id not in item_ids:
                 item_ids.append(item_id)
         seen_shots.add(shot_id)
-        room_es = entry.get("room_name_es") or rooms[room_id]["name"]
-        fixed.append({
+        shot = {
             "shot_id": shot_id,
             "room_id": room_id,
-            "room_name_es": room_es,
-            "short_es": entry.get("short_es") or room_es,
             "item_ids": list(item_ids),
-            "instruction_es": entry.get("instruction_es") or "",
-            "instruction_en": entry.get("instruction_en") or "",
-        })
+        }
+        room_en = entry.get("room_name_en") or rooms[room_id]["name"]
+        short_en = entry.get("short_en") or room_en
+        instruction_en = entry.get("instruction_en") or ""
+        if not entry.get("room_name_en"):
+            notes.append(f"Tour: shot {shot_id!r} has no English room name")
+        if not entry.get("short_en"):
+            notes.append(f"Tour: shot {shot_id!r} has no English short name")
+        if not entry.get("instruction_en"):
+            notes.append(f"Tour: shot {shot_id!r} has no English instruction")
+        for field, english in (("room_name", room_en), ("short", short_en),
+                               ("instruction", instruction_en)):
+            shot[f"{field}_en"] = english
+            for lang in ("es", "ru"):
+                key = f"{field}_{lang}"
+                shot[key] = entry.get(key) or english
+                if not entry.get(key):
+                    notes.append(
+                        f"Tour: shot {shot_id!r} has no {key}, English used"
+                    )
+        fixed.append(shot)
     covered = set()
     for shot in fixed:
         covered.update(shot["item_ids"])
@@ -120,15 +142,20 @@ def fixup_tour(property, checklist, shots):
             continue
         extra += 1
         shot_id = f"{item.room_id}-extra-{extra}"
-        room_es = rooms[item.room_id]["name"]
+        room_name = rooms[item.room_id]["name"]
         fixed.append({
             "shot_id": shot_id,
             "room_id": item.room_id,
-            "room_name_es": room_es,
-            "short_es": room_es,
+            "room_name_es": room_name,
+            "room_name_en": room_name,
+            "room_name_ru": room_name,
+            "short_es": room_name,
+            "short_en": room_name,
+            "short_ru": room_name,
             "item_ids": [item.id],
             "instruction_es": f"Foto: {item.label}",
             "instruction_en": item.requirement,
+            "instruction_ru": item.requirement,
         })
         notes.append(f"Tour: added shot {shot_id} for missing item {item.id}")
     ordered = []
@@ -192,6 +219,8 @@ def generate_tour(client, property, checklist, effort=None, properties_dir=None)
             ),
             schema=tour_schema(),
             effort=prompts.REASONING_EFFORT if effort is None else effort,
+            # Three languages per shot roughly triples the answer size.
+            max_output_tokens=32000,
         )
     except MetaClientError as exc:
         raise PropertyError(f"Property '{property['id']}': tour generation failed: {exc}") from exc

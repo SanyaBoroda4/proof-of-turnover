@@ -32,14 +32,17 @@ def requests_schema(item_ids):
     }
 
 
-def write_requests(client, property, checklist, proofs, effort=None, item_ids=None):
+def write_requests(client, property, checklist, proofs, effort=None, item_ids=None,
+                   language=None):
     """Write requests for unproven critical items; returns (requests, notes).
 
     Requests are grouped by room in house order (whole-house items last).
     Makes no call when everything critical is proven. With item_ids, only
     those items are considered (one tour photo writes only its own shot).
+    The cleaner text uses language (default: the property's).
     """
     effort = prompts.REASONING_EFFORT if effort is None else effort
+    language = language or property.get("cleaner_language", "en")
     by_id = {item.id: item for item in checklist}
     room_order = {room["id"]: index for index, room in enumerate(property["rooms"])}
     wanted = [
@@ -65,9 +68,7 @@ def write_requests(client, property, checklist, proofs, effort=None, item_ids=No
         answer = client.respond(
             f"requests ({len(entries)} items)",
             [{"type": "input_text", "text": "Write the re-cleaning requests."}],
-            instructions=prompts.requests_instructions(
-                property.get("cleaner_language", "en"), entries
-            ),
+            instructions=prompts.requests_instructions(language, entries),
             schema=requests_schema([item.id for item in wanted]),
             effort=effort,
         )

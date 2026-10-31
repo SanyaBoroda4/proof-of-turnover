@@ -182,7 +182,7 @@ def _score_final(run, proof, key):
     return passed, len(key.get("expected", [])), lines
 
 
-def _false_alarms(run, key, consumed):
+def _false_alarms(run, key, consumed, proof=None):
     expected_ids = {e["item"] for e in key.get("expected", []) if not e["item"].startswith("*.")}
     files = {photo["id"]: photo["file"] for photo in run.get("photos", [])}
     lines = []
@@ -191,7 +191,10 @@ def _false_alarms(run, key, consumed):
         if claim.get("status") == "problem" and claim_id not in expected_ids | consumed:
             status, cited, seen = _claim_view(claim, files)
             lines.append(f"- problem `{claim_id}` @ `{cited}` — \"{seen}\"")
-    for issue in run.get("other_issues", []):
+    # proof.json carries the pruned issues (repeats of reported item
+    # problems, house-level calls included, are already dropped there).
+    issues = proof.get("other_issues", []) if proof else run.get("other_issues", [])
+    for issue in issues:
         cited = files.get(issue.get("photo_id"), "-")
         lines.append(
             f"- other issue @ `{cited}` (room {issue.get('room_id')}) — "
@@ -212,6 +215,7 @@ def score_run(run_dir, key_path):
     out.append(f"## Items: {passed}/{total_items} pass")
     out.extend(item_lines or ["- none"])
     out.append("")
+    proof = None
     proof_path = Path(run_dir) / "proof.json"
     if proof_path.is_file():
         proof = json.loads(proof_path.read_text(encoding="utf-8"))
@@ -220,7 +224,7 @@ def score_run(run_dir, key_path):
         out.extend(final_lines or ["- none"])
         out.append("")
     out.append("## Other app findings (possible false alarms)")
-    out.extend(_false_alarms(run, key, consumed) or ["- none"])
+    out.extend(_false_alarms(run, key, consumed, proof) or ["- none"])
     out.append("")
     return "\n".join(out)
 

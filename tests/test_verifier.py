@@ -166,7 +166,9 @@ def test_segment_problem_objects_uses_problem_object(tmp_path):
     assert found["bed.beds_made"].prompt == "brown stain"
     assert found["bed.beds_made"].count == 3
     assert len(client.sam_calls) == 1
-    assert notes == []
+    picks = [c for c in client.calls if c["purpose"].startswith("pick problem boxes")]
+    assert len(picks) == 1  # the 3-box result goes through one pick call
+    assert notes == ["Box pick for bed.beds_made: kept 3 of 3"]
 
 
 def test_verify_effort_env_override(tmp_path, monkeypatch):
@@ -193,3 +195,64 @@ def test_sam_unreadable_output_counts_as_none(tmp_path, monkeypatch):
     assert result.sams["bed.beds_made"].count == 0
     assert result.sams["bed.beds_made"].boxes == []
     assert any("unreadable" in note for note in result.notes)
+
+
+def _numbered_boxes(count):
+    return [
+        {"left": i * 2, "top": 1, "right": i * 2 + 4, "bottom": 8, "confidence": 0.9}
+        for i in range(count)
+    ]
+
+
+def test_pick_problem_boxes_keeps_only_picked(tmp_path):
+    from pot.verifier import pick_problem_boxes
+
+    photos = make_photos(tmp_path / "photos", 1)
+    sam = SamCheck("bed.beds_made", "P01", "brown stain", 3, _numbered_boxes(3))
+    client = FakeSpark(picker=lambda call: {"boxes": [3, 1, 3, 9]})
+    kept, notes = pick_problem_boxes(client, "bed.beds_made", photos[0], sam, "brown stain")
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["purpose"].startswith("pick problem boxes")
+    assert "brown stain" in call["instructions"]
+    assert image_count(call["content"]) == 1
+    assert [box["left"] for box in kept.boxes] == [0, 4]  # boxes 1 and 3
+    assert kept.count == 2
+    assert notes == ["Box pick for bed.beds_made: kept 2 of 3"]
+
+
+def test_pick_problem_boxes_none_keeps_no_box(tmp_path):
+    from pot.verifier import pick_problem_boxes
+
+    photos = make_photos(tmp_path / "photos", 1)
+    sam = SamCheck("bed.beds_made", "P01", "brown stain", 2, _numbered_boxes(2))
+    client = FakeSpark(picker=lambda call: {"boxes": []})
+    kept, notes = pick_problem_boxes(client, "bed.beds_made", photos[0], sam, "brown stain")
+    assert kept.count == 0 and kept.boxes == []
+    assert notes == ["Box pick for bed.beds_made: kept 0 of 2"]
+
+
+def test_pick_problem_boxes_single_box_makes_no_call(tmp_path):
+    from pot.verifier import pick_problem_boxes
+
+    photos = make_photos(tmp_path / "photos", 1)
+    sam = SamCheck("bed.beds_made", "P01", "brown stain", 1, _numbered_boxes(1))
+    client = FakeSpark()
+    kept, notes = pick_problem_boxes(client, "bed.beds_made", photos[0], sam, "brown stain")
+    assert kept is sam and notes == []
+    assert client.calls == []
+
+
+def test_pick_problem_boxes_failure_keeps_all(tmp_path):
+    from pot.verifier import pick_problem_boxes
+
+    def boom(call):
+        raise MetaClientError("pick: boom")
+
+    photos = make_photos(tmp_path / "photos", 1)
+    sam = SamCheck("bed.beds_made", "P01", "brown stain", 3, _numbered_boxes(3))
+    kept, notes = pick_problem_boxes(
+        FakeSpark(picker=boom), "bed.beds_made", photos[0], sam, "brown stain"
+    )
+    assert kept is sam
+    assert notes == ["Box pick for bed.beds_made failed (pick: boom); kept all 3"]

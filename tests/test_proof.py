@@ -378,3 +378,9 @@ def test_evidence_images_drawn_with_caption(tmp_path):
         assert _has_color(img, _is_red)  # problem-object boxes, not item boxes
         assert not _has_color(img, _is_green)
     assert not (Path(tmp_path) / "evidence" / "bed.skip.jpg").exists()
+
+
+def test_proven_count_caption_reads_seen_needed():
+    proof = _prove(sam=_sam(count=2))
+    assert proof.status == PROVEN
+    assert proof.reason == "Confirmed in the photo (2 seen, 1 needed)"

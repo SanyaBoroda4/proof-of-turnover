@@ -20,6 +20,7 @@
          border: none; border-radius: 10px; background: var(--green); color: #fff;
          cursor: pointer; text-align: center; }
   .btn.secondary { background: #e5e5e5; color: #1f2328; }
+  .btn.saved { outline: 3px solid #0969da; outline-offset: 2px; }
   .btn:disabled { opacity: 0.5; }
   .camera { display: block; width: 100%; padding: 20px; margin: 10px 0; font-size: 22px;
          border: none; border-radius: 10px; background: #0969da; color: #fff;
@@ -46,12 +47,108 @@
 const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
 const DEMO = params.get("demo") === "1";
-const OLD_PHOTO_ES = "Foto antigua: esta foto es de antes de empezar. Toma una nueva.";
 let RUN = params.get("run") || "";
+let LANG = "es", langPicked = false, LANGS = null;
 let tour = null, takenSet = new Set(), status = null, demoPhotos = null;
 let overrideShot = null, selectedDemo = "", photoError = "", lastKey = null;
 let pollTimer = null, pendingShot = null;
 let prevShotId = null, seenReqIds = null;
+
+const I18N = {
+  es: {
+    title: "Turno de limpieza",
+    loading: "Cargando…",
+    start: "Empezar",
+    house: "Casa",
+    demoNote: "Modo demo: las fotos salen de una carpeta.",
+    demoPhoto: "Foto demo",
+    starting: "Empezando…",
+    greeting: "Hola",
+    hello: "Empezamos",
+    progress: (room, rooms, taken, total) =>
+      `Habitación ${room} de ${rooms} · Foto ${taken} de ${total}`,
+    checkingMove: "Revisando la foto… puedes seguir.",
+    checking: "Revisando…",
+    repeat: "Repetir",
+    take: "Fotografiar",
+    retake: "Repetir foto",
+    next: "Siguiente",
+    ready: "✓ Listo",
+    doneAll: "✓ Todo listo",
+    finished: "Turno terminado",
+    open: n => new Intl.PluralRules("es").select(n) === "one"
+      ? "Queda 1 tema" : `Quedan ${n} temas`,
+    oldPhoto: "Foto antigua: esta foto es de antes de empezar. Toma una nueva.",
+    authError: "Este enlace no tiene código. Pide el enlace completo.",
+    noVoice: "Este teléfono no tiene voz en español; solo se muestra el texto.",
+  },
+  en: {
+    title: "Cleaning turnover",
+    loading: "Loading…",
+    start: "Start",
+    house: "House",
+    demoNote: "Demo mode: photos come from a folder.",
+    demoPhoto: "Demo photo",
+    starting: "Starting…",
+    greeting: "Hello",
+    hello: "Let's go",
+    progress: (room, rooms, taken, total) =>
+      `Room ${room} of ${rooms} · Photo ${taken} of ${total}`,
+    checkingMove: "Checking the photo… keep going.",
+    checking: "Checking…",
+    repeat: "Repeat",
+    take: "Take photo",
+    retake: "Retake photo",
+    next: "Next",
+    ready: "✓ Done",
+    doneAll: "✓ All done",
+    finished: "Turnover finished",
+    open: n => new Intl.PluralRules("en").select(n) === "one"
+      ? "1 thing left" : `${n} things left`,
+    oldPhoto: "Old photo: this photo is from before the start. Take a new one.",
+    authError: "This link has no code. Ask for the full link.",
+    noVoice: "This phone has no English voice; text only.",
+  },
+  ru: {
+    title: "Уборка",
+    loading: "Загрузка…",
+    start: "Начать",
+    house: "Дом",
+    demoNote: "Демо-режим: фото берутся из папки.",
+    demoPhoto: "Демо-фото",
+    starting: "Начинаем…",
+    greeting: "Здравствуйте",
+    hello: "Начинаем",
+    progress: (room, rooms, taken, total) =>
+      `Комната ${room} из ${rooms} · Фото ${taken} из ${total}`,
+    checkingMove: "Проверяем фото… продолжайте.",
+    checking: "Проверяем…",
+    repeat: "Повторить",
+    take: "Сфотографировать",
+    retake: "Переснять фото",
+    next: "Далее",
+    ready: "✓ Готово",
+    doneAll: "✓ Всё готово",
+    finished: "Уборка завершена",
+    open: n => {
+      const form = new Intl.PluralRules("ru").select(n);
+      if (form === "one") return `Осталась ${n} тема`;
+      if (form === "few") return `Остались ${n} темы`;
+      return `Осталось ${n} тем`;
+    },
+    oldPhoto: "Старое фото: оно сделано до начала. Сделайте новое.",
+    authError: "В этой ссылке нет кода. Попросите полную ссылку.",
+    noVoice: "На этом телефоне нет русского голоса; только текст.",
+  },
+};
+function T() { return I18N[LANG] || I18N.en; }
+
+function loadSavedLang() {
+  try { return localStorage.getItem("pot-lang") || ""; } catch (e) { return ""; }
+}
+function saveLang(code) {
+  try { localStorage.setItem("pot-lang", code); } catch (e) {}
+}
 
 async function api(path, opts) {
   const r = await fetch(path, opts || {});
@@ -64,18 +161,30 @@ async function api(path, opts) {
   return r.json();
 }
 
+const VOICE_PREFS = {es: ["es-us", "es-mx"], en: ["en-us"], ru: ["ru-ru"]};
 let voice = null;
 function pickVoice() {
+  voice = null;
   if (!("speechSynthesis" in window)) return;
-  const vs = speechSynthesis.getVoices().filter(
-    v => v.lang && v.lang.toLowerCase().startsWith("es"));
-  voice = vs.find(v => v.lang.toLowerCase() === "es-us")
-    || vs.find(v => v.lang.toLowerCase() === "es-mx")
-    || vs[0] || null;
+  const all = speechSynthesis.getVoices() || [];
+  const mine = all.filter(
+    v => v.lang && v.lang.toLowerCase().startsWith(LANG));
+  for (const pref of (VOICE_PREFS[LANG] || [])) {
+    voice = mine.find(v => v.lang.toLowerCase() === pref) || null;
+    if (voice) break;
+  }
+  voice = voice || mine[0] || null;
+}
+function voiceMissing() {
+  if (!("speechSynthesis" in window)) return false;
+  const all = speechSynthesis.getVoices() || [];
+  if (!all.length) return false; // voices not loaded yet
+  pickVoice();
+  return !voice;
 }
 if ("speechSynthesis" in window) {
   pickVoice();
-  speechSynthesis.onvoiceschanged = pickVoice;
+  speechSynthesis.onvoiceschanged = () => { pickVoice(); renderMaybe(); };
 }
 const speechQueue = [];
 let speaking = false;
@@ -85,7 +194,7 @@ function pumpSpeech() {
   speaking = true;
   const u = new SpeechSynthesisUtterance(speechQueue.shift());
   if (voice) u.voice = voice;
-  u.lang = (voice && voice.lang) || "es";
+  u.lang = (voice && voice.lang) || LANG;
   u.onend = u.onerror = () => {
     speaking = false;
     if (speechTimer) { clearTimeout(speechTimer); speechTimer = null; }
@@ -123,8 +232,16 @@ function roomName(roomId) {
   return roomId;
 }
 
+function tourText(shot, base) {
+  return shot[base + "_" + LANG] || shot[base + "_en"] || shot[base + "_es"] || "";
+}
+
 function roomHeading(shot) {
-  return shot.room_name_es || roomName(shot.room_id);
+  return tourText(shot, "room_name") || roomName(shot.room_id);
+}
+
+function instruction(shot) {
+  return tourText(shot, "instruction");
 }
 
 function shotOfItem(itemId) {
@@ -150,16 +267,19 @@ function currentShot() {
 }
 
 function renderMaybe() {
-  const key = JSON.stringify([tour, status, overrideShot, selectedDemo, photoError]);
+  const key = JSON.stringify(
+    [LANG, langPicked, tour, status, overrideShot, selectedDemo, photoError]);
   if (key === lastKey) return;
   lastKey = key;
   render();
 }
 
 function render() {
+  document.documentElement.lang = LANG;
+  document.title = T().title;
   const app = document.getElementById("app");
   if (!RUN) return renderStart(app);
-  if (!tour || !status) { app.innerHTML = "<p>Cargando…</p>"; return; }
+  if (!tour || !status) { app.innerHTML = `<p>${esc(T().loading)}</p>`; return; }
   if (!status.current_shot && !status.checking.length && !overrideShot) {
     return renderDone(app);
   }
@@ -167,26 +287,50 @@ function render() {
 }
 
 async function renderStart(app) {
+  if (!langPicked) return renderLanguage(app);
   let props = [];
   try { props = (await api("/api/properties")).properties; } catch (e) { return fail(app, e); }
   const options = props.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
-  app.innerHTML = `<h1>Turno de limpieza</h1>
-    <label class="small" for="prop">Casa</label>
+  app.innerHTML = `<h1>${esc(T().title)}</h1>
+    <label class="small" for="prop">${esc(T().house)}</label>
     <select id="prop">${options}</select>
-    <button class="btn" id="start">Empezar</button>
-    ${DEMO ? '<p class="small">Modo demo: las fotos salen de una carpeta.</p>' : ""}`;
+    <button class="btn" id="start">${esc(T().start)}</button>
+    ${DEMO ? `<p class="small">${esc(T().demoNote)}</p>` : ""}`;
   document.getElementById("start").onclick = startTour;
 }
 
+async function renderLanguage(app) {
+  if (LANGS === null) {
+    try { LANGS = (await api("/api/languages")).languages; }
+    catch (e) { return fail(app, e); }
+  }
+  const saved = loadSavedLang();
+  const buttons = LANGS.map(l =>
+    `<button class="btn${l.code === saved ? " saved" : ""}" data-lang="${esc(l.code)}">${esc(l.name)}</button>`
+  ).join("");
+  app.innerHTML = `<h1>Idioma · Language · Язык</h1>${buttons}`;
+  app.querySelectorAll("[data-lang]").forEach(b => {
+    b.onclick = () => {
+      LANG = b.getAttribute("data-lang");
+      saveLang(LANG);
+      pickVoice();
+      say(T().greeting);
+      langPicked = true;
+      lastKey = null;
+      renderMaybe();
+    };
+  });
+}
+
 async function startTour() {
-  say("Empezamos");
+  say(T().hello);
   const app = document.getElementById("app");
   const property = document.getElementById("prop").value;
-  app.innerHTML = "<p>Empezando…</p>";
+  app.innerHTML = `<p>${esc(T().starting)}</p>`;
   try {
     const created = await api("/api/runs", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({property: property, demo: DEMO}),
+      body: JSON.stringify({property: property, demo: DEMO, language: LANG}),
     });
     RUN = created.run_id;
     const url = new URL(location.href);
@@ -197,7 +341,7 @@ async function startTour() {
     const shot = currentShot();
     if (shot) {
       prevShotId = shot.shot_id;
-      say(roomHeading(shot) + ". " + shot.instruction_es);
+      say(roomHeading(shot) + ". " + instruction(shot));
     }
     renderMaybe();
   } catch (e) { fail(app, e); }
@@ -206,7 +350,9 @@ async function startTour() {
 function progressHtml() {
   const p = status.progress;
   const pct = p.shots_total ? Math.round(100 * p.shots_taken / p.shots_total) : 0;
-  return `<div class="progress">Habitación ${Math.min(p.rooms_done + 1, p.rooms_total)} de ${p.rooms_total} · Foto ${p.shots_taken} de ${p.shots_total}</div>
+  return `<div class="progress">${esc(T().progress(
+    Math.min(p.rooms_done + 1, p.rooms_total), p.rooms_total,
+    p.shots_taken, p.shots_total))}</div>
     <div class="bar"><div style="width:${pct}%"></div></div>`;
 }
 
@@ -220,7 +366,7 @@ function shotState(shot) {
 }
 
 function shortName(shot) {
-  const s = shot.short_es || roomHeading(shot);
+  const s = tourText(shot, "short") || roomHeading(shot);
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -230,7 +376,7 @@ function cameraHtml(label) {
       const sel = p.url === selectedDemo ? " selected" : "";
       return `<option value="${esc(p.url)}"${sel}>${esc(p.name)}</option>`;
     }).join("");
-    return `<label class="small" for="demoPick">Foto demo</label>
+    return `<label class="small" for="demoPick">${esc(T().demoPhoto)}</label>
       <select id="demoPick">${options}</select>
       <button class="btn" id="snapDemo">${esc(label)}</button>`;
   }
@@ -260,28 +406,29 @@ function recentHtml(current) {
     }
     const failed = critical.filter(i => i.request);
     if (failed.length) {
-      return `<div class="result bad">${failed.map(i => `<p>${esc(i.request.cleaner)}</p>`).join("")}<button data-retake="${esc(shot.shot_id)}">Repetir foto</button></div>`;
+      return `<div class="result bad">${failed.map(i => `<p>${esc(i.request.cleaner)}</p>`).join("")}<button data-retake="${esc(shot.shot_id)}">${esc(T().retake)}</button></div>`;
     }
-    return `<div class="result wait">${room}: Revisando…</div>`;
+    return `<div class="result wait">${room}: ${esc(T().checking)}</div>`;
   }).join("");
   return rows ? `<div>${rows}</div>` : "";
 }
 
 function renderShot(app) {
   const shot = currentShot();
-  let html = `<h1>Turno de limpieza</h1>` + progressHtml();
-  if (status.checking.length) html += `<div class="result wait">Revisando la foto… puedes seguir.</div>`;
+  let html = `<h1>${esc(T().title)}</h1>` + progressHtml();
+  if (status.checking.length) html += `<div class="result wait">${esc(T().checkingMove)}</div>`;
   if (shot) {
     html += `<h2 class="room">${esc(roomHeading(shot))}</h2>
-      <div class="instruction">${esc(shot.instruction_es)}</div>
-      <button class="btn secondary" id="repeat">Repetir</button>`;
+      <div class="instruction">${esc(instruction(shot))}</div>`;
+    if (voiceMissing()) html += `<p class="small">${esc(T().noVoice)}</p>`;
+    html += `<button class="btn secondary" id="repeat">${esc(T().repeat)}</button>`;
     if (!takenSet.has(shot.shot_id)) {
-      html += cameraHtml("Fotografiar");
+      html += cameraHtml(T().take);
     } else if (shotState(shot) === "done") {
-      html += `<div class="result ok">✓ Listo</div>
-        <button class="btn" id="next">Siguiente</button>`;
+      html += `<div class="result ok">${esc(T().ready)}</div>
+        <button class="btn" id="next">${esc(T().next)}</button>`;
     } else if (status.checking.length) {
-      html += `<div class="result wait">Revisando la foto…</div>`;
+      html += `<div class="result wait">${esc(T().checking)}</div>`;
     }
     html += recentHtml(shot);
   }
@@ -289,7 +436,7 @@ function renderShot(app) {
   app.innerHTML = html;
   if (shot) {
     document.getElementById("repeat").onclick = () =>
-      repeatSay(roomHeading(shot) + ". " + shot.instruction_es);
+      repeatSay(roomHeading(shot) + ". " + instruction(shot));
     const next = document.getElementById("next");
     if (next) next.onclick = () => { overrideShot = null; renderMaybe(); };
     wireCamera(shot);
@@ -335,23 +482,23 @@ async function upload(shot, file) {
     await refresh();
     renderMaybe();
   } catch (e) {
-    photoError = e.message.indexOf("foto antigua") >= 0 ? OLD_PHOTO_ES : e.message;
+    photoError = e.message.indexOf("foto antigua") >= 0 ? T().oldPhoto : e.message;
     renderMaybe();
   }
 }
 
 function renderDone(app) {
   const byId = itemsById();
-  let html = `<h1>Turno terminado</h1>` + progressHtml();
+  let html = `<h1>${esc(T().finished)}</h1>` + progressHtml();
   if (!status.open.length) {
-    html += `<div class="result ok">✓ Todo listo</div>`;
+    html += `<div class="result ok">${esc(T().doneAll)}</div>`;
   } else {
-    const head = status.open.length === 1 ? "Queda 1 tema" : `Quedan ${status.open.length} temas`;
-    html += `<p>${head}:</p><ul class="open">` + status.open.map(id => {
+    const head = T().open(status.open.length);
+    html += `<p>${esc(head)}:</p><ul class="open">` + status.open.map(id => {
       const item = byId[id];
       const text = item.request ? item.request.cleaner : item.label;
       const s = shotOfItem(id);
-      const btn = s ? ` <button data-shot="${esc(s.shot_id)}">Fotografiar</button>` : "";
+      const btn = s ? ` <button data-shot="${esc(s.shot_id)}">${esc(T().take)}</button>` : "";
       return `<li>${esc(text)}${btn}</li>`;
     }).join("") + `</ul>`;
   }
@@ -363,7 +510,7 @@ function renderDone(app) {
 
 function fail(app, e) {
   if (e.message === "auth") {
-    app.innerHTML = `<div class="error">Este enlace no tiene código. Pide el enlace completo.</div>`;
+    app.innerHTML = `<div class="error">${esc(T().authError)}</div>`;
   } else {
     app.innerHTML = `<div class="error">${esc(e.message)}</div>`;
   }
@@ -373,7 +520,7 @@ function announce() {
   const cur = currentShot();
   const curId = cur ? cur.shot_id : null;
   if (prevShotId !== null && curId && curId !== prevShotId) {
-    say(roomHeading(cur) + ". " + cur.instruction_es);
+    say(roomHeading(cur) + ". " + instruction(cur));
   }
   if (curId) prevShotId = curId;
   const byId = itemsById();
@@ -396,6 +543,10 @@ async function refresh() {
   tour = {shots: t.shots};
   takenSet = new Set(t.taken);
   status = s;
+  if (s.language && I18N[s.language]) {
+    if (LANG !== s.language) { LANG = s.language; pickVoice(); }
+    langPicked = true;
+  }
   if (DEMO && demoPhotos === null) {
     try { demoPhotos = (await api("/api/demo-photos")).photos; }
     catch (e) { demoPhotos = []; }

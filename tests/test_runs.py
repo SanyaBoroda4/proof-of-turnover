@@ -312,6 +312,36 @@ def test_news_reports_changes_requests_and_signoff(tmp_path):
     assert all(re.fullmatch(r"\d{2}:\d{2}:\d{2}", e["time"]) for e in news)
 
 
+def test_load_keeps_language(tmp_path):
+    from pot.checklist import load_property
+
+    property = load_property("demo-house")
+    checklist = build_checklist(property)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    state = RunState(run_dir, property, checklist, tour={"shots": []}, language="ru")
+    with state.lock:
+        state._save_locked()
+    assert RunState.load(run_dir).language == "ru"
+
+
+def test_load_without_language_gets_property_default(tmp_path):
+    from pot.checklist import load_property
+
+    property = load_property("demo-house")
+    checklist = build_checklist(property)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    state = RunState(run_dir, property, checklist, tour={"shots": []}, language="ru")
+    with state.lock:
+        state._save_locked()
+    first_path = run_dir / "first_look.json"
+    data = json.loads(first_path.read_text(encoding="utf-8"))
+    del data["language"]  # runs saved before languages existed
+    first_path.write_text(json.dumps(data), encoding="utf-8")
+    assert RunState.load(run_dir).language == "es"
+
+
 def test_has_evidence_only_when_file_exists(tmp_path):
     state = _state(tmp_path)
     bed_item = _bed_item(state)

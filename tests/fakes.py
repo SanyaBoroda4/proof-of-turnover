@@ -125,6 +125,14 @@ def _empty_tour(call):
     return {"shots": []}
 
 
+def _keep_all_boxes(call):
+    import re
+
+    match = re.search(r"(\d+) numbered boxes", call["instructions"] or "")
+    count = int(match.group(1)) if match else 0
+    return {"boxes": list(range(1, count + 1))}
+
+
 SAM_FIXTURE = (
     Path(__file__).with_name("fixtures") / "sam_three_squares.txt"
 ).read_text(encoding="utf-8")
@@ -134,7 +142,7 @@ class FakeSpark:
     """Duck-typed stand-in for MetaClient.respond()/segment_image()."""
 
     def __init__(self, matcher=None, inspector=None, verifier=None, sam=None,
-                 decider=None, requester=None, tour=None):
+                 decider=None, requester=None, tour=None, picker=None):
         self.calls = []
         self.sam_calls = []
         self._matcher = matcher or _unknown_everything
@@ -144,6 +152,7 @@ class FakeSpark:
         self._decider = decider or _decide_first
         self._requester = requester or _request_everything
         self._tour = tour or _empty_tour
+        self._picker = picker or _keep_all_boxes
         self.trace = []
         self._hooks = []
 
@@ -190,6 +199,8 @@ class FakeSpark:
             return self._requester(call)
         if "shots" in props:
             return self._tour(call)
+        if "boxes" in props:
+            return self._picker(call)
         return self._inspector(call)
 
     def segment_image(self, purpose, jpeg_bytes, prompt):
