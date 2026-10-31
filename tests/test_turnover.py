@@ -68,6 +68,13 @@ def test_run_turnover_writes_first_look_json(tmp_path):
     assert outcome["match"].coverage["master-bedroom"] == "covered"
     assert outcome["look"].claims["master-bedroom.beds_made"].status == "done"
     assert outcome["look"].claims["kitchen.trash"].status == "not_shown"
+    proof = json.loads((run_dir / "proof.json").read_text(encoding="utf-8"))
+    assert set(proof) == {"verdict", "items", "other_issues", "notes"}
+    assert proof["verdict"]["ready"] is False
+    assert proof["items"]["master-bedroom.beds_made"]["status"] == "proven"
+    assert proof["items"]["master-bedroom.beds_made"]["file"] == "a.jpg"
+    assert proof["items"]["master-bedroom.beds_made"]["sam"]["count"] == 3
+    assert (run_dir / "evidence" / "master-bedroom.beds_made.jpg").is_file()
 
 
 def test_main_end_to_end(tmp_path, monkeypatch, capsys):
@@ -79,8 +86,11 @@ def test_main_end_to_end(tmp_path, monkeypatch, capsys):
     assert len(runs) == 1
     assert (runs[0] / "first_look.json").is_file()
     assert (runs[0] / "photos" / "P01_check.jpg").is_file()
+    assert (runs[0] / "proof.json").is_file()
     out = capsys.readouterr().out
-    assert "Rooms not photographed:" in out
+    assert "NOT READY" in out
+    assert "Need a photo" in out
+    assert "Proven:" in out
     assert "Meta calls:" in out
     assert "Tokens:" in out
     assert "Model time:" in out

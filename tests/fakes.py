@@ -95,13 +95,30 @@ def _not_shown_everything(call):
     }
 
 
-class FakeSpark:
-    """Duck-typed stand-in for MetaClient.respond()."""
+def _confirm_everything(call):
+    return {
+        "this_room": "yes",
+        "verdict": "done",
+        "count_seen": 5,
+        "reason": "looks good",
+    }
 
-    def __init__(self, matcher=None, inspector=None):
+
+SAM_FIXTURE = (
+    Path(__file__).with_name("fixtures") / "sam_three_squares.txt"
+).read_text(encoding="utf-8")
+
+
+class FakeSpark:
+    """Duck-typed stand-in for MetaClient.respond()/segment_image()."""
+
+    def __init__(self, matcher=None, inspector=None, verifier=None, sam=None):
         self.calls = []
+        self.sam_calls = []
         self._matcher = matcher or _unknown_everything
         self._inspector = inspector or _not_shown_everything
+        self._verifier = verifier or _confirm_everything
+        self._sam = sam if sam is not None else (lambda call: SAM_FIXTURE)
         self.trace = []
 
     def respond(
@@ -113,9 +130,20 @@ class FakeSpark:
             "content": content,
             "instructions": instructions,
             "schema": schema,
+            "effort": effort,
         }
         self.calls.append(call)
         props = (schema or {}).get("properties", {})
         if "matches" in props:
             return self._matcher(call)
+        if "verdict" in props:
+            return self._verifier(call)
         return self._inspector(call)
+
+    def segment_image(self, purpose, jpeg_bytes, prompt):
+        call = {"purpose": purpose, "jpeg_bytes": jpeg_bytes, "prompt": prompt}
+        self.sam_calls.append(call)
+        outcome = self._sam(call)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome

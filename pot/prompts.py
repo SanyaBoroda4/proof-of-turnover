@@ -8,8 +8,10 @@ words, the photo labels and the image parts.
 import base64
 
 REASONING_EFFORT = "medium"
+VERIFY_EFFORT = "medium"
 MATCH_PHOTO_SIZE = "overview"  # 768 px copies are enough to match rooms
 FIRST_LOOK_PHOTO_SIZE = "check"  # 1600 px copies keep small details (stains)
+VERIFY_PHOTO_SIZE = "check"  # second look also needs full detail
 
 
 def model_photo_path(photo, size):
@@ -100,3 +102,22 @@ Rules:
 - count_seen: for items that need a minimum number, how many are visible in that one photo; count only what is visible in the cited photo; otherwise null.
 - other_issues: damage or problems NOT on the checklist that a photo clearly shows (stain, broken lamp, missing mirror). Leave it empty when there are none.
 - Return one claim for every checklist item above."""
+
+
+def second_look_instructions(room_name, room_description, requirement, min_count):
+    subject = f"Room: {room_name}"
+    if room_description:
+        subject += f" ({room_description})"
+    need = f" Minimum number: {min_count}." if min_count is not None else ""
+    return f"""You verify one cleaning checklist item from a single photo. Look only at the photo below.
+
+{subject}
+
+Requirement: {requirement}.{need}
+
+Rules:
+- this_room: "yes" when the photo clearly shows this room (compare what it shows with the room name and description); "no" when it clearly shows another room; "unclear" when you cannot tell.
+- verdict: "done" only when the photo clearly shows the requirement is met; "not_done" only when it clearly shows it is NOT met; otherwise "unclear".
+- Never guess. Judge only what is actually visible in this photo.
+- count_seen: how many relevant objects are visible in this photo (an integer, or null when the requirement has no minimum number or you cannot count).
+- reason: why, in English, at most 25 words."""

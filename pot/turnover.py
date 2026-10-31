@@ -1,9 +1,10 @@
-"""Run the first look: match photos to rooms and claim checklist items.
+"""Run the full turnover: match photos, first look, then proof.
 
 Usage: python -m pot.turnover <photo folder> --property demo-house
 
 Loads the property, checklist and photos into a new data/runs/<timestamp>/
-folder, matches rooms, runs the first look and saves first_look.json.
+folder, matches rooms, runs the first look and the proof stage, and saves
+first_look.json, proof.json and evidence/ images.
 """
 
 import argparse
@@ -18,10 +19,69 @@ from pot.inspector import first_look
 from pot.matcher import match_rooms
 from pot.meta_client import MetaClient, MetaClientError
 from pot.photos import load_photo_set, new_run_dir
+from pot.proof import PROVEN, prune_other_issues, prove_all, save_evidence, verdict
+from pot.verifier import verify
+
+
+def run_proof(client, run_dir, property, checklist, photos, match, look):
+    """Run verify + proof rule + evidence; save proof.json; return proof data."""
+    run_dir = Path(run_dir)
+    rooms = {room["id"]: room for room in property["rooms"]}
+    verification = verify(client, checklist, look.claims, photos, rooms)
+    proofs = prove_all(
+        checklist,
+        look.claims,
+        verification.second_looks,
+        verification.sams,
+        match.assignments,
+        match.coverage,
+        [photo.id for photo in photos],
+    )
+    pruned = prune_other_issues(look.other_issues, proofs, look.claims)
+    host_verdict = verdict(checklist, proofs)
+    photos_by_id = {photo.id: photo for photo in photos}
+    items = {}
+    for item in checklist:
+        proof = proofs[item.id]
+        photo = photos_by_id.get(proof.photo_id)
+        claim = look.claims.get(item.id)
+        second = verification.second_looks.get(item.id)
+        sam = verification.sams.get(item.id)
+        items[item.id] = {
+            "status": proof.status,
+            "reason": proof.reason,
+            "photo_id": proof.photo_id,
+            "file": photo.original_name if photo is not None else None,
+            "claim": asdict(claim) if claim is not None else None,
+            "second_look": asdict(second) if second is not None else None,
+            "sam": {"count": sam.count, "boxes": sam.boxes} if sam is not None else None,
+        }
+    result = {
+        "verdict": {
+            "ready": host_verdict.ready,
+            "problems": host_verdict.problems,
+            "need_photo": host_verdict.need_photo,
+            "worth_a_look": host_verdict.worth_a_look,
+        },
+        "items": items,
+        "other_issues": [asdict(issue) for issue in pruned],
+        "notes": match.notes + look.notes + verification.notes,
+    }
+    (run_dir / "proof.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    save_evidence(
+        run_dir, proofs, {item.id: item for item in checklist},
+        photos_by_id, verification.sams,
+    )
+    return {
+        "proofs": proofs,
+        "verdict": host_verdict,
+        "other_issues": pruned,
+        "verification": verification,
+    }
 
 
 def run_turnover(photo_folder, property_id, client, run_dir=None):
-    """Run matching + first look; save first_look.json; return the result."""
+    """Run matching + first look + proof; save JSONs; return the result."""
     started = time.monotonic()
     property = load_property(property_id)
     checklist = build_checklist(property)
@@ -54,6 +114,7 @@ def run_turnover(photo_folder, property_id, client, run_dir=None):
         "notes": match.notes + look.notes,
     }
     (run_dir / "first_look.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    proof = run_proof(client, run_dir, property, checklist, photos, match, look)
     return {
         "run_dir": run_dir,
         "property": property,
@@ -61,6 +122,7 @@ def run_turnover(photo_folder, property_id, client, run_dir=None):
         "photos": photos,
         "match": match,
         "look": look,
+        "proof": proof,
         "elapsed_seconds": time.monotonic() - started,
     }
 
@@ -79,38 +141,24 @@ def _trace_totals(trace):
 
 
 def print_report(outcome, client):
-    property = outcome["property"]
-    match = outcome["match"]
-    look = outcome["look"]
-    by_room = {}
-    for item in outcome["checklist"]:
-        by_room.setdefault(item.room_id, []).append(item)
-    photos_by_room = {}
-    for assignment in match.assignments.values():
-        photos_by_room.setdefault(assignment.room_id, []).append(assignment.photo_id)
-    rooms = sorted(property["rooms"], key=lambda room: room["floor"])
-    for room in rooms:
-        mine = photos_by_room.get(room["id"], [])
-        print(f"Floor {room['floor']} - {room['name']}: photos {', '.join(mine) or 'none'}")
-        for item in by_room.get(room["id"], []):
-            if item.key == "coverage":
-                print(f"  [{match.coverage[room['id']]}] {item.id}: {item.label}")
-                continue
-            claim = look.claims[item.id]
-            print(f"  [{claim.status}|{claim.photo_id or '-'}] {item.id}: {claim.seen or '-'}")
-    if photos_by_room.get("unknown"):
-        print(f"Unknown room: photos {', '.join(photos_by_room['unknown'])}")
-    house_items = by_room.get("house", [])
-    if house_items:
-        print("Whole house")
-        for item in house_items:
-            claim = look.claims[item.id]
-            print(f"  [{claim.status}|{claim.photo_id or '-'}] {item.id}: {claim.seen or '-'}")
-    missing = [room["name"] for room in rooms if match.coverage[room["id"]] != "covered"]
-    if missing:
-        print(f"Rooms not photographed: {', '.join(missing)}")
-    else:
-        print("Rooms not photographed: none")
+    proofs = outcome["proof"]["proofs"]
+    host_verdict = outcome["proof"]["verdict"]
+    photos_by_id = {photo.id: photo for photo in outcome["photos"]}
+    print("READY" if host_verdict.ready else "NOT READY")
+
+    def show(title, ids):
+        print(f"{title} ({len(ids)}):")
+        for item_id in ids:
+            proof = proofs[item_id]
+            photo = photos_by_id.get(proof.photo_id)
+            where = f" [{photo.original_name}]" if photo is not None else ""
+            print(f"  {item_id}: {proof.reason}{where}")
+
+    show("Problems", host_verdict.problems)
+    show("Need a photo", host_verdict.need_photo)
+    show("Worth a look", host_verdict.worth_a_look)
+    proven = sum(1 for proof in proofs.values() if proof.status == PROVEN)
+    print(f"Proven: {proven}/{len(proofs)} items")
     calls, cached, model_seconds, tokens = _trace_totals(client.trace)
     print(f"Meta calls: {calls} ({cached} from cache)")
     print(f"Time: {outcome['elapsed_seconds']:.1f} s")

@@ -124,6 +124,64 @@ def _score_items(run, key):
     return passed, len(key.get("expected", [])), lines, consumed
 
 
+def _proof_candidates(proof, item):
+    items = proof.get("items", {})
+    if item.startswith("*."):
+        want_key = item[2:]
+        return [
+            (claim_id, items[claim_id]["status"], items[claim_id].get("file") or "-")
+            for claim_id in sorted(items)
+            if claim_id.partition(".")[2] == want_key
+        ]
+    if item in items:
+        entry = items[item]
+        return [(item, entry["status"], entry.get("file") or "-")]
+    return []
+
+
+def _proof_satisfies(status, result):
+    if result == "done":
+        return status == "proven"
+    if result == "problem":
+        return status == "problem"
+    if result == "not_done":
+        return status != "proven"
+    return False
+
+
+def _first_look_view(run, item_id):
+    claims = run.get("claims", {})
+    files = {photo["id"]: photo["file"] for photo in run.get("photos", [])}
+    if item_id in claims:
+        claim = claims[item_id]
+        cited = files.get(claim.get("photo_id")) or "-"
+        return f"{claim.get('status')} @ `{cited}`"
+    room = item_id.partition(".")[0]
+    return run.get("coverage", {}).get(room, "?")
+
+
+def _score_final(run, proof, key):
+    lines = []
+    passed = 0
+    for entry in key.get("expected", []):
+        item, result = entry["item"], entry["result"]
+        candidates = _proof_candidates(proof, item)
+        decisive = next((c for c in candidates if _proof_satisfies(c[1], result)), None)
+        if decisive is not None:
+            passed += 1
+            mark = "PASS"
+        else:
+            mark = "FAIL"
+            decisive = candidates[0] if candidates else (item, "missing", "-")
+        claim_id, status, cited = decisive
+        extra = " in some room" if item.startswith("*.") else ""
+        lines.append(
+            f"- {mark} `{claim_id}`{extra} (expected {result}): "
+            f"final {status} @ `{cited}` (first look: {_first_look_view(run, claim_id)})"
+        )
+    return passed, len(key.get("expected", [])), lines
+
+
 def _false_alarms(run, key, consumed):
     expected_ids = {e["item"] for e in key.get("expected", []) if not e["item"].startswith("*.")}
     files = {photo["id"]: photo["file"] for photo in run.get("photos", [])}
@@ -154,6 +212,13 @@ def score_run(run_dir, key_path):
     out.append(f"## Items: {passed}/{total_items} pass")
     out.extend(item_lines or ["- none"])
     out.append("")
+    proof_path = Path(run_dir) / "proof.json"
+    if proof_path.is_file():
+        proof = json.loads(proof_path.read_text(encoding="utf-8"))
+        final_passed, final_total, final_lines = _score_final(run, proof, key)
+        out.append(f"## Final statuses: {final_passed}/{final_total} pass")
+        out.extend(final_lines or ["- none"])
+        out.append("")
     out.append("## Other app findings (possible false alarms)")
     out.extend(_false_alarms(run, key, consumed) or ["- none"])
     out.append("")

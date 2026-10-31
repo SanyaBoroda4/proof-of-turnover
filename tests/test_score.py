@@ -70,3 +70,25 @@ def test_false_alarms_list_unexpected_problems_and_issues(tmp_path):
     assert "`bed.floor_clear` @ `bed.jpg`" in report  # unexpected problem claim
     assert "other issue @ `bed.jpg` (room bed)" in report
     assert "`bath.floor_clear` @ `bath.jpg`" not in report.split("## Other app findings")[1]
+
+
+def test_final_statuses_scored_when_proof_exists(tmp_path):
+    run_dir, key_path = _fixture(tmp_path)
+    _write(run_dir / "proof.json", {
+        "verdict": {"ready": False},
+        "items": {
+            "bed.beds_made": {"status": "proven", "file": "bed.jpg"},
+            "bed.floor_clear": {"status": "problem", "file": "bed.jpg"},
+            "bath.towels": {"status": "needs proof", "file": None},
+            "bath.coverage": {"status": "needs proof", "file": None},
+            "bath.floor_clear": {"status": "needs proof", "file": "bath.jpg"},
+            "bed.no_belongings": {"status": "needs proof", "file": None},
+        },
+    })
+    report = score_run(run_dir, key_path)
+    assert "## Final statuses: 4/5 pass" in report
+    assert "PASS `bed.beds_made`" in report
+    assert "final proven @ `bed.jpg` (first look: done @ `bed.jpg`)" in report
+    assert "PASS `bath.coverage`" in report
+    assert "PASS `bed.floor_clear` in some room" in report
+    assert "FAIL `bed.no_belongings`" in report

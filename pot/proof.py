@@ -1,0 +1,187 @@
+"""The proof rule (pure, no API calls), the host verdict, and evidence images.
+
+prove_all() turns first-look claims + second looks + SAM checks into a
+final status per item: proven, needs proof, or problem. verdict() turns
+those into the host's ready / not-ready answer. save_evidence() draws
+one annotated photo per proven/problem item.
+"""
+
+from dataclasses import dataclass, field
+
+from PIL import Image, ImageDraw, ImageFont
+
+PROVEN = "proven"
+NEEDS_PROOF = "needs proof"
+PROBLEM = "problem"
+
+COVERED_CONFIDENCES = ("high", "medium")
+CAPTION_BAR_HEIGHT = 36
+BOX_WIDTH = 4
+
+
+@dataclass
+class ProofItem:
+    item_id: str
+    status: str  # proven / needs proof / problem
+    reason: str  # short, host-readable
+    photo_id: str  # "" when no photo
+
+
+@dataclass
+class Verdict:
+    ready: bool
+    problems: list = field(default_factory=list)  # critical problem ids
+    need_photo: list = field(default_factory=list)  # critical needs-proof ids
+    worth_a_look: list = field(default_factory=list)  # non-critical, not proven
+
+
+def _room_ok(second, photo_unknown):
+    """Room rule shared by done and problem claims."""
+    if second.this_room == "no":
+        return False
+    if photo_unknown and second.this_room != "yes":
+        return False
+    return True
+
+
+def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_photo):
+    """Apply the proof rule to one item; returns a ProofItem."""
+    if item.key == "coverage":
+        if coverage == "covered" and first_room_photo:
+            return ProofItem(item.id, PROVEN, "Room photographed", first_room_photo)
+        return ProofItem(item.id, NEEDS_PROOF, "No photo of this room", "")
+    if claim is None or claim.status == "not_shown":
+        return ProofItem(item.id, NEEDS_PROOF, "No photo shows it", "")
+    if second is None:
+        return ProofItem(item.id, NEEDS_PROOF, "Verification did not run", claim.photo_id)
+    if claim.status == "done":
+        if second.this_room == "no":
+            return ProofItem(item.id, NEEDS_PROOF, "Second look: photo shows another room", claim.photo_id)
+        if photo_unknown and second.this_room != "yes":
+            return ProofItem(
+                item.id, NEEDS_PROOF,
+                "Second look could not confirm the photo shows this room", claim.photo_id,
+            )
+        if second.verdict == "not_done":
+            return ProofItem(item.id, NEEDS_PROOF, "Second look says it is not done", claim.photo_id)
+        if second.verdict != "done":
+            return ProofItem(item.id, NEEDS_PROOF, "Second look could not tell", claim.photo_id)
+        if item.sam_prompt is not None and (sam is None or sam.count == 0):
+            return ProofItem(
+                item.id, NEEDS_PROOF,
+                f"No '{item.sam_prompt}' found in the photo", claim.photo_id,
+            )
+        if item.min_count is not None:
+            best = max(
+                [sam.count if sam is not None else 0]
+                + [second.count_seen if second.count_seen is not None else 0]
+            )
+            if best < item.min_count:
+                return ProofItem(
+                    item.id, NEEDS_PROOF,
+                    f"Only {best} of at least {item.min_count} visible in the photo",
+                    claim.photo_id,
+                )
+            return ProofItem(
+                item.id, PROVEN,
+                f"Confirmed in the photo ({best} of {item.min_count} visible)",
+                claim.photo_id,
+            )
+        return ProofItem(item.id, PROVEN, "Confirmed in the photo", claim.photo_id)
+    if _room_ok(second, photo_unknown) and second.verdict == "not_done":
+        reason = second.reason or claim.seen or "Photo shows it is not done"
+        return ProofItem(item.id, PROBLEM, reason, claim.photo_id)
+    return ProofItem(item.id, NEEDS_PROOF, "Checks disagree", claim.photo_id)
+
+
+def prove_all(checklist, claims, seconds, sams, assignments, coverage, photo_order):
+    """Apply the proof rule to every item; returns {item_id: ProofItem}."""
+    first_photo = {}
+    for photo_id in photo_order:
+        assignment = assignments.get(photo_id)
+        if assignment is None or assignment.confidence not in COVERED_CONFIDENCES:
+            continue
+        first_photo.setdefault(assignment.room_id, photo_id)
+    proofs = {}
+    for item in checklist:
+        claim = claims.get(item.id)
+        photo_id = claim.photo_id if claim is not None else ""
+        assignment = assignments.get(photo_id)
+        photo_unknown = assignment is None or assignment.room_id == "unknown"
+        proofs[item.id] = prove_item(
+            item,
+            claim,
+            seconds.get(item.id),
+            sams.get(item.id),
+            photo_unknown,
+            coverage.get(item.room_id),
+            first_photo.get(item.room_id),
+        )
+    return proofs
+
+
+def prune_other_issues(other_issues, proofs, claims):
+    """Drop issues on photos where a final problem item already reports."""
+    problem_photos = set()
+    for item_id, proof in proofs.items():
+        claim = claims.get(item_id)
+        if proof.status == PROBLEM and claim is not None and claim.photo_id:
+            problem_photos.add(claim.photo_id)
+    return [issue for issue in other_issues if issue.photo_id not in problem_photos]
+
+
+def verdict(checklist, proofs):
+    """Host verdict: ready only when every critical item is proven."""
+    result = Verdict(ready=True)
+    for item in checklist:
+        status = proofs[item.id].status
+        if status == PROVEN:
+            continue
+        if item.critical:
+            result.ready = False
+            if status == PROBLEM:
+                result.problems.append(item.id)
+            else:
+                result.need_photo.append(item.id)
+        else:
+            result.worth_a_look.append(item.id)
+    return result
+
+
+def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams):
+    """Save one annotated photo per proven/problem item under evidence/."""
+    evidence_dir = run_dir / "evidence"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    paths = {}
+    font = ImageFont.load_default()
+    for item_id in sorted(proofs):
+        proof = proofs[item_id]
+        if proof.status not in (PROVEN, PROBLEM):
+            continue
+        photo = photos_by_id.get(proof.photo_id)
+        if photo is None:
+            continue
+        with Image.open(photo.check_path) as source:
+            source.load()
+            canvas = Image.new("RGB", (source.width, source.height + CAPTION_BAR_HEIGHT), "white")
+            canvas.paste(source, (0, CAPTION_BAR_HEIGHT))
+        draw = ImageDraw.Draw(canvas)
+        label = items_by_id[item_id].label if item_id in items_by_id else item_id
+        draw.text((8, 10), f"{label} - {proof.status}", fill="black", font=font)
+        color = (0, 180, 0) if proof.status == PROVEN else (220, 0, 0)
+        sam = sams.get(item_id)
+        for box in sam.boxes if sam is not None else []:
+            draw.rectangle(
+                [
+                    int(box["left"]),
+                    int(box["top"]) + CAPTION_BAR_HEIGHT,
+                    int(box["right"]),
+                    int(box["bottom"]) + CAPTION_BAR_HEIGHT,
+                ],
+                outline=color,
+                width=BOX_WIDTH,
+            )
+        path = evidence_dir / f"{item_id}.jpg"
+        canvas.save(path, "JPEG", quality=90)
+        paths[item_id] = path
+    return paths
