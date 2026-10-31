@@ -12,7 +12,7 @@ import io
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from pot import prompts
 from pot.meta_client import MetaClientError, submit_with_context
@@ -238,13 +238,21 @@ def verify(client, checklist, claims, photos, rooms=None, assignments=None, effo
     return VerifyResult(second_looks=seconds, sams=sams, room_decisions=decisions, notes=notes)
 
 
+#: Box picks only run with this many boxes at most; more are unreadable.
+MAX_PICK_BOXES = 8
+
+
 def _numbered_boxes_jpeg(photo, boxes):
     """The check copy with each box drawn in red, numbered 1..N."""
     with Image.open(photo.check_path) as handle:
         handle.load()
         image = handle.convert("RGB")
     width, height = image.size
-    stroke = max(2, width // 200)
+    stroke = max(3, width // 200)
+    try:
+        font = ImageFont.load_default(size=max(24, height // 18))
+    except TypeError:  # very old Pillow without sized default fonts
+        font = ImageFont.load_default()
     draw = ImageDraw.Draw(image)
     for number, box in enumerate(boxes, start=1):
         draw.rectangle(
@@ -252,15 +260,34 @@ def _numbered_boxes_jpeg(photo, boxes):
             outline=(220, 38, 40), width=stroke,
         )
         label = str(number)
-        box_top = max(0, box["top"] - 6 * stroke)
+        left, top, right, bottom = draw.textbbox((0, 0), label, font=font)
+        pad = stroke + 2
+        badge_w = right - left + 2 * pad
+        badge_h = bottom - top + 2 * pad
+        badge_top = box["top"] - badge_h - stroke
+        if badge_top < 0:
+            badge_top = min(height - badge_h, box["top"] + stroke)
+        badge_left = min(max(0, box["left"]), max(0, width - badge_w))
         draw.rectangle(
-            [box["left"], box_top, box["left"] + 8 * stroke, box["top"] + 6 * stroke],
-            fill=(255, 255, 255),
+            [badge_left, badge_top, badge_left + badge_w, badge_top + badge_h],
+            fill=(255, 235, 59), outline=(0, 0, 0), width=max(1, stroke // 2),
         )
-        draw.text((box["left"] + stroke, box_top), label, fill=(220, 38, 40))
+        draw.text((badge_left + pad - left, badge_top + pad - top), label,
+                  font=font, fill=(0, 0, 0))
     buffer = io.BytesIO()
     image.save(buffer, "JPEG", quality=90)
     return buffer.getvalue()
+
+
+def _area_box(boxes):
+    """One box around the area all the boxes cover."""
+    return {
+        "left": min(box["left"] for box in boxes),
+        "top": min(box["top"] for box in boxes),
+        "right": max(box["right"] for box in boxes),
+        "bottom": max(box["bottom"] for box in boxes),
+        "confidence": max(box.get("confidence", 0) for box in boxes),
+    }
 
 
 def pick_problem_boxes(client, item_id, photo, sam, problem_object, effort=None):
@@ -300,6 +327,24 @@ def pick_problem_boxes(client, item_id, photo, sam, problem_object, effort=None)
     return SamCheck(item_id, sam.photo_id, sam.prompt, len(kept), kept), [note]
 
 
+def refine_problem_boxes(client, item_id, photo, sam, problem_object, effort=None):
+    """Narrow a problem SAM result; returns (SamCheck, notes).
+
+    One box is kept as is. Two to eight boxes go through one Muse
+    Spark pick call. More than eight would be unreadable when
+    numbered, so no call is made and one red box covers their whole
+    area instead.
+    """
+    if sam.count <= 1:
+        return sam, []
+    if sam.count > MAX_PICK_BOXES:
+        area = _area_box(sam.boxes)
+        note = (f"Box pick for {item_id} skipped "
+                f"({sam.count} boxes): drew 1 area box")
+        return SamCheck(item_id, sam.photo_id, sam.prompt, 1, [area]), [note]
+    return pick_problem_boxes(client, item_id, photo, sam, problem_object, effort)
+
+
 def segment_problem_objects(client, proofs, seconds, photos_by_id, effort=None):
     """SAM-segment each final problem's problem_object; returns {item_id: SamCheck}.
 
@@ -332,7 +377,7 @@ def segment_problem_objects(client, proofs, seconds, photos_by_id, effort=None):
             sams[item_id] = result
         picks = [
             (item_id, submit_with_context(
-                pool, pick_problem_boxes, client, item_id,
+                pool, refine_problem_boxes, client, item_id,
                 photos_by_id[proofs[item_id].photo_id], sams[item_id],
                 seconds[item_id].problem_object, effort,
             ))

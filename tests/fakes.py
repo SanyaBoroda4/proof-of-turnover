@@ -1,8 +1,13 @@
 """Shared fakes for first-look tests: tiny photos and a scriptable client."""
 
+import math
+import struct
+import subprocess
+import wave
 from datetime import datetime
 from pathlib import Path
 
+from imageio_ffmpeg import get_ffmpeg_exe
 from PIL import Image
 
 from pot.meta_client import call_context
@@ -33,6 +38,30 @@ def make_photos(directory, count):
             )
         )
     return photos
+
+
+def tone_clip(path, container="webm"):
+    """A 1 s 440 Hz tone as webm/opus or mp4/aac, like browser audio."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = path.with_suffix(".src.wav")
+    with wave.open(str(raw), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(44100)
+        handle.writeframes(b"".join(
+            struct.pack("<h", int(9999 * math.sin(2 * math.pi * 440 * t / 44100)))
+            for t in range(44100)
+        ))
+    codec = {"webm": "libopus", "mp4": "aac"}[container]
+    proc = subprocess.run(
+        [get_ffmpeg_exe(), "-y", "-v", "error", "-i", str(raw),
+         "-c:a", codec, str(path)],
+        capture_output=True, text=True, timeout=120,
+    )
+    assert proc.returncode == 0, proc.stderr[-300:]
+    raw.unlink()
+    return path
 
 
 def photo_ids_in(content):
@@ -133,6 +162,21 @@ def _keep_all_boxes(call):
     return {"boxes": list(range(1, count + 1))}
 
 
+def _spanish_note(call):
+    return {"transcript": "se acabó el café", "turns": []}
+
+
+def _english_note(call):
+    texts = [part.get("text", "") for part in call["content"]
+             if part.get("type") == "input_text"]
+    words = " ".join(texts).split()
+    return {
+        "translation": "EN: " + " ".join(texts),
+        "title": " ".join(words[:5]) or "Note",
+        "category": "supplies",
+    }
+
+
 SAM_FIXTURE = (
     Path(__file__).with_name("fixtures") / "sam_three_squares.txt"
 ).read_text(encoding="utf-8")
@@ -142,9 +186,11 @@ class FakeSpark:
     """Duck-typed stand-in for MetaClient.respond()/segment_image()."""
 
     def __init__(self, matcher=None, inspector=None, verifier=None, sam=None,
-                 decider=None, requester=None, tour=None, picker=None):
+                 decider=None, requester=None, tour=None, picker=None,
+                 transcript=None, noter=None):
         self.calls = []
         self.sam_calls = []
+        self.transcribe_calls = []
         self._matcher = matcher or _unknown_everything
         self._inspector = inspector or _not_shown_everything
         self._verifier = verifier or _confirm_everything
@@ -153,6 +199,8 @@ class FakeSpark:
         self._requester = requester or _request_everything
         self._tour = tour or _empty_tour
         self._picker = picker or _keep_all_boxes
+        self._transcript = transcript or _spanish_note
+        self._noter = noter or _english_note
         self.trace = []
         self._hooks = []
 
@@ -201,6 +249,8 @@ class FakeSpark:
             return self._tour(call)
         if "boxes" in props:
             return self._picker(call)
+        if "translation" in props:
+            return self._noter(call)
         return self._inspector(call)
 
     def segment_image(self, purpose, jpeg_bytes, prompt):
@@ -208,6 +258,16 @@ class FakeSpark:
         self.sam_calls.append(call)
         self._fire(purpose, "test-sam")
         outcome = self._sam(call)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    def transcribe(self, purpose, wav_path, languages):
+        call = {"purpose": purpose, "wav_path": str(wav_path),
+                "languages": list(languages)}
+        self.transcribe_calls.append(call)
+        self._fire(purpose, "test-asr")
+        outcome = self._transcript(call)
         if isinstance(outcome, Exception):
             raise outcome
         return outcome

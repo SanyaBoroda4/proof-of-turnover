@@ -109,7 +109,7 @@
       "room": "master-bathroom",
       "key": "toilet_paper",
       "label": "New roll on the holder",
-      "requirement": "A new, full toilet paper roll on the holder next to the toilet",
+      "requirement": "A new, full toilet paper roll on the holder next to the toilet (a folded end is fine)",
       "sam_prompt": "toilet paper roll",
       "min_count": 1,
       "critical": true
@@ -127,7 +127,7 @@
       "room": "hall-bathroom",
       "key": "toilet_paper",
       "label": "New roll on the holder",
-      "requirement": "A new, full toilet paper roll on the holder next to the toilet",
+      "requirement": "A new, full toilet paper roll on the holder next to the toilet (a folded end is fine)",
       "sam_prompt": "toilet paper roll",
       "min_count": 1,
       "critical": true
@@ -145,7 +145,7 @@
       "room": "powder-room",
       "key": "toilet_paper",
       "label": "New roll on the holder",
-      "requirement": "A new, full toilet paper roll on the holder next to the toilet",
+      "requirement": "A new, full toilet paper roll on the holder next to the toilet (a folded end is fine)",
       "sam_prompt": "toilet paper roll",
       "min_count": 1,
       "critical": true

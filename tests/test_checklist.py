@@ -17,7 +17,7 @@ def _by_id(items):
     return {item.id: item for item in items}
 
 
-def test_rental_1_v5_checklist():
+def test_rental_1_v6_checklist():
     prop = load_property("rental-1")
     items = _by_id(build_checklist(prop))
     assert len(items) == 80
@@ -39,6 +39,8 @@ def test_rental_1_v5_checklist():
         assert "normal" in toilet.requirement.lower()
         spare = items[f"{room_id}.spare_toilet_paper"]
         assert spare.min_count == 2
+        paper = items[f"{room_id}.toilet_paper"]
+        assert paper.requirement.endswith("(a folded end is fine)")
     assert "throw blanket" in items["patio.area_tidy"].requirement
     assert "throw blanket" in items["porch.area_tidy"].requirement
     assert "judge the inside" in items["kitchen.fridge"].requirement

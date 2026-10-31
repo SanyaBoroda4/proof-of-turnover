@@ -32,7 +32,7 @@ from pot.verifier import (
     MAX_WORKERS,
     check_sam,
     check_second_look,
-    pick_problem_boxes,
+    refine_problem_boxes,
     segment_problem_objects,
     verify,
 )
@@ -155,7 +155,7 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
                     notes.extend(job_notes)
     for item_id, sam in list(problem_sams.items()):
         if sam.count > 1:
-            picked, job_notes = pick_problem_boxes(
+            picked, job_notes = refine_problem_boxes(
                 client, item_id, photo, sam, seconds[item_id].problem_object, effort
             )
             notes.extend(job_notes)

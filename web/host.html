@@ -29,6 +29,11 @@
   .pill.problem { background: #b42318; }
   .pill.needs-photo { background: #b54708; }
   .pill.not-yet { background: #57606a; }
+  .pill.damage { background: #b42318; }
+  .pill.missing { background: #b54708; }
+  .pill.supplies { background: #0969da; }
+  .pill.other { background: #57606a; }
+  .news .card audio { width: 100%; margin-top: 6px; }
   .thumb { width: 120px; cursor: zoom-in; border-radius: 6px; }
   #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8);
              cursor: zoom-out; z-index: 10; text-align: center; padding: 24px; }
@@ -101,12 +106,38 @@ function newsHtml() {
   if (!news.length) return "";
   const cards = news.map(ev => {
     const img = ev.photo_id ? `<img src="${overviewUrl(ev.photo_id)}" alt="" loading="lazy">` : "";
-    const what = ev.kind === "request" || !ev.item_label ? esc(ev.text)
+    const what = ev.kind === "note" ? `${esc(ev.room_name)} — note: ${esc(ev.text)}`
+      : ev.kind === "request" || !ev.item_label ? esc(ev.text)
       : `${esc(ev.room_name)} — ${esc(ev.item_label)}: ${esc(ev.status)}`;
     return `<div class="card"><div class="time">${esc(ev.time || "")}</div>
       <div>${what}</div>${img}</div>`;
   }).join("");
   return `<h2>Latest news</h2><div class="news">${cards}</div>`;
+}
+
+function voiceNotesHtml() {
+  const notes = status.voice_notes || [];
+  if (!notes.length) return "";
+  const cards = notes.map(n => {
+    const audio = n.audio_url
+      ? `<div><audio controls preload="none" src="${esc(n.audio_url)}"></audio></div>` : "";
+    return `<div class="card"><div><span class="pill ${esc(n.category)}">${esc(n.category)}</span>
+      <span class="small">${esc(n.room_name)} · ${esc(n.time || "")}</span></div>
+      <div><strong>${esc(n.title)}</strong></div>
+      <div>${esc(n.english)}</div>
+      <div class="small">Original (${esc(n.language)}): ${esc(n.text)}</div>${audio}</div>`;
+  }).join("");
+  return `<h2>Voice notes</h2><div class="news">${cards}</div>`;
+}
+
+function noteWarnings() {
+  const flags = (status.voice_notes || []).filter(
+    n => n.category === "damage" || n.category === "missing");
+  if (!flags.length) return "";
+  return `<div>` + flags.map(n =>
+    `<div class="small"><span class="pill ${esc(n.category)}">${esc(n.category)}</span>
+     ${esc(n.room_name)} — ${esc(n.title)}</div>`
+  ).join("") + `</div>`;
 }
 
 function renderStatus(app) {
@@ -148,10 +179,12 @@ function renderStatus(app) {
     <div class="banner ${esc(status.agent_state)}">${esc(STATE_TEXT[status.agent_state] || status.agent_state)}</div>
     ${status.language ? `<div class="small">Cleaner language: ${esc(langNames[status.language] || status.language)}</div>` : ""}
     ${newsHtml()}
+    ${voiceNotesHtml()}
     <div class="row">
       <div>
         <h2>Sign off</h2>
         <button id="approve">Approve turnover</button>
+        ${noteWarnings()}
         <h2>Send back</h2>
         <div class="sendback-list">${open || "<span class='small'>Nothing open.</span>"}</div>
         <input type="text" id="notes" placeholder="Notes for the cleaner">

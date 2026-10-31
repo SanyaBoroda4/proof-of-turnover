@@ -273,6 +273,18 @@ def test_segment_image_empty_answer_returned_without_retry(tmp_path):
     assert len(fake.responses.calls) == 1
 
 
+def test_transcribe_empty_transcript_returned_without_retry(tmp_path):
+    wav = tmp_path / "clip.wav"
+    wav.write_bytes(b"RIFF-fake-wav")
+    http = _FakeHTTP([_FakeHTTPResponse({"transcript": "", "turns": []})])
+    client = MetaClient(cache_dir=tmp_path / "cache", api_key="k", http_client=http,
+                        sleep=lambda seconds: None)
+    assert client.transcribe("transcribe note", wav, ["ru"]) == {
+        "transcript": "", "turns": []}
+    assert len(http.calls) == 1
+    assert client.trace[-1]["ok"] is True
+
+
 def test_upload_file_returns_id(tmp_path):
     target = tmp_path / "frame.jpg"
     target.write_bytes(b"fake-frame")

@@ -96,6 +96,8 @@ class RunState:
         self.requests = {}
         self.other_issues = []
         self.notes = []
+        self.voice_notes = []
+        self.note_seq = 0
         self.calls = []
         self.checking = set()
         self.photo_seconds = {}
@@ -175,6 +177,13 @@ class RunState:
             OtherIssue(**issue) for issue in first_data.get("other_issues", [])
         ]
         state.notes = list(first_data.get("notes", []))
+        state.voice_notes = [dict(note) for note in first_data.get("voice_notes", [])]
+        for note in state.voice_notes:
+            try:
+                number = int(str(note.get("id", ""))[1:])
+            except (ValueError, TypeError):
+                continue
+            state.note_seq = max(state.note_seq, number)
         proof_path = run_dir / "proof.json"
         if proof_path.is_file():
             proof_data = json.loads(proof_path.read_text(encoding="utf-8"))
@@ -447,14 +456,31 @@ class RunState:
         with self.lock:
             self.calls.append(entry)
 
-    def _event_locked(self, kind, item_id=None, status=None, photo_id=None, text=""):
+    def next_note_id(self):
+        """Claim the next voice-note id (N01, N02, ...)."""
+        with self.lock:
+            self.note_seq += 1
+            return f"N{self.note_seq:02d}"
+
+    def store_voice_note(self, record, notes=()):
+        """Store a translated voice note with its news event."""
+        with self.lock:
+            self.voice_notes.append(dict(record))
+            self._event_locked("note", text=record["title"],
+                               room_id=record["room_id"],
+                               room_name=record["room_name"])
+            self.notes.extend(notes)
+            self._save_locked()
+
+    def _event_locked(self, kind, item_id=None, status=None, photo_id=None, text="",
+                      room_id=None, room_name=None):
         """Append a news event (callers hold the lock); keeps the last 50."""
         item = self.items_by_id.get(item_id) if item_id else None
         self.events.append({
             "time": datetime.now().strftime("%H:%M:%S"),
-            "kind": kind,  # status | request | signoff
-            "room_id": item.room_id if item else "",
-            "room_name": item.room_name if item else "",
+            "kind": kind,  # status | request | signoff | note
+            "room_id": item.room_id if item else (room_id or ""),
+            "room_name": item.room_name if item else (room_name or ""),
             "item_id": item_id or "",
             "item_label": item.label if item else "",
             "status": status or "",
@@ -603,6 +629,7 @@ class RunState:
                 "recent": recent,
                 "news": list(reversed(self.events[-8:])),
                 "signoff": dict(self.signoff),
+                "voice_notes": [self._voice_note_out(note) for note in reversed(self.voice_notes)],
             }
 
     def _item_status_locked(self, item, shot_of_item, taken):
@@ -661,6 +688,27 @@ class RunState:
                 return None
             return photo.overview_path.read_bytes()
 
+    def _voice_note_out(self, note):
+        """A voice note for /status, newest first, with its audio URL."""
+        out = dict(note)
+        out["audio_url"] = (
+            f"/api/runs/{self.run_dir.name}/notes/{note['id']}/audio"
+        )
+        return out
+
+    def read_note_audio(self, note_id):
+        """A stored note's WAV bytes, read under the lock."""
+        with self.lock:
+            note = next(
+                (n for n in self.voice_notes if n["id"] == note_id), None
+            )
+            if note is None:
+                return None
+            path = self.run_dir / "notes" / note["audio"]
+            if not path.is_file():
+                return None
+            return path.read_bytes()
+
     # -- persistence (callers hold the lock) --------------------------------
 
     def _save_locked(self):
@@ -687,6 +735,7 @@ class RunState:
             "claims": {item_id: asdict(claim) for item_id, claim in self.claims.items()},
             "other_issues": [asdict(issue) for issue in self.other_issues],
             "notes": list(self.notes),
+            "voice_notes": [dict(note) for note in self.voice_notes],
         }
         _write_json_atomically(self.run_dir / "first_look.json", first_data)
         host_verdict = verdict(self.checklist, self.proofs)

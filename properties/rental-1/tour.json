@@ -12,66 +12,295 @@
       "room_name_ru": "\u041f\u0435\u0440\u0435\u0434\u043d\u0435\u0435 \u043a\u0440\u044b\u043b\u044c\u0446\u043e",
       "short_en": "porch seats",
       "short_es": "asientos del porche",
-      "short_ru": "\u043c\u0435\u0431\u0435\u043b\u044c \u043a\u0440\u044b\u043b\u044c\u0446\u0430",
-      "instruction_en": "Take a photo of the seats on the front porch.",
-      "instruction_es": "Fotograf\u00eda los asientos en el porche delantero.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0441\u0438\u0434\u0435\u043d\u044c\u044f \u043d\u0430 \u043f\u0435\u0440\u0435\u0434\u043d\u0435\u043c \u043a\u0440\u044b\u043b\u044c\u0446\u0435."
+      "short_ru": "\u0441\u0438\u0434\u0435\u043d\u044c\u044f \u043a\u0440\u044b\u043b\u044c\u0446\u0430",
+      "instruction_en": "Take a photo of the front porch seats with pillows, showing clean porch and walkway.",
+      "instruction_es": "Toma una foto de los asientos del porche delantero con cojines, muestra piso limpio.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0441\u0438\u0434\u0435\u043d\u044c\u044f \u043d\u0430 \u043f\u0435\u0440\u0435\u0434\u043d\u0435\u043c \u043a\u0440\u044b\u043b\u044c\u0446\u0435 \u0441 \u043f\u043e\u0434\u0443\u0448\u043a\u0430\u043c\u0438, \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0438\u0441\u0442\u043e\u0442\u0443."
     },
     {
       "shot_id": "foyer-01",
       "room_id": "foyer",
       "item_ids": [
-        "foyer.floor_clear"
-      ],
-      "room_name_en": "Foyer and staircase",
-      "room_name_es": "Recibidor y escalera",
-      "room_name_ru": "\u041f\u0440\u0438\u0445\u043e\u0436\u0430\u044f \u0438 \u043b\u0435\u0441\u0442\u043d\u0438\u0446\u0430",
-      "short_en": "foyer floor",
-      "short_es": "suelo del recibidor",
-      "short_ru": "\u043f\u043e\u043b \u043f\u0440\u0438\u0445\u043e\u0436\u0435\u0439",
-      "instruction_en": "Take a photo of the floor in the foyer and staircase.",
-      "instruction_es": "Fotograf\u00eda el suelo en el recibidor y escalera.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u043e\u043b \u0432 \u043f\u0440\u0438\u0445\u043e\u0436\u0435\u0439 \u0438 \u043d\u0430 \u043b\u0435\u0441\u0442\u043d\u0438\u0446\u0435."
-    },
-    {
-      "shot_id": "living-01",
-      "room_id": "living-room",
-      "item_ids": [
-        "living-room.sofa_bed_linens"
-      ],
-      "room_name_en": "Living room",
-      "room_name_es": "Sala de estar",
-      "room_name_ru": "\u0413\u043e\u0441\u0442\u0438\u043d\u0430\u044f",
-      "short_en": "TV stand inside",
-      "short_es": "interior del mueble TV",
-      "short_ru": "\u0432\u043d\u0443\u0442\u0440\u0438 \u0442\u0443\u043c\u0431\u044b \u0422\u0412",
-      "instruction_en": "Take a photo of the open TV stand in the living room.",
-      "instruction_es": "Fotograf\u00eda el mueble de TV abierto en la sala de estar.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0443\u044e \u0442\u0443\u043c\u0431\u0443 \u0422\u0412 \u0432 \u0433\u043e\u0441\u0442\u0438\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "living-02",
-      "room_id": "living-room",
-      "item_ids": [
-        "living-room.couch",
-        "living-room.no_belongings",
-        "living-room.floor_clear",
-        "living-room.pillows",
-        "living-room.ceiling_fan",
+        "foyer.floor_clear",
         "house.baseboards"
       ],
-      "room_name_en": "Living room",
-      "room_name_es": "Sala de estar",
-      "room_name_ru": "\u0413\u043e\u0441\u0442\u0438\u043d\u0430\u044f",
-      "short_en": "couch and fan",
-      "short_es": "sof\u00e1 y ventilador",
-      "short_ru": "\u0434\u0438\u0432\u0430\u043d \u0438 \u0432\u0435\u043d\u0442\u0438\u043b\u044f\u0442\u043e\u0440",
-      "instruction_en": "Take a photo of the couch and fan in the living room.",
-      "instruction_es": "Fotograf\u00eda el sof\u00e1 y el ventilador en la sala de estar.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0434\u0438\u0432\u0430\u043d \u0438 \u0432\u0435\u043d\u0442\u0438\u043b\u044f\u0442\u043e\u0440 \u0432 \u0433\u043e\u0441\u0442\u0438\u043d\u043e\u0439."
+      "room_name_en": "Foyer and staircase",
+      "room_name_es": "Vest\u00edbulo y escalera",
+      "room_name_ru": "\u0425\u043e\u043b\u043b \u0438 \u043b\u0435\u0441\u0442\u043d\u0438\u0446\u0430",
+      "short_en": "floor clear",
+      "short_es": "piso despejado",
+      "short_ru": "\u0447\u0438\u0441\u0442\u044b\u0439 \u043f\u043e\u043b",
+      "instruction_en": "Take a photo of the foyer floor and stairs showing they are clear and baseboards clean.",
+      "instruction_es": "Toma una foto del piso del vest\u00edbulo y escalera despejados y z\u00f3calos limpios.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u043e\u043b \u0445\u043e\u043b\u043b\u0430 \u0438 \u043b\u0435\u0441\u0442\u043d\u0438\u0446\u0443 \u0431\u0435\u0437 \u0432\u0435\u0449\u0435\u0439, \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0438\u0441\u0442\u044b\u0435 \u043f\u043b\u0438\u043d\u0442\u0443\u0441\u044b."
     },
     {
-      "shot_id": "dining-01",
+      "shot_id": "powder-room-01",
+      "room_id": "powder-room",
+      "item_ids": [
+        "powder-room.toilet",
+        "powder-room.toilet_paper",
+        "powder-room.spare_toilet_paper"
+      ],
+      "room_name_en": "Powder room",
+      "room_name_es": "Medio ba\u00f1o",
+      "room_name_ru": "\u0413\u043e\u0441\u0442\u0435\u0432\u043e\u0439 \u0442\u0443\u0430\u043b\u0435\u0442",
+      "short_en": "toilet and paper",
+      "short_es": "inodoro y papel",
+      "short_ru": "\u0443\u043d\u0438\u0442\u0430\u0437 \u0438 \u0431\u0443\u043c\u0430\u0433\u0430",
+      "instruction_en": "In the powder room lift the toilet lid, show bowl, holder roll and spare roll.",
+      "instruction_es": "En el medio ba\u00f1o levanta la tapa del inodoro y muestra taza, rollo y repuesto.",
+      "instruction_ru": "\u0412 \u0433\u043e\u0441\u0442\u0435\u0432\u043e\u043c \u0442\u0443\u0430\u043b\u0435\u0442\u0435 \u043f\u043e\u0434\u043d\u0438\u043c\u0438\u0442\u0435 \u043a\u0440\u044b\u0448\u043a\u0443 \u0443\u043d\u0438\u0442\u0430\u0437\u0430, \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0430\u0448\u0443 \u0438 \u0434\u0432\u0430 \u0440\u0443\u043b\u043e\u043d\u0430."
+    },
+    {
+      "shot_id": "powder-room-02",
+      "room_id": "powder-room",
+      "item_ids": [
+        "powder-room.sink",
+        "powder-room.hand_towel",
+        "powder-room.no_guest_items"
+      ],
+      "room_name_en": "Powder room",
+      "room_name_es": "Medio ba\u00f1o",
+      "room_name_ru": "\u0413\u043e\u0441\u0442\u0435\u0432\u043e\u0439 \u0442\u0443\u0430\u043b\u0435\u0442",
+      "short_en": "sink and towel",
+      "short_es": "lavabo y toalla",
+      "short_ru": "\u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0430 \u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0435",
+      "instruction_en": "Take a photo of the powder room sink, mirror and hand towel with nothing left.",
+      "instruction_es": "Toma una foto del lavabo y espejo del medio ba\u00f1o con toalla y sin objetos.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0443 \u0438 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0433\u043e\u0441\u0442\u0435\u0432\u043e\u043c \u0442\u0443\u0430\u043b\u0435\u0442\u0435 \u0441 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0435\u043c."
+    },
+    {
+      "shot_id": "laundry-01",
+      "room_id": "laundry",
+      "item_ids": [
+        "laundry.machines"
+      ],
+      "room_name_en": "Laundry room",
+      "room_name_es": "Lavander\u00eda",
+      "room_name_ru": "\u041f\u0440\u0430\u0447\u0435\u0447\u043d\u0430\u044f",
+      "short_en": "washer open",
+      "short_es": "lavadora abierta",
+      "short_ru": "\u0441\u0442\u0438\u0440\u0430\u043b\u044c\u043d\u0430\u044f \u043e\u0442\u043a\u0440\u044b\u0442\u0430",
+      "instruction_en": "In the laundry room open the washer lid and show the empty drum.",
+      "instruction_es": "En la lavander\u00eda abre la tapa de la lavadora y muestra el tambor vac\u00edo.",
+      "instruction_ru": "\u0412 \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043a\u0440\u044b\u0448\u043a\u0443 \u0441\u0442\u0438\u0440\u0430\u043b\u044c\u043d\u043e\u0439 \u043c\u0430\u0448\u0438\u043d\u044b \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u043f\u0443\u0441\u0442\u043e\u0439 \u0431\u0430\u0440\u0430\u0431\u0430\u043d."
+    },
+    {
+      "shot_id": "laundry-02",
+      "room_id": "laundry",
+      "item_ids": [
+        "laundry.dryer"
+      ],
+      "room_name_en": "Laundry room",
+      "room_name_es": "Lavander\u00eda",
+      "room_name_ru": "\u041f\u0440\u0430\u0447\u0435\u0447\u043d\u0430\u044f",
+      "short_en": "dryer open",
+      "short_es": "secadora abierta",
+      "short_ru": "\u0441\u0443\u0448\u0438\u043b\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442\u0430",
+      "instruction_en": "In the laundry room open the dryer door and show the empty drum.",
+      "instruction_es": "En la lavander\u00eda abre la puerta de la secadora y muestra el tambor vac\u00edo.",
+      "instruction_ru": "\u0412 \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0434\u0432\u0435\u0440\u0446\u0443 \u0441\u0443\u0448\u0438\u043b\u043a\u0438 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u043f\u0443\u0441\u0442\u043e\u0439 \u0431\u0430\u0440\u0430\u0431\u0430\u043d."
+    },
+    {
+      "shot_id": "laundry-03",
+      "room_id": "laundry",
+      "item_ids": [
+        "laundry.lint_filter"
+      ],
+      "room_name_en": "Laundry room",
+      "room_name_es": "Lavander\u00eda",
+      "room_name_ru": "\u041f\u0440\u0430\u0447\u0435\u0447\u043d\u0430\u044f",
+      "short_en": "lint filter",
+      "short_es": "filtro de pelusa",
+      "short_ru": "\u0444\u0438\u043b\u044c\u0442\u0440 \u0441\u0443\u0448\u0438\u043b\u043a\u0438",
+      "instruction_en": "In the laundry room pull out the dryer lint filter and show it is clean.",
+      "instruction_es": "En la lavander\u00eda saca el filtro de pelusa y muestra que est\u00e1 limpio.",
+      "instruction_ru": "\u0412 \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439 \u0432\u044b\u0442\u0430\u0449\u0438\u0442\u0435 \u0444\u0438\u043b\u044c\u0442\u0440 \u0441\u0443\u0448\u0438\u043b\u043a\u0438 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0442\u043e \u043e\u043d \u0447\u0438\u0441\u0442\u044b\u0439."
+    },
+    {
+      "shot_id": "laundry-04",
+      "room_id": "laundry",
+      "item_ids": [
+        "laundry.floor_clear",
+        "laundry.no_dirty_linens"
+      ],
+      "room_name_en": "Laundry room",
+      "room_name_es": "Lavander\u00eda",
+      "room_name_ru": "\u041f\u0440\u0430\u0447\u0435\u0447\u043d\u0430\u044f",
+      "short_en": "floor clean",
+      "short_es": "piso limpio",
+      "short_ru": "\u0447\u0438\u0441\u0442\u044b\u0439 \u043f\u043e\u043b",
+      "instruction_en": "Take a photo of the laundry room floor showing it is clean with no linens.",
+      "instruction_es": "Toma una foto del piso de la lavander\u00eda limpio y sin ropa sucia.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u043e\u043b \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439, \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0438\u0441\u0442\u043e\u0442\u0443 \u0431\u0435\u0437 \u0431\u0435\u043b\u044c\u044f."
+    },
+    {
+      "shot_id": "kitchen-01",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.coffee_beans"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "coffee beans",
+      "short_es": "granos de caf\u00e9",
+      "short_ru": "\u043a\u043e\u0444\u0435\u0439\u043d\u044b\u0435 \u0437\u0435\u0440\u043d\u0430",
+      "instruction_en": "In the kitchen take the lid off the hopper and show beans inside.",
+      "instruction_es": "En la cocina quita la tapa del molino y muestra los granos adentro.",
+      "instruction_ru": "\u041d\u0430 \u043a\u0443\u0445\u043d\u0435 \u0441\u043d\u0438\u043c\u0438\u0442\u0435 \u043a\u0440\u044b\u0448\u043a\u0443 \u0431\u0443\u043d\u043a\u0435\u0440\u0430 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0437\u0435\u0440\u043d\u0430 \u0432\u043d\u0443\u0442\u0440\u0438."
+    },
+    {
+      "shot_id": "kitchen-02",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.fridge"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "fridge inside",
+      "short_es": "interior refrigerador",
+      "short_ru": "\u0432\u043d\u0443\u0442\u0440\u0438 \u0445\u043e\u043b\u043e\u0434\u0438\u043b\u044c\u043d\u0438\u043a\u0430",
+      "instruction_en": "In the kitchen open the fridge doors and show the empty main compartment.",
+      "instruction_es": "En la cocina abre las puertas del refrigerador y muestra el interior vac\u00edo.",
+      "instruction_ru": "\u041d\u0430 \u043a\u0443\u0445\u043d\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0434\u0432\u0435\u0440\u0446\u044b \u0445\u043e\u043b\u043e\u0434\u0438\u043b\u044c\u043d\u0438\u043a\u0430 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u043f\u0443\u0441\u0442\u0443\u044e \u043a\u0430\u043c\u0435\u0440\u0443."
+    },
+    {
+      "shot_id": "kitchen-03",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.fridge_left_door"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "left door",
+      "short_es": "puerta izquierda",
+      "short_ru": "\u043b\u0435\u0432\u0430\u044f \u0434\u0432\u0435\u0440\u0446\u0430",
+      "instruction_en": "In the kitchen open the left fridge door and show all its shelves empty.",
+      "instruction_es": "En la cocina abre la puerta izquierda del refrigerador y muestra estantes vac\u00edos.",
+      "instruction_ru": "\u041d\u0430 \u043a\u0443\u0445\u043d\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043b\u0435\u0432\u0443\u044e \u0434\u0432\u0435\u0440\u0446\u0443 \u0445\u043e\u043b\u043e\u0434\u0438\u043b\u044c\u043d\u0438\u043a\u0430 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u043f\u0443\u0441\u0442\u044b\u0435 \u043f\u043e\u043b\u043a\u0438."
+    },
+    {
+      "shot_id": "kitchen-04",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.fridge_right_door"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "right door",
+      "short_es": "puerta derecha",
+      "short_ru": "\u043f\u0440\u0430\u0432\u0430\u044f \u0434\u0432\u0435\u0440\u0446\u0430",
+      "instruction_en": "In the kitchen open the right fridge door and show all its shelves empty.",
+      "instruction_es": "En la cocina abre la puerta derecha del refrigerador y muestra estantes vac\u00edos.",
+      "instruction_ru": "\u041d\u0430 \u043a\u0443\u0445\u043d\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043f\u0440\u0430\u0432\u0443\u044e \u0434\u0432\u0435\u0440\u0446\u0443 \u0445\u043e\u043b\u043e\u0434\u0438\u043b\u044c\u043d\u0438\u043a\u0430 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u043f\u0443\u0441\u0442\u044b\u0435 \u043f\u043e\u043b\u043a\u0438."
+    },
+    {
+      "shot_id": "kitchen-05",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.freezer"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "freezer open",
+      "short_es": "congelador abierto",
+      "short_ru": "\u043c\u043e\u0440\u043e\u0437\u0438\u043b\u044c\u043d\u0438\u043a \u043e\u0442\u043a\u0440\u044b\u0442",
+      "instruction_en": "In the kitchen open the freezer and show it empty except ice bin.",
+      "instruction_es": "En la cocina abre el congelador y muestra que est\u00e1 vac\u00edo con hielera.",
+      "instruction_ru": "\u041d\u0430 \u043a\u0443\u0445\u043d\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043c\u043e\u0440\u043e\u0437\u0438\u043b\u044c\u043d\u0438\u043a \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0442\u043e \u043e\u043d \u043f\u0443\u0441\u0442."
+    },
+    {
+      "shot_id": "kitchen-06",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.microwave"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "microwave open",
+      "short_es": "microondas abierto",
+      "short_ru": "\u043c\u0438\u043a\u0440\u043e\u0432\u043e\u043b\u043d\u043e\u0432\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442\u0430",
+      "instruction_en": "In the kitchen open the microwave and show walls and turntable clean.",
+      "instruction_es": "En la cocina abre el microondas y muestra paredes y plato limpios.",
+      "instruction_ru": "\u041d\u0430 \u043a\u0443\u0445\u043d\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043c\u0438\u043a\u0440\u043e\u0432\u043e\u043b\u043d\u043e\u0432\u043a\u0443 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0438\u0441\u0442\u043e\u0442\u0443 \u0432\u043d\u0443\u0442\u0440\u0438."
+    },
+    {
+      "shot_id": "kitchen-07",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.oven"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "oven open",
+      "short_es": "horno abierto",
+      "short_ru": "\u0434\u0443\u0445\u043e\u0432\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442\u0430",
+      "instruction_en": "In the kitchen open the oven and show floor, walls and racks clean.",
+      "instruction_es": "En la cocina abre el horno y muestra piso, paredes y rejillas limpios.",
+      "instruction_ru": "\u041d\u0430 \u043a\u0443\u0445\u043d\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0434\u0443\u0445\u043e\u0432\u043a\u0443 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0438\u0441\u0442\u044b\u0435 \u0441\u0442\u0435\u043d\u043a\u0438 \u0438 \u0440\u0435\u0448\u0435\u0442\u043a\u0438."
+    },
+    {
+      "shot_id": "kitchen-08",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.dishwasher"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "dishwasher open",
+      "short_es": "lavaplatos abierto",
+      "short_ru": "\u043f\u043e\u0441\u0443\u0434\u043e\u043c\u043e\u0439\u043a\u0430 \u043e\u0442\u043a\u0440\u044b\u0442\u0430",
+      "instruction_en": "In the kitchen open the dishwasher and show racks empty.",
+      "instruction_es": "En la cocina abre el lavaplatos y muestra las rejillas vac\u00edas.",
+      "instruction_ru": "\u041d\u0430 \u043a\u0443\u0445\u043d\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043f\u043e\u0441\u0443\u0434\u043e\u043c\u043e\u0439\u043a\u0443 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u043f\u0443\u0441\u0442\u044b\u0435 \u043a\u043e\u0440\u0437\u0438\u043d\u044b."
+    },
+    {
+      "shot_id": "kitchen-09",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.counters",
+        "kitchen.stovetop",
+        "kitchen.paper_towels",
+        "kitchen.cabinets",
+        "kitchen.coffee_machine_clean"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "counters and stove",
+      "short_es": "encimeras y estufa",
+      "short_ru": "\u0441\u0442\u043e\u043b\u0435\u0448\u043d\u0438\u0446\u0430 \u0438 \u043f\u043b\u0438\u0442\u0430",
+      "instruction_en": "Take a photo of the kitchen counters, sink, stovetop, paper roll and machine.",
+      "instruction_es": "Toma una foto de encimeras, fregadero, estufa, papel y cafetera de cocina.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0441\u0442\u043e\u043b\u0435\u0448\u043d\u0438\u0446\u044b, \u043c\u043e\u0439\u043a\u0443, \u043f\u043b\u0438\u0442\u0443, \u0431\u0443\u043c\u0430\u0433\u0443 \u0438 \u043a\u043e\u0444\u0435\u043c\u0430\u0448\u0438\u043d\u0443 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
+    },
+    {
+      "shot_id": "kitchen-10",
+      "room_id": "kitchen",
+      "item_ids": [
+        "kitchen.trash"
+      ],
+      "room_name_en": "Kitchen",
+      "room_name_es": "Cocina",
+      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
+      "short_en": "trash bins",
+      "short_es": "botes de basura",
+      "short_ru": "\u043c\u0443\u0441\u043e\u0440\u043d\u044b\u0435 \u0432\u0435\u0434\u0440\u0430",
+      "instruction_en": "Take a photo of both kitchen trash bins empty with new liners.",
+      "instruction_es": "Toma una foto de ambos botes de cocina vac\u00edos con bolsas nuevas.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0431\u0430 \u043c\u0443\u0441\u043e\u0440\u043d\u044b\u0445 \u0432\u0435\u0434\u0440\u0430 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435 \u043f\u0443\u0441\u0442\u044b\u043c\u0438 \u0441 \u043f\u0430\u043a\u0435\u0442\u0430\u043c\u0438."
+    },
+    {
+      "shot_id": "dining-room-01",
       "room_id": "dining-room",
       "item_ids": [
         "dining-room.table",
@@ -81,12 +310,12 @@
       "room_name_en": "Dining area",
       "room_name_es": "Comedor",
       "room_name_ru": "\u0421\u0442\u043e\u043b\u043e\u0432\u0430\u044f",
-      "short_en": "dining table",
-      "short_es": "mesa del comedor",
-      "short_ru": "\u0441\u0442\u043e\u043b \u0441\u0442\u043e\u043b\u043e\u0432\u043e\u0439",
-      "instruction_en": "Take a photo of the table in the dining area.",
-      "instruction_es": "Fotograf\u00eda la mesa en el comedor.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0441\u0442\u043e\u043b \u0432 \u0441\u0442\u043e\u043b\u043e\u0432\u043e\u0439."
+      "short_en": "table and chairs",
+      "short_es": "mesa y sillas",
+      "short_ru": "\u0441\u0442\u043e\u043b \u0438 \u0441\u0442\u0443\u043b\u044c\u044f",
+      "instruction_en": "Take a photo of the dining area table clear with chairs in place.",
+      "instruction_es": "Toma una foto del comedor con mesa despejada y sillas en su lugar.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0441\u0442\u043e\u043b\u043e\u0432\u0443\u044e \u0441 \u0447\u0438\u0441\u0442\u044b\u043c \u0441\u0442\u043e\u043b\u043e\u043c \u0438 \u0441\u0442\u0443\u043b\u044c\u044f\u043c\u0438 \u043d\u0430 \u043c\u0435\u0441\u0442\u0430\u0445."
     },
     {
       "shot_id": "patio-01",
@@ -99,291 +328,62 @@
       "room_name_es": "Terraza trasera",
       "room_name_ru": "\u0417\u0430\u0434\u043d\u044f\u044f \u0442\u0435\u0440\u0440\u0430\u0441\u0430",
       "short_en": "back porch seats",
-      "short_es": "asientos traseros",
-      "short_ru": "\u043c\u0435\u0431\u0435\u043b\u044c \u0442\u0435\u0440\u0440\u0430\u0441\u044b",
-      "instruction_en": "Take a photo of the seats on the back porch.",
-      "instruction_es": "Fotograf\u00eda los asientos en la terraza trasera.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0441\u0438\u0434\u0435\u043d\u044c\u044f \u043d\u0430 \u0437\u0430\u0434\u043d\u0435\u0439 \u0442\u0435\u0440\u0440\u0430\u0441\u0435."
+      "short_es": "asientos terraza",
+      "short_ru": "\u0441\u0438\u0434\u0435\u043d\u044c\u044f \u0442\u0435\u0440\u0440\u0430\u0441\u044b",
+      "instruction_en": "Take a photo of the back porch seats with pillows showing it is tidy.",
+      "instruction_es": "Toma una foto de la terraza trasera con cojines y muestra orden.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0437\u0430\u0434\u043d\u044e\u044e \u0442\u0435\u0440\u0440\u0430\u0441\u0443 \u0441 \u043f\u043e\u0434\u0443\u0448\u043a\u0430\u043c\u0438, \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u043f\u043e\u0440\u044f\u0434\u043e\u043a."
     },
     {
-      "shot_id": "kitchen-01",
-      "room_id": "kitchen",
+      "shot_id": "living-room-01",
+      "room_id": "living-room",
       "item_ids": [
-        "kitchen.fridge"
+        "living-room.sofa_bed_linens"
       ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "fridge interior",
-      "short_es": "interior del frigor\u00edfico",
-      "short_ru": "\u0432\u043d\u0443\u0442\u0440\u0438 \u0445\u043e\u043b\u043e\u0434\u0438\u043b\u044c\u043d\u0438\u043a\u0430",
-      "instruction_en": "Take a photo of the open fridge in the kitchen.",
-      "instruction_es": "Fotograf\u00eda el frigor\u00edfico abierto en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0439 \u0445\u043e\u043b\u043e\u0434\u0438\u043b\u044c\u043d\u0438\u043a \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
+      "room_name_en": "Living room",
+      "room_name_es": "Sala",
+      "room_name_ru": "\u0413\u043e\u0441\u0442\u0438\u043d\u0430\u044f",
+      "short_en": "TV stand linens",
+      "short_es": "ropa en mueble",
+      "short_ru": "\u0431\u0435\u043b\u044c\u0435 \u0432 \u0442\u0443\u043c\u0431\u0435",
+      "instruction_en": "In the living room open TV stand doors and show sofa-bed linens inside.",
+      "instruction_es": "En la sala abre las puertas del mueble y muestra la ropa de cama adentro.",
+      "instruction_ru": "\u0412 \u0433\u043e\u0441\u0442\u0438\u043d\u043e\u0439 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0434\u0432\u0435\u0440\u0446\u044b \u0442\u0443\u043c\u0431\u044b \u0422\u0412 \u0438 \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0431\u0435\u043b\u044c\u0435 \u0432\u043d\u0443\u0442\u0440\u0438."
     },
     {
-      "shot_id": "kitchen-02",
-      "room_id": "kitchen",
+      "shot_id": "living-room-02",
+      "room_id": "living-room",
       "item_ids": [
-        "kitchen.fridge_left_door"
+        "living-room.couch",
+        "living-room.no_belongings",
+        "living-room.floor_clear",
+        "living-room.pillows"
       ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "left door",
-      "short_es": "puerta izquierda",
-      "short_ru": "\u043b\u0435\u0432\u0430\u044f \u0434\u0432\u0435\u0440\u0446\u0430",
-      "instruction_en": "Take a photo of the left door in the kitchen.",
-      "instruction_es": "Fotograf\u00eda la puerta izquierda en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043b\u0435\u0432\u0443\u044e \u0434\u0432\u0435\u0440\u0446\u0443 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
+      "room_name_en": "Living room",
+      "room_name_es": "Sala",
+      "room_name_ru": "\u0413\u043e\u0441\u0442\u0438\u043d\u0430\u044f",
+      "short_en": "couch and pillows",
+      "short_es": "sof\u00e1 y cojines",
+      "short_ru": "\u0434\u0438\u0432\u0430\u043d \u0438 \u043f\u043e\u0434\u0443\u0448\u043a\u0438",
+      "instruction_en": "Take a photo of the living room couch with pillows and clean floor.",
+      "instruction_es": "Toma una foto de la sala con sof\u00e1, cojines y piso limpio.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0433\u043e\u0441\u0442\u0438\u043d\u0443\u044e \u0441 \u0434\u0438\u0432\u0430\u043d\u043e\u043c, \u043f\u043e\u0434\u0443\u0448\u043a\u0430\u043c\u0438 \u0438 \u0447\u0438\u0441\u0442\u044b\u043c \u043f\u043e\u043b\u043e\u043c."
     },
     {
-      "shot_id": "kitchen-03",
-      "room_id": "kitchen",
+      "shot_id": "living-room-03",
+      "room_id": "living-room",
       "item_ids": [
-        "kitchen.fridge_right_door"
+        "living-room.ceiling_fan"
       ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "right door",
-      "short_es": "puerta derecha",
-      "short_ru": "\u043f\u0440\u0430\u0432\u0430\u044f \u0434\u0432\u0435\u0440\u0446\u0430",
-      "instruction_en": "Take a photo of the right door in the kitchen.",
-      "instruction_es": "Fotograf\u00eda la puerta derecha en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u0440\u0430\u0432\u0443\u044e \u0434\u0432\u0435\u0440\u0446\u0443 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
-    },
-    {
-      "shot_id": "kitchen-04",
-      "room_id": "kitchen",
-      "item_ids": [
-        "kitchen.freezer"
-      ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "open freezer",
-      "short_es": "congelador abierto",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u043c\u043e\u0440\u043e\u0437\u0438\u043b\u043a\u0430",
-      "instruction_en": "Take a photo of the open freezer in the kitchen.",
-      "instruction_es": "Fotograf\u00eda el congelador abierto en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0443\u044e \u043c\u043e\u0440\u043e\u0437\u0438\u043b\u043a\u0443 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
-    },
-    {
-      "shot_id": "kitchen-05",
-      "room_id": "kitchen",
-      "item_ids": [
-        "kitchen.microwave"
-      ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "open microwave",
-      "short_es": "microondas abierto",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u043c\u0438\u043a\u0440\u043e\u0432\u043e\u043b\u043d\u043e\u0432\u043a\u0430",
-      "instruction_en": "Take a photo of the open microwave in the kitchen.",
-      "instruction_es": "Fotograf\u00eda el microondas abierto en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0443\u044e \u043c\u0438\u043a\u0440\u043e\u0432\u043e\u043b\u043d\u043e\u0432\u043a\u0443 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
-    },
-    {
-      "shot_id": "kitchen-06",
-      "room_id": "kitchen",
-      "item_ids": [
-        "kitchen.oven"
-      ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "open oven",
-      "short_es": "horno abierto",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u0434\u0443\u0445\u043e\u0432\u043a\u0430",
-      "instruction_en": "Take a photo of the open oven in the kitchen.",
-      "instruction_es": "Fotograf\u00eda el horno abierto en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0443\u044e \u0434\u0443\u0445\u043e\u0432\u043a\u0443 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
-    },
-    {
-      "shot_id": "kitchen-07",
-      "room_id": "kitchen",
-      "item_ids": [
-        "kitchen.dishwasher"
-      ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "open dishwasher",
-      "short_es": "lavavajillas abierto",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u043f\u043e\u0441\u0443\u0434\u043e\u043c\u043e\u0439\u043a\u0430",
-      "instruction_en": "Take a photo of the open dishwasher in the kitchen.",
-      "instruction_es": "Fotograf\u00eda el lavavajillas abierto en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0443\u044e \u043f\u043e\u0441\u0443\u0434\u043e\u043c\u043e\u0439\u043a\u0443 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
-    },
-    {
-      "shot_id": "kitchen-08",
-      "room_id": "kitchen",
-      "item_ids": [
-        "kitchen.coffee_beans"
-      ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "coffee bean hopper",
-      "short_es": "tolva de caf\u00e9",
-      "short_ru": "\u0431\u0443\u043d\u043a\u0435\u0440 \u043a\u043e\u0444\u0435\u043c\u0430\u0448\u0438\u043d\u044b",
-      "instruction_en": "Take a photo of the coffee hopper in the kitchen.",
-      "instruction_es": "Fotograf\u00eda la tolva de caf\u00e9 en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0431\u0443\u043d\u043a\u0435\u0440 \u043a\u043e\u0444\u0435\u043c\u0430\u0448\u0438\u043d\u044b \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
-    },
-    {
-      "shot_id": "kitchen-09",
-      "room_id": "kitchen",
-      "item_ids": [
-        "kitchen.trash"
-      ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "trash bins",
-      "short_es": "cubos de basura",
-      "short_ru": "\u043c\u0443\u0441\u043e\u0440\u043d\u044b\u0435 \u0432\u0435\u0434\u0440\u0430",
-      "instruction_en": "Take a photo of the trash bins in the kitchen.",
-      "instruction_es": "Fotograf\u00eda los cubos de basura en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043c\u0443\u0441\u043e\u0440\u043d\u044b\u0435 \u0432\u0435\u0434\u0440\u0430 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
-    },
-    {
-      "shot_id": "kitchen-10",
-      "room_id": "kitchen",
-      "item_ids": [
-        "kitchen.counters",
-        "kitchen.stovetop",
-        "kitchen.cabinets",
-        "kitchen.coffee_machine_clean",
-        "kitchen.paper_towels"
-      ],
-      "room_name_en": "Kitchen",
-      "room_name_es": "Cocina",
-      "room_name_ru": "\u041a\u0443\u0445\u043d\u044f",
-      "short_en": "counters and stove",
-      "short_es": "encimera y cocina",
-      "short_ru": "\u0441\u0442\u043e\u043b\u0435\u0448\u043d\u0438\u0446\u0430 \u0438 \u043f\u043b\u0438\u0442\u0430",
-      "instruction_en": "Take a photo of the counters and stove in the kitchen.",
-      "instruction_es": "Fotograf\u00eda la encimera y la cocina en la cocina.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0441\u0442\u043e\u043b\u0435\u0448\u043d\u0438\u0446\u0443 \u0438 \u043f\u043b\u0438\u0442\u0443 \u043d\u0430 \u043a\u0443\u0445\u043d\u0435."
-    },
-    {
-      "shot_id": "laundry-01",
-      "room_id": "laundry",
-      "item_ids": [
-        "laundry.machines"
-      ],
-      "room_name_en": "Laundry room",
-      "room_name_es": "Lavadero",
-      "room_name_ru": "\u041f\u0440\u0430\u0447\u0435\u0447\u043d\u0430\u044f",
-      "short_en": "open washer",
-      "short_es": "lavadora abierta",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u0441\u0442\u0438\u0440\u0430\u043b\u043a\u0430",
-      "instruction_en": "Take a photo of the open washer in the laundry room.",
-      "instruction_es": "Fotograf\u00eda la lavadora abierta en el lavadero.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0443\u044e \u0441\u0442\u0438\u0440\u0430\u043b\u043a\u0443 \u0432 \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "laundry-02",
-      "room_id": "laundry",
-      "item_ids": [
-        "laundry.lint_filter"
-      ],
-      "room_name_en": "Laundry room",
-      "room_name_es": "Lavadero",
-      "room_name_ru": "\u041f\u0440\u0430\u0447\u0435\u0447\u043d\u0430\u044f",
-      "short_en": "lint filter",
-      "short_es": "filtro de pelusas",
-      "short_ru": "\u0444\u0438\u043b\u044c\u0442\u0440 \u0441\u0443\u0448\u0438\u043b\u043a\u0438",
-      "instruction_en": "Take a photo of the lint filter in the laundry room.",
-      "instruction_es": "Fotograf\u00eda el filtro de pelusas en el lavadero.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0444\u0438\u043b\u044c\u0442\u0440 \u0441\u0443\u0448\u0438\u043b\u043a\u0438 \u0432 \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "laundry-03",
-      "room_id": "laundry",
-      "item_ids": [
-        "laundry.dryer"
-      ],
-      "room_name_en": "Laundry room",
-      "room_name_es": "Lavadero",
-      "room_name_ru": "\u041f\u0440\u0430\u0447\u0435\u0447\u043d\u0430\u044f",
-      "short_en": "open dryer",
-      "short_es": "secadora abierta",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u0430\u044f \u0441\u0443\u0448\u0438\u043b\u043a\u0430",
-      "instruction_en": "Take a photo of the open dryer in the laundry room.",
-      "instruction_es": "Fotograf\u00eda la secadora abierta en el lavadero.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0443\u044e \u0441\u0443\u0448\u0438\u043b\u043a\u0443 \u0432 \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "laundry-04",
-      "room_id": "laundry",
-      "item_ids": [
-        "laundry.floor_clear",
-        "laundry.no_dirty_linens"
-      ],
-      "room_name_en": "Laundry room",
-      "room_name_es": "Lavadero",
-      "room_name_ru": "\u041f\u0440\u0430\u0447\u0435\u0447\u043d\u0430\u044f",
-      "short_en": "laundry floor",
-      "short_es": "suelo del lavadero",
-      "short_ru": "\u043f\u043e\u043b \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439",
-      "instruction_en": "Take a photo of the floor in the laundry room.",
-      "instruction_es": "Fotograf\u00eda el suelo en el lavadero.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u043e\u043b \u0432 \u043f\u0440\u0430\u0447\u0435\u0447\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "powder-01",
-      "room_id": "powder-room",
-      "item_ids": [
-        "powder-room.toilet"
-      ],
-      "room_name_en": "Powder room",
-      "room_name_es": "Aseo de cortes\u00eda",
-      "room_name_ru": "\u0413\u043e\u0441\u0442\u0435\u0432\u043e\u0439 \u0442\u0443\u0430\u043b\u0435\u0442",
-      "short_en": "open toilet",
-      "short_es": "inodoro abierto",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0439 \u0443\u043d\u0438\u0442\u0430\u0437",
-      "instruction_en": "Take a photo of the open toilet in the powder room.",
-      "instruction_es": "Fotograf\u00eda el inodoro abierto en el aseo de cortes\u00eda.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0439 \u0443\u043d\u0438\u0442\u0430\u0437 \u0432 \u0433\u043e\u0441\u0442\u0435\u0432\u043e\u043c \u0442\u0443\u0430\u043b\u0435\u0442\u0435."
-    },
-    {
-      "shot_id": "powder-02",
-      "room_id": "powder-room",
-      "item_ids": [
-        "powder-room.toilet_paper",
-        "powder-room.spare_toilet_paper"
-      ],
-      "room_name_en": "Powder room",
-      "room_name_es": "Aseo de cortes\u00eda",
-      "room_name_ru": "\u0413\u043e\u0441\u0442\u0435\u0432\u043e\u0439 \u0442\u0443\u0430\u043b\u0435\u0442",
-      "short_en": "toilet paper rolls",
-      "short_es": "rollos de papel",
-      "short_ru": "\u0440\u0443\u043b\u043e\u043d\u044b \u0431\u0443\u043c\u0430\u0433\u0438",
-      "instruction_en": "Take a photo of the paper rolls in the powder room.",
-      "instruction_es": "Fotograf\u00eda los rollos de papel en el aseo de cortes\u00eda.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0443\u043b\u043e\u043d\u044b \u0431\u0443\u043c\u0430\u0433\u0438 \u0432 \u0433\u043e\u0441\u0442\u0435\u0432\u043e\u043c \u0442\u0443\u0430\u043b\u0435\u0442\u0435."
-    },
-    {
-      "shot_id": "powder-03",
-      "room_id": "powder-room",
-      "item_ids": [
-        "powder-room.sink",
-        "powder-room.hand_towel",
-        "powder-room.no_guest_items"
-      ],
-      "room_name_en": "Powder room",
-      "room_name_es": "Aseo de cortes\u00eda",
-      "room_name_ru": "\u0413\u043e\u0441\u0442\u0435\u0432\u043e\u0439 \u0442\u0443\u0430\u043b\u0435\u0442",
-      "short_en": "sink and mirror",
-      "short_es": "lavabo y espejo",
-      "short_ru": "\u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0430 \u0438 \u0437\u0435\u0440\u043a\u0430\u043b\u043e",
-      "instruction_en": "Take a photo of the sink and mirror in the powder room.",
-      "instruction_es": "Fotograf\u00eda el lavabo y el espejo en el aseo de cortes\u00eda.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0443 \u0438 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0433\u043e\u0441\u0442\u0435\u0432\u043e\u043c \u0442\u0443\u0430\u043b\u0435\u0442\u0435."
+      "room_name_en": "Living room",
+      "room_name_es": "Sala",
+      "room_name_ru": "\u0413\u043e\u0441\u0442\u0438\u043d\u0430\u044f",
+      "short_en": "ceiling fan",
+      "short_es": "ventilador de techo",
+      "short_ru": "\u043f\u043e\u0442\u043e\u043b\u043e\u0447\u043d\u044b\u0439 \u0432\u0435\u043d\u0442\u0438\u043b\u044f\u0442\u043e\u0440",
+      "instruction_en": "Take a photo of the living room ceiling fan showing blades dust-free.",
+      "instruction_es": "Toma una foto del ventilador de la sala y muestra aspas sin polvo.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0432\u0435\u043d\u0442\u0438\u043b\u044f\u0442\u043e\u0440 \u0432 \u0433\u043e\u0441\u0442\u0438\u043d\u043e\u0439, \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0438\u0441\u0442\u044b\u0435 \u043b\u043e\u043f\u0430\u0441\u0442\u0438."
     },
     {
       "shot_id": "master-bedroom-01",
@@ -397,179 +397,121 @@
       "room_name_en": "Master bedroom",
       "room_name_es": "Dormitorio principal",
       "room_name_ru": "\u0413\u043b\u0430\u0432\u043d\u0430\u044f \u0441\u043f\u0430\u043b\u044c\u043d\u044f",
-      "short_en": "made beds",
-      "short_es": "camas hechas",
-      "short_ru": "\u0437\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0435 \u043a\u0440\u043e\u0432\u0430\u0442\u0438",
-      "instruction_en": "Take a photo of the made beds in the master bedroom.",
-      "instruction_es": "Fotograf\u00eda las camas hechas en el dormitorio principal.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0437\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0435 \u043a\u0440\u043e\u0432\u0430\u0442\u0438 \u0432 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0441\u043f\u0430\u043b\u044c\u043d\u0435."
+      "short_en": "both beds made",
+      "short_es": "ambas camas",
+      "short_ru": "\u043e\u0431\u0435 \u043a\u0440\u043e\u0432\u0430\u0442\u0438",
+      "instruction_en": "Take a photo of the master bedroom showing both made beds and clean floor.",
+      "instruction_es": "Toma una foto del dormitorio principal con ambas camas tendidas y piso.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0433\u043b\u0430\u0432\u043d\u0443\u044e \u0441\u043f\u0430\u043b\u044c\u043d\u044e \u0441 \u043e\u0431\u0435\u0438\u043c\u0438 \u043a\u0440\u043e\u0432\u0430\u0442\u044f\u043c\u0438 \u0438 \u0447\u0438\u0441\u0442\u044b\u043c \u043f\u043e\u043b\u043e\u043c."
     },
     {
       "shot_id": "master-bathroom-01",
       "room_id": "master-bathroom",
       "item_ids": [
-        "master-bathroom.toilet"
+        "master-bathroom.toilet",
+        "master-bathroom.toilet_paper",
+        "master-bathroom.spare_toilet_paper",
+        "master-bathroom.shelves"
       ],
       "room_name_en": "Master bathroom",
       "room_name_es": "Ba\u00f1o principal",
       "room_name_ru": "\u0413\u043b\u0430\u0432\u043d\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
-      "short_en": "open toilet",
-      "short_es": "inodoro abierto",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0439 \u0443\u043d\u0438\u0442\u0430\u0437",
-      "instruction_en": "Take a photo of the open toilet in the master bathroom.",
-      "instruction_es": "Fotograf\u00eda el inodoro abierto en el ba\u00f1o principal.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0439 \u0443\u043d\u0438\u0442\u0430\u0437 \u0432 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
+      "short_en": "toilet and shelves",
+      "short_es": "inodoro y repisas",
+      "short_ru": "\u0443\u043d\u0438\u0442\u0430\u0437 \u0438 \u043f\u043e\u043b\u043a\u0438",
+      "instruction_en": "In the master bathroom lift lid, show bowl, rolls and stocked shelves.",
+      "instruction_es": "En el ba\u00f1o principal levanta la tapa y muestra taza, rollos y repisas.",
+      "instruction_ru": "\u0412 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0432\u0430\u043d\u043d\u043e\u0439 \u043f\u043e\u0434\u043d\u0438\u043c\u0438\u0442\u0435 \u043a\u0440\u044b\u0448\u043a\u0443, \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0430\u0448\u0443, \u0440\u0443\u043b\u043e\u043d\u044b \u0438 \u043f\u043e\u043b\u043a\u0438."
     },
     {
       "shot_id": "master-bathroom-02",
       "room_id": "master-bathroom",
       "item_ids": [
-        "master-bathroom.toilet_paper",
-        "master-bathroom.spare_toilet_paper"
-      ],
-      "room_name_en": "Master bathroom",
-      "room_name_es": "Ba\u00f1o principal",
-      "room_name_ru": "\u0413\u043b\u0430\u0432\u043d\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
-      "short_en": "toilet paper rolls",
-      "short_es": "rollos de papel",
-      "short_ru": "\u0440\u0443\u043b\u043e\u043d\u044b \u0431\u0443\u043c\u0430\u0433\u0438",
-      "instruction_en": "Take a photo of the paper rolls in the master bathroom.",
-      "instruction_es": "Fotograf\u00eda los rollos de papel en el ba\u00f1o principal.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0443\u043b\u043e\u043d\u044b \u0431\u0443\u043c\u0430\u0433\u0438 \u0432 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "master-bathroom-03",
-      "room_id": "master-bathroom",
-      "item_ids": [
+        "master-bathroom.towels",
         "master-bathroom.sink",
         "master-bathroom.no_guest_items"
       ],
       "room_name_en": "Master bathroom",
       "room_name_es": "Ba\u00f1o principal",
       "room_name_ru": "\u0413\u043b\u0430\u0432\u043d\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
-      "short_en": "sink and mirror",
-      "short_es": "lavabo y espejo",
-      "short_ru": "\u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0430 \u0438 \u0437\u0435\u0440\u043a\u0430\u043b\u043e",
-      "instruction_en": "Take a photo of the sink and mirror in the master bathroom.",
-      "instruction_es": "Fotograf\u00eda el lavabo y el espejo en el ba\u00f1o principal.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0443 \u0438 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
+      "short_en": "sink and towels",
+      "short_es": "lavabo y toallas",
+      "short_ru": "\u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0430 \u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0430",
+      "instruction_en": "Take a photo of the master bathroom vanity with clean sink and towels.",
+      "instruction_es": "Toma una foto del tocador del ba\u00f1o principal con lavabo y toallas.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0443 \u0432 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0432\u0430\u043d\u043d\u043e\u0439 \u0441 \u0447\u0438\u0441\u0442\u044b\u043c\u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0430\u043c\u0438."
     },
     {
-      "shot_id": "master-bathroom-04",
-      "room_id": "master-bathroom",
-      "item_ids": [
-        "master-bathroom.shelves",
-        "master-bathroom.towels"
-      ],
-      "room_name_en": "Master bathroom",
-      "room_name_es": "Ba\u00f1o principal",
-      "room_name_ru": "\u0413\u043b\u0430\u0432\u043d\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
-      "short_en": "shelves and towels",
-      "short_es": "estanter\u00edas y toallas",
-      "short_ru": "\u043f\u043e\u043b\u043a\u0438 \u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0430",
-      "instruction_en": "Take a photo of the shelves and towels in the master bathroom.",
-      "instruction_es": "Fotograf\u00eda las estanter\u00edas y toallas en el ba\u00f1o principal.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u043e\u043b\u043a\u0438 \u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0430 \u0432 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "master-bathroom-05",
+      "shot_id": "master-bathroom-03",
       "room_id": "master-bathroom",
       "item_ids": [
         "master-bathroom.shower",
-        "master-bathroom.amenities"
+        "master-bathroom.amenities",
+        "master-bathroom.no_guest_items"
       ],
       "room_name_en": "Master bathroom",
       "room_name_es": "Ba\u00f1o principal",
       "room_name_ru": "\u0413\u043b\u0430\u0432\u043d\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
       "short_en": "clean tub",
-      "short_es": "ba\u00f1era limpia",
+      "short_es": "tina limpia",
       "short_ru": "\u0447\u0438\u0441\u0442\u0430\u044f \u0432\u0430\u043d\u043d\u0430",
-      "instruction_en": "Take a photo of the tub in the master bathroom.",
-      "instruction_es": "Fotograf\u00eda la ba\u00f1era en el ba\u00f1o principal.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0432\u0430\u043d\u043d\u0443 \u0432 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
+      "instruction_en": "Take a photo of the master bathroom clean tub with shampoo bottles.",
+      "instruction_es": "Toma una foto de la tina limpia del ba\u00f1o principal con champ\u00fas.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0447\u0438\u0441\u0442\u0443\u044e \u0432\u0430\u043d\u043d\u0443 \u0432 \u0433\u043b\u0430\u0432\u043d\u043e\u0439 \u0432\u0430\u043d\u043d\u043e\u0439 \u0441 \u0448\u0430\u043c\u043f\u0443\u043d\u044f\u043c\u0438."
     },
     {
       "shot_id": "hall-bathroom-01",
       "room_id": "hall-bathroom",
       "item_ids": [
-        "hall-bathroom.toilet"
+        "hall-bathroom.toilet",
+        "hall-bathroom.toilet_paper",
+        "hall-bathroom.spare_toilet_paper",
+        "hall-bathroom.shelves"
       ],
       "room_name_en": "Hall bathroom",
       "room_name_es": "Ba\u00f1o del pasillo",
       "room_name_ru": "\u041e\u0431\u0449\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
-      "short_en": "open toilet",
-      "short_es": "inodoro abierto",
-      "short_ru": "\u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0439 \u0443\u043d\u0438\u0442\u0430\u0437",
-      "instruction_en": "Take a photo of the open toilet in the hall bathroom.",
-      "instruction_es": "Fotograf\u00eda el inodoro abierto en el ba\u00f1o del pasillo.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0439 \u0443\u043d\u0438\u0442\u0430\u0437 \u0432 \u043e\u0431\u0449\u0435\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
+      "short_en": "toilet and shelves",
+      "short_es": "inodoro y repisas",
+      "short_ru": "\u0443\u043d\u0438\u0442\u0430\u0437 \u0438 \u043f\u043e\u043b\u043a\u0438",
+      "instruction_en": "In the hall bathroom lift lid, show bowl, rolls and stocked shelves.",
+      "instruction_es": "En el ba\u00f1o del pasillo levanta la tapa y muestra taza, rollos y repisas.",
+      "instruction_ru": "\u0412 \u043e\u0431\u0449\u0435\u0439 \u0432\u0430\u043d\u043d\u043e\u0439 \u043f\u043e\u0434\u043d\u0438\u043c\u0438\u0442\u0435 \u043a\u0440\u044b\u0448\u043a\u0443, \u043f\u043e\u043a\u0430\u0436\u0438\u0442\u0435 \u0447\u0430\u0448\u0443, \u0440\u0443\u043b\u043e\u043d\u044b \u0438 \u043f\u043e\u043b\u043a\u0438."
     },
     {
       "shot_id": "hall-bathroom-02",
       "room_id": "hall-bathroom",
       "item_ids": [
-        "hall-bathroom.toilet_paper",
-        "hall-bathroom.spare_toilet_paper"
-      ],
-      "room_name_en": "Hall bathroom",
-      "room_name_es": "Ba\u00f1o del pasillo",
-      "room_name_ru": "\u041e\u0431\u0449\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
-      "short_en": "toilet paper rolls",
-      "short_es": "rollos de papel",
-      "short_ru": "\u0440\u0443\u043b\u043e\u043d\u044b \u0431\u0443\u043c\u0430\u0433\u0438",
-      "instruction_en": "Take a photo of the paper rolls in the hall bathroom.",
-      "instruction_es": "Fotograf\u00eda los rollos de papel en el ba\u00f1o del pasillo.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0443\u043b\u043e\u043d\u044b \u0431\u0443\u043c\u0430\u0433\u0438 \u0432 \u043e\u0431\u0449\u0435\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "hall-bathroom-03",
-      "room_id": "hall-bathroom",
-      "item_ids": [
+        "hall-bathroom.towels",
         "hall-bathroom.sink",
         "hall-bathroom.no_guest_items"
       ],
       "room_name_en": "Hall bathroom",
       "room_name_es": "Ba\u00f1o del pasillo",
       "room_name_ru": "\u041e\u0431\u0449\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
-      "short_en": "sink and mirror",
-      "short_es": "lavabo y espejo",
-      "short_ru": "\u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0430 \u0438 \u0437\u0435\u0440\u043a\u0430\u043b\u043e",
-      "instruction_en": "Take a photo of the sink and mirror in the hall bathroom.",
-      "instruction_es": "Fotograf\u00eda el lavabo y el espejo en el ba\u00f1o del pasillo.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0443 \u0438 \u0437\u0435\u0440\u043a\u0430\u043b\u043e \u0432 \u043e\u0431\u0449\u0435\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
+      "short_en": "sink and towels",
+      "short_es": "lavabo y toallas",
+      "short_ru": "\u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0430 \u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0430",
+      "instruction_en": "Take a photo of the hall bathroom vanity with clean sink and towels.",
+      "instruction_es": "Toma una foto del tocador del ba\u00f1o del pasillo con lavabo y toallas.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0440\u0430\u043a\u043e\u0432\u0438\u043d\u0443 \u0432 \u043e\u0431\u0449\u0435\u0439 \u0432\u0430\u043d\u043d\u043e\u0439 \u0441 \u0447\u0438\u0441\u0442\u044b\u043c\u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0430\u043c\u0438."
     },
     {
-      "shot_id": "hall-bathroom-04",
+      "shot_id": "hall-bathroom-03",
       "room_id": "hall-bathroom",
       "item_ids": [
-        "hall-bathroom.shelves",
-        "hall-bathroom.towels"
-      ],
-      "room_name_en": "Hall bathroom",
-      "room_name_es": "Ba\u00f1o del pasillo",
-      "room_name_ru": "\u041e\u0431\u0449\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
-      "short_en": "shelves and towels",
-      "short_es": "estanter\u00edas y toallas",
-      "short_ru": "\u043f\u043e\u043b\u043a\u0438 \u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0430",
-      "instruction_en": "Take a photo of the shelves and towels in the hall bathroom.",
-      "instruction_es": "Fotograf\u00eda las estanter\u00edas y toallas en el ba\u00f1o del pasillo.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u043e\u043b\u043a\u0438 \u0438 \u043f\u043e\u043b\u043e\u0442\u0435\u043d\u0446\u0430 \u0432 \u043e\u0431\u0449\u0435\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
-    },
-    {
-      "shot_id": "hall-bathroom-05",
-      "room_id": "hall-bathroom",
-      "item_ids": [
-        "hall-bathroom.shower"
+        "hall-bathroom.shower",
+        "hall-bathroom.no_guest_items"
       ],
       "room_name_en": "Hall bathroom",
       "room_name_es": "Ba\u00f1o del pasillo",
       "room_name_ru": "\u041e\u0431\u0449\u0430\u044f \u0432\u0430\u043d\u043d\u0430\u044f",
       "short_en": "clean tub",
-      "short_es": "ba\u00f1era limpia",
+      "short_es": "tina limpia",
       "short_ru": "\u0447\u0438\u0441\u0442\u0430\u044f \u0432\u0430\u043d\u043d\u0430",
-      "instruction_en": "Take a photo of the tub in the hall bathroom.",
-      "instruction_es": "Fotograf\u00eda la ba\u00f1era en el ba\u00f1o del pasillo.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0432\u0430\u043d\u043d\u0443 \u0432 \u043e\u0431\u0449\u0435\u0439 \u0432\u0430\u043d\u043d\u043e\u0439."
+      "instruction_en": "Take a photo of the hall bathroom clean tub with shower curtain.",
+      "instruction_es": "Toma una foto de la tina limpia del ba\u00f1o del pasillo con cortina.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0447\u0438\u0441\u0442\u0443\u044e \u0432\u0430\u043d\u043d\u0443 \u0432 \u043e\u0431\u0449\u0435\u0439 \u0432\u0430\u043d\u043d\u043e\u0439 \u0441\u043e \u0448\u0442\u043e\u0440\u043a\u043e\u0439."
     },
     {
       "shot_id": "bedroom-1-01",
@@ -582,12 +524,12 @@
       "room_name_en": "Bedroom 1",
       "room_name_es": "Dormitorio 1",
       "room_name_ru": "\u0421\u043f\u0430\u043b\u044c\u043d\u044f 1",
-      "short_en": "made bed",
-      "short_es": "cama hecha",
+      "short_en": "bed made",
+      "short_es": "cama tendida",
       "short_ru": "\u0437\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u0430\u044f \u043a\u0440\u043e\u0432\u0430\u0442\u044c",
-      "instruction_en": "Take a photo of the made bed in Bedroom 1.",
-      "instruction_es": "Fotograf\u00eda la cama hecha en el dormitorio 1.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0437\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u0443\u044e \u043a\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0441\u043f\u0430\u043b\u044c\u043d\u0435 1."
+      "instruction_en": "Take a photo of Bedroom 1 showing made bed and clean floor.",
+      "instruction_es": "Toma una foto del Dormitorio 1 con cama tendida y piso limpio.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0421\u043f\u0430\u043b\u044c\u043d\u044e 1 \u0441 \u043a\u0440\u043e\u0432\u0430\u0442\u044c\u044e \u0438 \u0447\u0438\u0441\u0442\u044b\u043c \u043f\u043e\u043b\u043e\u043c."
     },
     {
       "shot_id": "bedroom-2-01",
@@ -600,14 +542,14 @@
       "room_name_en": "Bedroom 2",
       "room_name_es": "Dormitorio 2",
       "room_name_ru": "\u0421\u043f\u0430\u043b\u044c\u043d\u044f 2",
-      "short_en": "made bed",
-      "short_es": "cama hecha",
+      "short_en": "bed made",
+      "short_es": "cama tendida",
       "short_ru": "\u0437\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u0430\u044f \u043a\u0440\u043e\u0432\u0430\u0442\u044c",
-      "instruction_en": "Take a photo of the made bed in Bedroom 2.",
-      "instruction_es": "Fotograf\u00eda la cama hecha en el dormitorio 2.",
-      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0437\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u0443\u044e \u043a\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0441\u043f\u0430\u043b\u044c\u043d\u0435 2."
+      "instruction_en": "Take a photo of Bedroom 2 showing made bed and clean floor.",
+      "instruction_es": "Toma una foto del Dormitorio 2 con cama tendida y piso limpio.",
+      "instruction_ru": "\u0421\u0444\u043e\u0442\u043e\u0433\u0440\u0430\u0444\u0438\u0440\u0443\u0439\u0442\u0435 \u0421\u043f\u0430\u043b\u044c\u043d\u044e 2 \u0441 \u043a\u0440\u043e\u0432\u0430\u0442\u044c\u044e \u0438 \u0447\u0438\u0441\u0442\u044b\u043c \u043f\u043e\u043b\u043e\u043c."
     }
   ],
   "model": "muse-spark-1.3-contributor",
-  "generated_at": "2026-10-31T12:32:35"
+  "generated_at": "2026-10-31T13:07:39"
 }

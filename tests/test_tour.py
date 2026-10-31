@@ -180,7 +180,11 @@ def test_tour_instructions_cover_open_doors_and_short_names():
     assert "opened only for the photo" in text
     assert "short_xx" in text
     assert "2-4 words" in text
-    assert "Fotografía" in text and "Take a photo of" in text
+    assert "what to open, lift, take off or remove" in text
+    assert "At most about 20 words" in text
+    assert '"refrigerador" (not "frigorífico")' in text
+    assert '"piso" (not "suelo")' in text
+    assert "Take a photo of" in text
     assert "Сфотографируйте" in text
 
 

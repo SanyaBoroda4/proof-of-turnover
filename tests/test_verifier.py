@@ -256,3 +256,48 @@ def test_pick_problem_boxes_failure_keeps_all(tmp_path):
     )
     assert kept is sam
     assert notes == ["Box pick for bed.beds_made failed (pick: boom); kept all 3"]
+
+
+def test_refine_problem_boxes_single_box_makes_no_call(tmp_path):
+    from pot.verifier import refine_problem_boxes
+
+    photos = make_photos(tmp_path / "photos", 1)
+    sam = SamCheck("bed.beds_made", "P01", "stain", 1, _numbered_boxes(1))
+    client = FakeSpark()
+    kept, notes = refine_problem_boxes(
+        client, "bed.beds_made", photos[0], sam, "stain")
+    assert kept is sam and notes == []
+    assert client.calls == []
+
+
+def test_refine_problem_boxes_eight_boxes_trigger_one_pick(tmp_path):
+    from pot.verifier import refine_problem_boxes
+
+    photos = make_photos(tmp_path / "photos", 1)
+    sam = SamCheck("bed.beds_made", "P01", "shoe", 8, _numbered_boxes(8))
+    client = FakeSpark(picker=lambda call: {"boxes": [2]})
+    kept, notes = refine_problem_boxes(
+        client, "bed.beds_made", photos[0], sam, "shoe")
+    assert len(client.calls) == 1
+    assert kept.count == 1
+    assert notes == ["Box pick for bed.beds_made: kept 1 of 8"]
+
+
+def test_refine_problem_boxes_many_boxes_draw_one_area_box(tmp_path):
+    from pot.verifier import refine_problem_boxes
+
+    photos = make_photos(tmp_path / "photos", 1)
+    boxes = [
+        {"left": 0, "top": 0, "right": 4, "bottom": 4, "confidence": 0.6},
+        {"left": 10, "top": 2, "right": 14, "bottom": 8, "confidence": 0.9},
+    ] + _numbered_boxes(7)
+    sam = SamCheck("bed.beds_made", "P01", "jar", 9, boxes)
+    client = FakeSpark()
+    kept, notes = refine_problem_boxes(
+        client, "bed.beds_made", photos[0], sam, "jar")
+    assert client.calls == []
+    assert kept.count == 1
+    area = kept.boxes[0]
+    assert (area["left"], area["top"], area["right"], area["bottom"]) == (0, 0, 16, 8)
+    assert area["confidence"] == 0.9
+    assert notes == ["Box pick for bed.beds_made skipped (9 boxes): drew 1 area box"]

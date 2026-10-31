@@ -29,7 +29,8 @@ from pydantic import BaseModel
 
 from pot import config, prompts
 from pot.checklist import PropertyError, build_checklist, load_property
-from pot.meta_client import MetaClient, call_context
+from pot.meta_client import MetaClient, MetaClientError, call_context
+from pot.notes import MAX_NOTE_BYTES, NotesError, add_voice_note
 from pot.photos import new_run_dir
 from pot.recheck import run_photo_checks
 from pot.requests import write_requests
@@ -340,6 +341,33 @@ def create_app(client=None):
         if blob is None:
             raise HTTPException(404, f"No photo '{photo_id}'")
         return Response(blob, media_type="image/jpeg", headers=dict(LONG_CACHE))
+
+    @app.post("/api/runs/{run_id}/notes")
+    def _add_note(run_id: str, room_id: str = Form(...), audio: UploadFile = File(...)):
+        state = need_state(run_id)
+        _checked_id(room_id, "room")
+        blob = audio.file.read(MAX_NOTE_BYTES + 1)
+        token = call_context.set({"run_dir": str(state.run_dir), "photo_id": None})
+        try:
+            try:
+                return add_voice_note(
+                    server.client, state, blob, audio.filename or "note",
+                    room_id, effort=prompts.RECHECK_EFFORT,
+                )
+            except NotesError as exc:
+                raise HTTPException(400, str(exc))
+            except MetaClientError as exc:
+                raise HTTPException(502, str(exc))
+        finally:
+            call_context.reset(token)
+
+    @app.get("/api/runs/{run_id}/notes/{note_id}/audio")
+    def _get_note_audio(run_id: str, note_id: str):
+        _checked_id(note_id, "note")
+        blob = need_state(run_id).read_note_audio(note_id)
+        if blob is None:
+            raise HTTPException(404, f"No audio for '{note_id}'")
+        return Response(blob, media_type="audio/wav", headers=dict(LONG_CACHE))
 
     @app.post("/api/runs/{run_id}/signoff")
     def _signoff(run_id: str, body: SignoffBody):

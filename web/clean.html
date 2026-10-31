@@ -53,6 +53,9 @@ let tour = null, takenSet = new Set(), status = null, demoPhotos = null;
 let overrideShot = null, selectedDemo = "", photoError = "", lastKey = null;
 let pollTimer = null, pendingShot = null;
 let prevShotId = null, seenReqIds = null;
+let recorder = null, recStream = null, recChunks = [], recRoom = null;
+let recStart = 0, recSeconds = 0, recTimer = null;
+let transcribing = false, noteMsg = "", noteMsgTimer = null;
 
 const I18N = {
   es: {
@@ -81,6 +84,13 @@ const I18N = {
     oldPhoto: "Foto antigua: esta foto es de antes de empezar. Toma una nueva.",
     authError: "Este enlace no tiene código. Pide el enlace completo.",
     noVoice: "Este teléfono no tiene voz en español; solo se muestra el texto.",
+    mic: "Grabar nota",
+    stop: "Detener",
+    transcribing: "Transcribiendo…",
+    noSpeech: "No se escuchó nada.",
+    insecure: "Las notas de voz necesitan el enlace seguro (https).",
+    micDenied: "Sin acceso al micrófono.",
+    note: "Nota",
   },
   en: {
     title: "Cleaning turnover",
@@ -108,6 +118,13 @@ const I18N = {
     oldPhoto: "Old photo: this photo is from before the start. Take a new one.",
     authError: "This link has no code. Ask for the full link.",
     noVoice: "This phone has no English voice; text only.",
+    mic: "Record note",
+    stop: "Stop",
+    transcribing: "Transcribing…",
+    noSpeech: "No speech heard.",
+    insecure: "Voice notes need the secure link (https).",
+    micDenied: "No microphone access.",
+    note: "Note",
   },
   ru: {
     title: "Уборка",
@@ -139,15 +156,28 @@ const I18N = {
     oldPhoto: "Старое фото: оно сделано до начала. Сделайте новое.",
     authError: "В этой ссылке нет кода. Попросите полную ссылку.",
     noVoice: "На этом телефоне нет русского голоса; только текст.",
+    mic: "Записать заметку",
+    stop: "Стоп",
+    transcribing: "Распознаём…",
+    noSpeech: "Речь не слышна.",
+    insecure: "Для голосовых заметок нужна безопасная ссылка (https).",
+    micDenied: "Нет доступа к микрофону.",
+    note: "Заметка",
   },
 };
 function T() { return I18N[LANG] || I18N.en; }
 
 function loadSavedLang() {
-  try { return localStorage.getItem("pot-lang") || ""; } catch (e) { return ""; }
+  return storeGet("pot-lang");
 }
 function saveLang(code) {
-  try { localStorage.setItem("pot-lang", code); } catch (e) {}
+  storeSet("pot-lang", code);
+}
+function storeGet(key) {
+  try { return localStorage.getItem(key) || ""; } catch (e) { return ""; }
+}
+function storeSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) {}
 }
 
 async function api(path, opts) {
@@ -268,7 +298,8 @@ function currentShot() {
 
 function renderMaybe() {
   const key = JSON.stringify(
-    [LANG, langPicked, tour, status, overrideShot, selectedDemo, photoError]);
+    [LANG, langPicked, tour, status, overrideShot, selectedDemo, photoError,
+     !!recorder, transcribing, noteMsg]);
   if (key === lastKey) return;
   lastKey = key;
   render();
@@ -290,7 +321,13 @@ async function renderStart(app) {
   if (!langPicked) return renderLanguage(app);
   let props = [];
   try { props = (await api("/api/properties")).properties; } catch (e) { return fail(app, e); }
-  const options = props.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
+  const houses = props
+    .filter(p => DEMO || p.id !== "demo-house")
+    .sort((a, b) => (a.id === "demo-house") - (b.id === "demo-house"));
+  const savedHouse = storeGet("pot-house");
+  const options = houses.map(p =>
+    `<option value="${esc(p.id)}"${p.id === savedHouse ? " selected" : ""}>${esc(p.name)}</option>`
+  ).join("");
   app.innerHTML = `<h1>${esc(T().title)}</h1>
     <label class="small" for="prop">${esc(T().house)}</label>
     <select id="prop">${options}</select>
@@ -326,6 +363,7 @@ async function startTour() {
   say(T().hello);
   const app = document.getElementById("app");
   const property = document.getElementById("prop").value;
+  storeSet("pot-house", property);
   app.innerHTML = `<p>${esc(T().starting)}</p>`;
   try {
     const created = await api("/api/runs", {
@@ -368,6 +406,37 @@ function shotState(shot) {
 function shortName(shot) {
   const s = tourText(shot, "short") || roomHeading(shot);
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function micReady() {
+  return !!window.isSecureContext && "MediaRecorder" in window &&
+    !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+function fmtTime(seconds) {
+  const m = Math.floor(seconds / 60), s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function micHtml() {
+  if (recorder) {
+    return `<button class="btn secondary" id="micStop">${esc(T().stop)} (${esc(fmtTime(recSeconds))})</button>`;
+  }
+  if (transcribing) {
+    return `<div class="result wait">${esc(T().transcribing)}</div>`;
+  }
+  if (micReady()) {
+    return `<button class="btn secondary" id="micStart">${esc(T().mic)}</button>`;
+  }
+  return `<p class="small">${esc(T().insecure)}</p>`;
+}
+
+function notesHtml() {
+  const notes = (status.voice_notes || []).slice(0, 3);
+  if (!notes.length) return "";
+  return `<div>` + notes.map(n =>
+    `<div class="result ok">${esc(T().note)} · ${esc(n.room_name)}: ${esc(n.text)}</div>`
+  ).join("") + `</div>`;
 }
 
 function cameraHtml(label) {
@@ -430,7 +499,10 @@ function renderShot(app) {
     } else if (status.checking.length) {
       html += `<div class="result wait">${esc(T().checking)}</div>`;
     }
+    html += micHtml();
+    if (noteMsg) html += `<div class="result wait">${esc(noteMsg)}</div>`;
     html += recentHtml(shot);
+    html += notesHtml();
   }
   if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
   app.innerHTML = html;
@@ -440,6 +512,10 @@ function renderShot(app) {
     const next = document.getElementById("next");
     if (next) next.onclick = () => { overrideShot = null; renderMaybe(); };
     wireCamera(shot);
+    const micStart = document.getElementById("micStart");
+    if (micStart) micStart.onclick = () => startRec(shot);
+    const micStop = document.getElementById("micStop");
+    if (micStop) micStop.onclick = stopRec;
   }
   app.querySelectorAll("[data-retake]").forEach(b => {
     b.onclick = () => {
@@ -469,6 +545,110 @@ function wireCamera(shot) {
 function openCamera(shotId) {
   pendingShot = shotId;
   document.getElementById("snapFile").click();
+}
+
+function pickMime() {
+  const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+  if (window.MediaRecorder && MediaRecorder.isTypeSupported) {
+    for (const c of cands) {
+      try {
+        if (MediaRecorder.isTypeSupported(c)) return c;
+      } catch (e) {}
+    }
+  }
+  return "";
+}
+
+function tickRec() {
+  recSeconds = Math.floor((Date.now() - recStart) / 1000);
+  const b = document.getElementById("micStop");
+  if (b) b.textContent = `${T().stop} (${fmtTime(recSeconds)})`;
+  if (recSeconds >= 60) stopRec();
+}
+
+async function startRec(shot) {
+  noteMsg = "";
+  recRoom = shot.room_id;
+  try {
+    recStream = await navigator.mediaDevices.getUserMedia({audio: true});
+  } catch (e) {
+    noteMsg = T().micDenied;
+    scheduleNoteClear();
+    renderMaybe();
+    return;
+  }
+  const mime = pickMime();
+  try {
+    recorder = mime ? new MediaRecorder(recStream, {mimeType: mime})
+      : new MediaRecorder(recStream);
+  } catch (e) {
+    recStream.getTracks().forEach(t => t.stop());
+    recStream = null;
+    noteMsg = T().micDenied;
+    scheduleNoteClear();
+    renderMaybe();
+    return;
+  }
+  recChunks = [];
+  recorder.ondataavailable = ev => { if (ev.data && ev.data.size) recChunks.push(ev.data); };
+  recorder.onstop = sendRec;
+  recStart = Date.now();
+  recSeconds = 0;
+  recorder.start();
+  if (recTimer) clearInterval(recTimer);
+  recTimer = setInterval(tickRec, 250);
+  lastKey = null;
+  renderMaybe();
+}
+
+function stopRec() {
+  if (recTimer) { clearInterval(recTimer); recTimer = null; }
+  if (recorder && recorder.state !== "inactive") recorder.stop();
+}
+
+function scheduleNoteClear() {
+  if (noteMsgTimer) clearTimeout(noteMsgTimer);
+  noteMsgTimer = setTimeout(() => {
+    noteMsgTimer = null;
+    noteMsg = "";
+    renderMaybe();
+  }, 8000);
+}
+
+async function sendRec() {
+  const chunks = recChunks;
+  const mime = (recorder && recorder.mimeType) || "";
+  if (recStream) {
+    recStream.getTracks().forEach(t => t.stop());
+    recStream = null;
+  }
+  recorder = null;
+  recChunks = [];
+  transcribing = true;
+  lastKey = null;
+  renderMaybe();
+  const ext = mime.indexOf("mp4") >= 0 ? "mp4" : "webm";
+  const form = new FormData();
+  form.append("room_id", recRoom);
+  form.append("audio", new Blob(chunks, {type: mime || "audio/webm"}), `note.${ext}`);
+  try {
+    const res = await api(`/api/runs/${encodeURIComponent(RUN)}/notes`,
+      {method: "POST", body: form});
+    transcribing = false;
+    if (res.status === "no_speech") {
+      noteMsg = T().noSpeech;
+      scheduleNoteClear();
+    } else {
+      noteMsg = "";
+      await refresh();
+    }
+    renderMaybe();
+  } catch (e) {
+    transcribing = false;
+    noteMsg = e.message;
+    scheduleNoteClear();
+    renderMaybe();
+  }
 }
 
 async function upload(shot, file) {

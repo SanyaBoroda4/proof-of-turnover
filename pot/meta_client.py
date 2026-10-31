@@ -503,8 +503,10 @@ class MetaClient:
             )
             response.raise_for_status()
             result = response.json()
-            if not result.get("transcript") and not result.get("turns"):
-                raise _RetryableError(f"{purpose}: empty transcript from {self.asr_model}")
+            # An empty transcript means no speech was heard: a valid
+            # answer, never retried (same idea as the empty-SAM fix).
+            if not isinstance(result, dict):
+                raise _RetryableError(f"{purpose}: bad transcript answer from {self.asr_model}")
             return result, {"transcript_json": result, "usage": None}
 
         request = {

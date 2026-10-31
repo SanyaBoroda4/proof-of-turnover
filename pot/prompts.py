@@ -148,7 +148,7 @@ Rules:
 - Never guess. Judge only what is actually visible in this photo.
 - count_seen: how many relevant objects are visible in this photo (an integer, or null when the requirement has no minimum number or you cannot count).
 - reason: why, in English, at most 25 words.
-- problem_object: when something is wrong in this photo, a 1-3 word noun phrase for what is wrong (for example "brown stain", "toothbrush", "blue cloth", "empty shelf"); "" when nothing is wrong."""
+- problem_object: one simple singular noun the photo search can find for the main wrong thing ("shoe", "toy", "toothbrush", "stain", "towel"); "holder" for an empty holder, "shelf" for an empty shelf; "" when nothing is wrong."""
 
 
 def room_decision_instructions(rooms):
@@ -219,6 +219,20 @@ Items:
 {item_lines}"""
 
 
+def note_instructions(text, language, room_name):
+    cleaner = _language_name((language or "en").lower())
+    return f"""A cleaner recorded a voice note in {cleaner} while cleaning the {room_name}. She reports damage, missing things, supplies that ran out, or other comments for the host.
+
+Note:
+{text}
+
+Rules:
+- translation: the note translated into English, faithful and short.
+- title: a short English title for the note, at most 8 words.
+- category: exactly one of "damage" (something broken, stained or damaged), "missing" (something absent that should be there), "supplies" (consumables that ran out and need restocking), "other" (anything else).
+- Write the translation and the title in English."""
+
+
 def tour_instructions(property, checklist, has_plan_image):
     room_lines = "\n".join(_room_line(room) for room in property["rooms"])
     item_lines = []
@@ -255,8 +269,11 @@ Rules:
 - Do not list coverage items: a room counts as photographed as soon as any photo of it arrives.
 - Whole-house items belong in a suitable room's shot, not in their own shot.
 - Every critical item must appear in at least one shot.
-- Each shot carries room_name_xx, short_xx and instruction_xx for xx = es, en, ru: short spoken sentences that name the room, so the cleaner can tell similar rooms apart. Spanish uses the tú imperative ("Fotografía…"), English the plain imperative ("Take a photo of…"), Russian the polite imperative ("Сфотографируйте…").
+- Each shot carries room_name_xx, short_xx and instruction_xx for xx = es, en, ru: short spoken sentences that name the room, so the cleaner can tell similar rooms apart.
+- instruction_xx tells the cleaner exactly what to do, not just what to photograph: what to open, lift, take off or remove, and what must be in the frame. Take the action from the item requirements below (a door or lid that must be open, a lid taken off only for the photo, two things shown in one photo). At most about 20 words; name the room in it, since some rooms need the same photo. For example: "Open the left fridge door and show all its shelves." / "Lift the toilet lid and show the inside of the bowl." / "Take the lid off the bean hopper and show the beans." / "Show the roll on the holder and the spare roll in one photo."
+- Spanish uses Latin American (US/Mexico) words in the tú form: "refrigerador" (not "frigorífico"), "piso" (not "suelo"), "lavandería", "medio baño". For example: "Abre la puerta izquierda del refrigerador y muestra todos los estantes." / "Levanta la tapa del inodoro y muestra el interior de la taza."
+- English uses the plain imperative ("Take a photo of…", "Open…", "Show…").
+- Russian uses the polite imperative ("Сфотографируйте…", "Откройте…", "Покажите…").
 - short_xx is 2-4 words naming the spot the photo shows (for example "lavadora", "puerta izquierda"), so two shots in one room can be told apart.
 - When an item's requirement says a door or lid must be open, that item gets its own shot.
-- When a requirement says something is opened only for the photo, that shot comes before the room's overview shot.
-- instruction_xx is one short sentence telling the cleaner what to photograph (it is read aloud to her); name the room in it, since some rooms need the same photo."""
+- When a requirement says something is opened only for the photo, that shot comes before the room's overview shot."""

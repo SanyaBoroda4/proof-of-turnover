@@ -65,10 +65,11 @@ def _client(inspector=_done, **kwargs):
     return test, code
 
 
-def _create_run(test, code, property="demo-house", demo=False):
-    response = test.post(
-        f"/api/runs?code={code}", json={"property": property, "demo": demo}
-    )
+def _create_run(test, code, property="demo-house", demo=False, language=None):
+    body = {"property": property, "demo": demo}
+    if language is not None:
+        body["language"] = language
+    response = test.post(f"/api/runs?code={code}", json=body)
     assert response.status_code == 200, response.text
     return response.json()["run_id"]
 
@@ -445,3 +446,55 @@ def test_languages_endpoint_lists_native_names():
         {"code": "en", "name": "English"},
         {"code": "ru", "name": "Русский"},
     ]
+
+
+def _note_upload(test, code, run_id, room_id, payload, name="note.webm"):
+    return test.post(
+        f"/api/runs/{run_id}/notes?code={code}",
+        data={"room_id": room_id},
+        files={"audio": (name, payload, "audio/webm")},
+    )
+
+
+def test_notes_endpoint_stores_and_serves_audio(tmp_path):
+    from tests.fakes import tone_clip
+
+    test, code = _client()
+    run_id = _create_run(test, code, language="ru")
+    blob = tone_clip(tmp_path / "note.webm").read_bytes()
+    response = _note_upload(test, code, run_id, "master-bedroom", blob)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "stored"
+    assert body["note"]["id"] == "N01"
+    assert body["note"]["language"] == "ru"
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert [n["id"] for n in status["voice_notes"]] == ["N01"]
+    assert status["news"][0]["kind"] == "note"
+    audio = test.get(f"/api/runs/{run_id}/notes/N01/audio?code={code}")
+    assert audio.status_code == 200
+    assert audio.headers["content-type"] == "audio/wav"
+    assert audio.content[:4] == b"RIFF"
+    assert test.get(f"/api/runs/{run_id}/notes/N99/audio?code={code}").status_code == 404
+    purposes = [c["purpose"] for c in
+                test.get(f"/api/runs/{run_id}/calls?code={code}").json()["calls"]]
+    assert any(p.startswith("transcribe voice note") for p in purposes)
+    assert any(p.startswith("translate voice note") for p in purposes)
+
+
+def test_notes_endpoint_no_speech_and_bad_room(tmp_path):
+    from tests.fakes import FakeSpark, tone_clip
+
+    test, code = _client()
+    run_id = _create_run(test, code)
+    blob = tone_clip(tmp_path / "note.webm").read_bytes()
+    assert _note_upload(test, code, run_id, "attic", blob).status_code == 400
+    quiet = TestClient(create_app(FakeSpark(
+        transcript=lambda call: {"transcript": "", "turns": []})))
+    hush = quiet.app.state.server.code
+    run_id = _create_run(quiet, hush)
+    response = _note_upload(quiet, hush, run_id, "master-bedroom", blob)
+    assert response.status_code == 200
+    assert response.json() == {"status": "no_speech", "detail": "no speech heard"}
+    status = quiet.get(f"/api/runs/{run_id}/status?code={hush}").json()
+    assert status["voice_notes"] == []
