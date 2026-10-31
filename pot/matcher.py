@@ -9,6 +9,8 @@ medium confidence is "not photographed". Coverage is decided here by code
 from dataclasses import dataclass, field
 
 from pot import prompts
+from pot.meta_client import MetaClientError
+from pot.photos import normalize_photo_id
 
 MATCH_BATCH_SIZE = 40
 
@@ -71,7 +73,7 @@ def _check_batch_answer(answer, batch_ids, room_ids, notes):
         if not isinstance(entry, dict):
             notes.append(f"Match batch {batch_ids[0]}-{batch_ids[-1]}: skipped a malformed entry")
             continue
-        photo_id = entry.get("photo_id")
+        photo_id = normalize_photo_id(entry.get("photo_id"))
         if photo_id not in batch_set:
             notes.append(f"Match batch {batch_ids[0]}-{batch_ids[-1]}: unknown photo id {photo_id!r}")
             continue
@@ -113,13 +115,19 @@ def match_rooms(client, photos, property):
         for photo in batch:
             content.extend(prompts.photo_parts(photo))
         purpose = f"match rooms batch {number}/{len(batches)} ({batch_ids[0]}-{batch_ids[-1]})"
-        answer = client.respond(
-            purpose,
-            content,
-            instructions=prompts.match_rooms_instructions(rooms),
-            schema=match_rooms_schema(batch_ids, room_ids),
-            effort=prompts.REASONING_EFFORT,
-        )
+        try:
+            answer = client.respond(
+                purpose,
+                content,
+                instructions=prompts.match_rooms_instructions(rooms),
+                schema=match_rooms_schema(batch_ids, room_ids),
+                effort=prompts.REASONING_EFFORT,
+            )
+        except MetaClientError as exc:
+            notes.append(f"Match batch {batch_ids[0]}-{batch_ids[-1]}: check failed: {exc}")
+            for photo_id in batch_ids:
+                assignments[photo_id] = _unknown(photo_id)
+            continue
         assignments.update(_check_batch_answer(answer, batch_ids, room_ids, notes))
     coverage = {}
     for room_id in room_ids:

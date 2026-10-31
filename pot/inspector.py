@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from pot import prompts
+from pot.meta_client import MetaClientError
+from pot.photos import normalize_photo_id
 
 ROOM_MAX_IMAGES = 40
 MAX_WORKERS = 6
@@ -41,7 +43,7 @@ class FirstLook:
     notes: list = field(default_factory=list)
 
 
-def first_look_schema(item_ids):
+def first_look_schema(item_ids, photo_ids):
     return {
         "type": "object",
         "properties": {
@@ -52,7 +54,7 @@ def first_look_schema(item_ids):
                     "properties": {
                         "item_id": {"type": "string", "enum": list(item_ids)},
                         "status": {"type": "string", "enum": list(STATUSES)},
-                        "photo_id": {"type": "string"},
+                        "photo_id": {"type": "string", "enum": list(photo_ids) + [""]},
                         "seen": {"type": "string"},
                         "count_seen": {"type": ["integer", "null"]},
                     },
@@ -92,7 +94,7 @@ def _check_count(entry, item, notes):
     return count
 
 
-def _check_room_answer(answer, items, photo_ids, room_label, notes):
+def _check_room_answer(answer, items, photo_ids, room_label, notes, unknown_ids=()):
     """Validate one room answer; anything bad becomes not_shown, never crash."""
     claims = {}
     issues = []
@@ -118,7 +120,7 @@ def _check_room_answer(answer, items, photo_ids, room_label, notes):
             continue
         item = by_id[item_id]
         status = entry.get("status")
-        photo_id = entry.get("photo_id") or ""
+        photo_id = normalize_photo_id(entry.get("photo_id"))
         seen = entry.get("seen") or ""
         if status not in STATUSES:
             notes.append(f"First look: {item_id} has invalid status {status!r}, set to not_shown")
@@ -130,6 +132,11 @@ def _check_room_answer(answer, items, photo_ids, room_label, notes):
                 )
                 claims[item_id] = _not_shown(item_id)
                 continue
+            if photo_id in unknown_ids:
+                notes.append(
+                    f"First look: {item_id} cites {photo_id}, matched to no room; "
+                    "check it shows this room"
+                )
         else:
             photo_id = ""
         claims[item_id] = Claim(
@@ -147,7 +154,7 @@ def _check_room_answer(answer, items, photo_ids, room_label, notes):
         if not isinstance(entry, dict):
             notes.append(f"First look {room_label}: skipped a malformed other_issue")
             continue
-        photo_id = entry.get("photo_id")
+        photo_id = normalize_photo_id(entry.get("photo_id"))
         description = entry.get("description") or ""
         if photo_id not in photo_set or not description:
             notes.append(f"First look {room_label}: dropped an invalid other_issue")
@@ -175,14 +182,19 @@ def _room_call(client, room_id, room_name, room_description, items, mine, others
         content.extend(prompts.photo_parts(photo))
     photo_ids = [photo.id for photo in chosen]
     label = room_id if room_name is None else f"{room_id} ({room_name})"
-    answer = client.respond(
-        f"first look {room_id} ({','.join(photo_ids)})",
-        content,
-        instructions=prompts.first_look_instructions(room_name, room_description, items),
-        schema=first_look_schema([item.id for item in items]),
-        effort=prompts.REASONING_EFFORT,
-    )
-    claims, issues = _check_room_answer(answer, items, photo_ids, room_id, notes)
+    unknown_ids = {photo.id for photo in chosen} & {photo.id for photo in others}
+    try:
+        answer = client.respond(
+            f"first look {room_id} ({','.join(photo_ids)})",
+            content,
+            instructions=prompts.first_look_instructions(room_name, room_description, items),
+            schema=first_look_schema([item.id for item in items], photo_ids),
+            effort=prompts.REASONING_EFFORT,
+        )
+    except MetaClientError as exc:
+        notes.append(f"First look {room_id}: check failed: {exc}")
+        return {item.id: _not_shown(item.id) for item in items}, [], notes
+    claims, issues = _check_room_answer(answer, items, photo_ids, room_id, notes, unknown_ids)
     return claims, issues, notes
 
 
@@ -200,13 +212,17 @@ def _house_calls(client, items, photos):
         for photo in batch:
             content.extend(prompts.photo_parts(photo))
         photo_ids = [photo.id for photo in batch]
-        answer = client.respond(
-            f"first look house batch {number}/{len(batches)}",
-            content,
-            instructions=prompts.first_look_instructions(None, None, pending),
-            schema=first_look_schema([item.id for item in pending]),
-            effort=prompts.REASONING_EFFORT,
-        )
+        try:
+            answer = client.respond(
+                f"first look house batch {number}/{len(batches)}",
+                content,
+                instructions=prompts.first_look_instructions(None, None, pending),
+                schema=first_look_schema([item.id for item in pending], photo_ids),
+                effort=prompts.REASONING_EFFORT,
+            )
+        except MetaClientError as exc:
+            notes.append(f"First look house batch {number}/{len(batches)}: check failed: {exc}")
+            break
         batch_claims, batch_issues = _check_room_answer(answer, pending, photo_ids, "house", notes)
         issues.extend(batch_issues)
         still_pending = []
@@ -252,7 +268,8 @@ def first_look(client, photos, assignments, checklist, rooms=None):
         if not mine and not others:
             continue
         room = rooms.get(room_id, {})
-        tasks.append((room_id, room.get("name"), room.get("description"), items, mine, others))
+        name = room.get("name") or items[0].room_name
+        tasks.append((room_id, name, room.get("description"), items, mine, others))
     if house_items and photos:
         tasks.append(("house",))
 
@@ -281,9 +298,21 @@ def first_look(client, photos, assignments, checklist, rooms=None):
                     _room_call, client, room_id, name, description, items, mine, others
                 )
             futures[room_id] = future
+        kept_unknown_issue = {}
         for room_id in sorted(futures):
             room_claims, room_issues, room_notes = futures[room_id].result()
             claims.update(room_claims)
-            issues.extend(room_issues)
+            for issue in room_issues:
+                assignment = assignments.get(issue.photo_id)
+                if assignment is not None and assignment.room_id == "unknown":
+                    if issue.photo_id in kept_unknown_issue:
+                        notes.append(
+                            f"First look: dropped duplicate issue for unknown photo "
+                            f"{issue.photo_id} from {room_id} "
+                            f"(kept {kept_unknown_issue[issue.photo_id]}'s)"
+                        )
+                        continue
+                    kept_unknown_issue[issue.photo_id] = room_id
+                issues.append(issue)
             notes.extend(room_notes)
     return FirstLook(claims=claims, other_issues=issues, notes=notes)

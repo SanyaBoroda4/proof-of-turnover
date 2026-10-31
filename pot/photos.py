@@ -27,7 +27,9 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
 CHECK_LONG_SIDE = 1600
 OVERVIEW_LONG_SIDE = 768
 
+_EXIF_IFD_POINTER = 0x8769
 _EXIF_DATETIME_ORIGINAL = 36867
+_EXIF_DATETIME_DIGITIZED = 36868
 _EXIF_DATETIME = 306
 
 
@@ -48,6 +50,18 @@ class Skipped(NamedTuple):
     reason: str
 
 
+def normalize_photo_id(value):
+    """Normalize a photo id cited by the model: "Photo P07" -> "P07".
+
+    Strips a leading "Photo", spaces and quotes, and uppercases, so the
+    label the model was shown ("Photo P07"), "p07" and "P07" all match.
+    """
+    text = str(value or "").strip().strip("\"'").strip()
+    if text.lower().startswith("photo"):
+        text = text[len("photo") :].strip().strip("\"'").strip()
+    return text.upper()
+
+
 class PhotoSet(list):
     """List of Photo with a .skipped record of Skipped(name, reason)."""
 
@@ -57,12 +71,25 @@ class PhotoSet(list):
 
 
 def _taken_at(image):
+    """Taken time: Exif sub-IFD original/digitized first, then main DateTime.
+
+    Phones store DateTimeOriginal in the Exif sub-IFD (0x8769); the main
+    DateTime (306) becomes the edit time once a photo is edited.
+    """
     try:
         exif = image.getexif()
     except Exception:
         return None
-    for tag in (_EXIF_DATETIME_ORIGINAL, _EXIF_DATETIME):
-        value = exif.get(tag)
+    try:
+        sub = exif.get_ifd(_EXIF_IFD_POINTER)
+    except Exception:
+        sub = {}
+    for source, tag in (
+        (sub, _EXIF_DATETIME_ORIGINAL),
+        (sub, _EXIF_DATETIME_DIGITIZED),
+        (exif, _EXIF_DATETIME),
+    ):
+        value = source.get(tag)
         if not value:
             continue
         try:
@@ -98,10 +125,12 @@ def load_photo_set(folder_or_files, run_dir):
     photos_dir = Path(run_dir) / "photos"
     photos_dir.mkdir(parents=True, exist_ok=True)
 
-    loaded = []  # (taken_sort, name, Photo-without-id, image)
+    # Pass 1: hash, stamp and shrink each photo, then drop the full-size
+    # image, so memory stays flat (ids are assigned after sorting in pass 2).
+    loaded = []  # (taken, name, taken, received, width, height, tmp check path)
     skipped = []
     seen_pixels = {}
-    for path in files:
+    for index, path in enumerate(files):
         if path.suffix.lower() not in IMAGE_EXTENSIONS:
             skipped.append(Skipped(path.name, f"not an image (extension {path.suffix or 'none'})"))
             continue
@@ -118,16 +147,25 @@ def load_photo_set(folder_or_files, run_dir):
             skipped.append(Skipped(path.name, f"exact duplicate of {seen_pixels[digest]}"))
             continue
         seen_pixels[digest] = path.name
-        loaded.append((taken, path.name, taken, datetime.now(), image))
+        width, height = image.size
+        received = datetime.now()
+        tmp_path = photos_dir / f"_tmp_{index:04d}.jpg"
+        image.thumbnail((CHECK_LONG_SIDE, CHECK_LONG_SIDE), Image.LANCZOS)
+        image.save(tmp_path, "JPEG", quality=90)
+        del image
+        loaded.append((taken, path.name, taken, received, width, height, tmp_path))
 
+    # Pass 2: sort, assign ids, rename the check copies, derive overviews.
     loaded.sort(key=lambda item: (item[0] is None, item[0] or datetime.min, item[1]))
     result = PhotoSet(skipped=skipped)
-    for number, (_, name, taken, received, image) in enumerate(loaded, start=1):
+    for number, (_, name, taken, received, width, height, tmp_path) in enumerate(loaded, start=1):
         photo_id = f"P{number:02d}"
         check_path = photos_dir / f"{photo_id}_check.jpg"
         overview_path = photos_dir / f"{photo_id}_overview.jpg"
-        _save_jpeg(image, check_path, CHECK_LONG_SIDE)
-        _save_jpeg(image, overview_path, OVERVIEW_LONG_SIDE)
+        tmp_path.replace(check_path)
+        with Image.open(check_path) as saved:
+            saved.load()
+            _save_jpeg(saved, overview_path, OVERVIEW_LONG_SIDE)
         result.append(
             Photo(
                 id=photo_id,
@@ -136,8 +174,8 @@ def load_photo_set(folder_or_files, run_dir):
                 received_at=received,
                 check_path=check_path,
                 overview_path=overview_path,
-                width=image.width,
-                height=image.height,
+                width=width,
+                height=height,
             )
         )
     return result

@@ -9,6 +9,7 @@ folder, matches rooms, runs the first look and saves first_look.json.
 import argparse
 import json
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from pot.photos import load_photo_set, new_run_dir
 
 def run_turnover(photo_folder, property_id, client, run_dir=None):
     """Run matching + first look; save first_look.json; return the result."""
+    started = time.monotonic()
     property = load_property(property_id)
     checklist = build_checklist(property)
     run_dir = Path(run_dir) if run_dir is not None else new_run_dir()
@@ -58,6 +60,7 @@ def run_turnover(photo_folder, property_id, client, run_dir=None):
         "photos": photos,
         "match": match,
         "look": look,
+        "elapsed_seconds": time.monotonic() - started,
     }
 
 
@@ -107,9 +110,10 @@ def print_report(outcome, client):
         print(f"Rooms not photographed: {', '.join(missing)}")
     else:
         print("Rooms not photographed: none")
-    calls, cached, seconds, tokens = _trace_totals(client.trace)
+    calls, cached, model_seconds, tokens = _trace_totals(client.trace)
     print(f"Meta calls: {calls} ({cached} from cache)")
-    print(f"Time: {seconds:.1f} s")
+    print(f"Time: {outcome['elapsed_seconds']:.1f} s")
+    print(f"Model time: {model_seconds:.1f} s")
     print(
         f"Tokens: {tokens['input_tokens']} in / {tokens['output_tokens']} out / "
         f"{tokens['total_tokens']} total"

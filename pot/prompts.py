@@ -70,8 +70,14 @@ def first_look_instructions(room_name, room_description, items):
     item_lines = "\n".join(_item_line(item) for item in items)
     if room_name is None:
         subject = "These checklist items belong to the whole property, not to one room."
+        room_guard = ""
     else:
         subject = f"Room: {room_name}"
+        room_guard = (
+            "- Some photos may show other rooms: use only photos that show this room "
+            "(compare what each photo shows with the room name and description above); "
+            "never cite a photo of another room as proof for this room.\n"
+        )
         if room_description:
             subject += f" ({room_description})"
     return f"""You check whether a cleaned place was cleaned properly. Look only at the photos below.
@@ -84,7 +90,7 @@ Checklist:
 Rules:
 - For each item give status "done" only when one single photo clearly shows it done; "problem" only when one photo clearly shows it NOT done (dirty, missing, broken or left behind).
 - Otherwise use "not_shown": the item is not in any photo, or the photo is too dark, blurry or far away to tell.
-- Never guess. Judge only what is actually visible.
+{room_guard}- Never guess. Judge only what is actually visible.
 - photo_id is the one photo that shows the item best; leave it empty ("") when the status is "not_shown".
 - seen: what is actually visible in that photo, in English, at most 25 words.
 - count_seen: for items that need a minimum number, how many are visible in that one photo; count only what is visible in the cited photo; otherwise null.

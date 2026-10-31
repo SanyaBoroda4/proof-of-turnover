@@ -95,6 +95,43 @@ def test_unknown_room_type_raises_clear_error(tmp_path):
         load_property("test-house", properties_dir=base)
 
 
+def test_new_room_types_build_with_coverage_first(tmp_path):
+    rooms = [
+        {"id": "wc", "type": "half_bathroom", "name": "WC", "floor": 1},
+        {"id": "dining", "type": "dining_room", "name": "Dining", "floor": 1},
+        {"id": "wash", "type": "laundry", "name": "Wash", "floor": 1},
+        {"id": "study", "type": "office", "name": "Study", "floor": 2},
+        {"id": "hall", "type": "hallway", "name": "Hall", "floor": 1},
+        {"id": "den", "type": "other", "name": "Den", "floor": 2},
+    ]
+    data = _valid_property(rooms=rooms)
+    base = _write_property(tmp_path, "test-house", data)
+    items = build_checklist(load_property("test-house", properties_dir=base))
+    by_id = {item.id: item for item in items}
+    assert [item.key for item in items if item.room_id == "wc"] == [
+        "coverage", "toilet", "toilet_paper", "sink", "hand_towel",
+    ]
+    assert by_id["wc.toilet"].min_count == 1
+    assert by_id["wc.toilet"].sam_prompt == "toilet"
+    assert by_id["wc.toilet_paper"].min_count == 1
+    assert by_id["wc.hand_towel"].min_count == 1
+    assert by_id["wc.hand_towel"].sam_prompt == "towel"
+    assert [item.key for item in items if item.room_id == "dining"] == [
+        "coverage", "table", "chairs", "floor_clear",
+    ]
+    assert [item.key for item in items if item.room_id == "wash"] == [
+        "coverage", "machines", "floor_clear",
+    ]
+    assert [item.key for item in items if item.room_id == "study"] == [
+        "coverage", "desk", "no_belongings", "floor_clear",
+    ]
+    assert [item.key for item in items if item.room_id == "hall"] == ["coverage", "floor_clear"]
+    assert by_id["hall.floor_clear"].label == "Floors and stairs clear"
+    assert [item.key for item in items if item.room_id == "den"] == [
+        "coverage", "tidy", "floor_clear",
+    ]
+
+
 def test_extra_items_attach_to_room_or_house(tmp_path):
     data = _valid_property(
         extra_items=[

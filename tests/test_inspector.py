@@ -3,6 +3,7 @@
 from pot.checklist import build_checklist
 from pot.inspector import first_look
 from pot.matcher import Assignment
+from pot.meta_client import MetaClientError
 from tests.fakes import FakeSpark, image_count, make_photos, photo_ids_in, tiny_property
 
 
@@ -206,3 +207,118 @@ def test_house_items_keep_first_non_not_shown(tmp_path):
     assert [image_count(c["content"]) for c in house_calls] == [40, 5]
     assert look.claims["house.alarm"].status == "done"
     assert look.claims["house.alarm"].photo_id == "P41"
+
+
+def _photo_enum(call):
+    return call["schema"]["properties"]["claims"]["items"]["properties"]["photo_id"]["enum"]
+
+
+def test_label_style_photo_id_kept_and_schema_has_enum(tmp_path):
+    photos = make_photos(tmp_path / "photos", 2)
+    assignments = _assignments([("P01", "bed"), ("P02", "bath")])
+
+    def labelled(call):
+        enum = _item_enum(call)
+        return {
+            "claims": [
+                {
+                    "item_id": item_id,
+                    "status": "done",
+                    "photo_id": "Photo P01",
+                    "seen": "looks good",
+                    "count_seen": None,
+                }
+                for item_id in enum
+            ],
+            "other_issues": [],
+        }
+
+    client = FakeSpark(inspector=labelled)
+    look = first_look(client, photos, assignments, _checklist())
+    assert look.claims["bed.beds_made"].status == "done"
+    assert look.claims["bed.beds_made"].photo_id == "P01"
+    bed_call = next(call for call in client.calls if call["purpose"].startswith("first look bed "))
+    assert _photo_enum(bed_call) == ["P01", ""]
+
+
+def test_claim_citing_unknown_photo_adds_note(tmp_path):
+    photos = make_photos(tmp_path / "photos", 2)
+    assignments = _assignments([("P01", "bed"), ("P02", "unknown")])
+
+    def citing_unknown(call):
+        enum = _item_enum(call)
+        return {
+            "claims": [
+                {
+                    "item_id": item_id,
+                    "status": "done",
+                    "photo_id": "P02",
+                    "seen": "looks good",
+                    "count_seen": None,
+                }
+                for item_id in enum
+            ],
+            "other_issues": [],
+        }
+
+    look = first_look(FakeSpark(inspector=citing_unknown), photos, assignments, _checklist())
+    assert look.claims["bed.beds_made"].status == "done"
+    assert any("bed.beds_made" in note and "P02" in note for note in look.notes)
+
+
+def test_instructions_warn_about_other_rooms(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    assignments = _assignments([("P01", "bed")])
+    client = FakeSpark()
+    first_look(client, photos, assignments, _checklist())
+    assert "other rooms" in client.calls[0]["instructions"]
+    assert "never cite a photo of another room" in client.calls[0]["instructions"]
+
+
+def test_duplicate_unknown_photo_issues_keep_first_in_room_order(tmp_path):
+    photos = make_photos(tmp_path / "photos", 3)
+    assignments = _assignments([("P01", "bed"), ("P02", "unknown"), ("P03", "bath")])
+
+    def stained(call):
+        enum = _item_enum(call)
+        return {
+            "claims": [
+                {
+                    "item_id": item_id, "status": "not_shown", "photo_id": "",
+                    "seen": "", "count_seen": None,
+                }
+                for item_id in enum
+            ],
+            "other_issues": [{"photo_id": "P02", "description": "a stain"}],
+        }
+
+    look = first_look(FakeSpark(inspector=stained), photos, assignments, _checklist())
+    assert len(look.other_issues) == 1
+    assert look.other_issues[0].photo_id == "P02"
+    assert look.other_issues[0].room_id == "bath"  # bath < bed in sorted order
+    assert any("duplicate issue" in note for note in look.notes)
+
+
+def test_failed_room_call_becomes_not_shown_and_run_continues(tmp_path):
+    photos = make_photos(tmp_path / "photos", 2)
+    assignments = _assignments([("P01", "bed"), ("P02", "bath")])
+
+    def flaky(call):
+        if call["purpose"].startswith("first look bed "):
+            raise MetaClientError("first look bed: boom")
+        enum = _item_enum(call)
+        return {
+            "claims": [
+                {
+                    "item_id": item_id, "status": "done", "photo_id": "P02",
+                    "seen": "looks good", "count_seen": None,
+                }
+                for item_id in enum
+            ],
+            "other_issues": [],
+        }
+
+    look = first_look(FakeSpark(inspector=flaky), photos, assignments, _checklist())
+    assert look.claims["bed.beds_made"].status == "not_shown"
+    assert look.claims["bath.towels"].status == "done"
+    assert any("check failed" in note for note in look.notes)

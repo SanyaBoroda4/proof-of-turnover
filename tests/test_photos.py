@@ -5,16 +5,19 @@ from datetime import datetime
 from PIL import Image
 from PIL.Image import Exif
 
-from pot.photos import load_photo_set
+from pot.photos import load_photo_set, normalize_photo_id
 
 
-def _jpeg(path, size, color, orientation=None, taken=None):
+def _jpeg(path, size, color, orientation=None, taken=None, edited=None):
     img = Image.new("RGB", size, color)
     exif = Exif()
     if orientation is not None:
         exif[274] = orientation
     if taken is not None:
-        exif[36867] = taken
+        # Like a real phone: DateTimeOriginal lives in the Exif sub-IFD.
+        exif.get_ifd(0x8769)[36867] = taken
+    if edited is not None:
+        exif[306] = edited
     img.save(path, "JPEG", exif=exif)
 
 
@@ -62,3 +65,27 @@ def test_accepts_list_of_files(tmp_path):
     photos = load_photo_set([incoming / "a.png", incoming / "morning.jpg"], tmp_path / "run")
     assert [p.id for p in photos] == ["P01", "P02"]
     assert [p.original_name for p in photos] == ["morning.jpg", "a.png"]
+
+
+def test_taken_prefers_sub_ifd_original_over_edit_time(tmp_path):
+    incoming = tmp_path / "incoming"
+    incoming.mkdir()
+    _jpeg(
+        incoming / "edited.jpg",
+        (100, 70),
+        "blue",
+        taken="2026:10:30 09:00:00",
+        edited="2026:10:31 18:00:00",
+    )
+    photos = load_photo_set(incoming, tmp_path / "run")
+    assert photos[0].taken_at == datetime(2026, 10, 30, 9, 0, 0)
+
+
+def test_normalize_photo_id():
+    assert normalize_photo_id("Photo P07") == "P07"
+    assert normalize_photo_id("photo p07") == "P07"
+    assert normalize_photo_id("p07") == "P07"
+    assert normalize_photo_id("P07") == "P07"
+    assert normalize_photo_id("  'Photo P07' ") == "P07"
+    assert normalize_photo_id("") == ""
+    assert normalize_photo_id(None) == ""

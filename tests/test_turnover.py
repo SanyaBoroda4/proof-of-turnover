@@ -82,6 +82,12 @@ def test_main_end_to_end(tmp_path, monkeypatch, capsys):
     assert "Rooms not photographed:" in out
     assert "Meta calls:" in out
     assert "Tokens:" in out
+    assert "Model time:" in out
+
+
+def test_run_reports_elapsed_time(tmp_path):
+    outcome = turnover.run_turnover(_incoming(tmp_path / "in"), "demo-house", _client(), tmp_path / "run")
+    assert outcome["elapsed_seconds"] >= 0
 
 
 def test_matcher_runs_through_real_photos(tmp_path):

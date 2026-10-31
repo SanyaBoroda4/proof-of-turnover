@@ -6,7 +6,19 @@ None), min_count (int, room-field name, or None) and critical. An item
 with only_if is generated only when that room field is set.
 """
 
-ROOM_TYPES = ("bedroom", "bathroom", "kitchen", "living_room", "outdoor")
+ROOM_TYPES = (
+    "bedroom",
+    "bathroom",
+    "half_bathroom",
+    "kitchen",
+    "dining_room",
+    "living_room",
+    "office",
+    "hallway",
+    "laundry",
+    "outdoor",
+    "other",
+)
 
 
 def _plural(count, one, many):
@@ -152,6 +164,138 @@ TEMPLATES = {
             "sam_prompt": None,
             "min_count": None,
             "critical": False,
+        },
+    ],
+    "half_bathroom": [
+        {
+            "key": "toilet",
+            "label": "Toilet clean, lid down",
+            "requirement": "Toilet is clean with the lid down",
+            "sam_prompt": "toilet",
+            "min_count": 1,
+            "critical": True,
+        },
+        {
+            "key": "toilet_paper",
+            "label": "Toilet paper",
+            "requirement": "Toilet paper on the holder",
+            "sam_prompt": "toilet paper roll",
+            "min_count": 1,
+            "critical": True,
+        },
+        {
+            "key": "sink",
+            "label": "Sink and mirror clean",
+            "requirement": "Sink and mirror are clean",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+        {
+            "key": "hand_towel",
+            "label": "Hand towel in place",
+            "requirement": "A hand towel is in place",
+            "sam_prompt": "towel",
+            "min_count": 1,
+            "critical": True,
+        },
+    ],
+    "dining_room": [
+        {
+            "key": "table",
+            "label": "Table clear",
+            "requirement": "Table is clear and wiped",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+        {
+            "key": "chairs",
+            "label": "Chairs in place",
+            "requirement": "Chairs are in place",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+        {
+            "key": "floor_clear",
+            "label": "Floor clear",
+            "requirement": "Floor is clear: nothing left on the floor",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+    ],
+    "laundry": [
+        {
+            "key": "machines",
+            "label": "Washer and dryer empty",
+            "requirement": "Washer and dryer are empty",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+        {
+            "key": "floor_clear",
+            "label": "Floor clear",
+            "requirement": "Floor is clear: nothing left on the floor",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+    ],
+    "office": [
+        {
+            "key": "desk",
+            "label": "Desk clear",
+            "requirement": "Desk is clear",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+        {
+            "key": "no_belongings",
+            "label": "No guest belongings left",
+            "requirement": "No guest belongings left in the room",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+        {
+            "key": "floor_clear",
+            "label": "Floor clear",
+            "requirement": "Floor is clear: nothing left on the floor",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+    ],
+    "hallway": [
+        {
+            "key": "floor_clear",
+            "label": "Floors and stairs clear",
+            "requirement": "Floors and stairs are clear",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+    ],
+    "other": [
+        {
+            "key": "tidy",
+            "label": "Tidy",
+            "requirement": "Tidy, no guest belongings left",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
+        },
+        {
+            "key": "floor_clear",
+            "label": "Floor clear",
+            "requirement": "Floor is clear: nothing left on the floor",
+            "sam_prompt": None,
+            "min_count": None,
+            "critical": True,
         },
     ],
 }
