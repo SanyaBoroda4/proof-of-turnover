@@ -40,6 +40,7 @@ def _project_dir(env_name, default):
 
 RUNS_DIR = _project_dir("POT_RUNS_DIR", "data/runs")
 MODEL_CACHE_DIR = _project_dir("POT_MODEL_CACHE_DIR", "data/model_cache")
+DEMO_DIR = _project_dir("POT_DEMO_DIR", "data/demo-build")
 
 
 def ensure_dirs():

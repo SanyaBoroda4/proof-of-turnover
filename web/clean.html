@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Turno de limpieza</title>
+<style>
+  :root { --green: #1a7f37; --red: #b42318; --orange: #b54708; --grey: #57606a; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
+         padding: 16px; max-width: 640px; margin-left: auto; margin-right: auto;
+         background: #fff; color: #1f2328; font-size: 18px; }
+  h1 { font-size: 24px; margin: 8px 0 16px; }
+  .bar { height: 10px; background: #e5e5e5; border-radius: 5px; overflow: hidden; margin: 8px 0; }
+  .bar > div { height: 100%; background: var(--green); }
+  .progress { color: var(--grey); font-size: 15px; }
+  .instruction { font-size: 26px; line-height: 1.35; margin: 20px 0; font-weight: 600; }
+  .btn { display: block; width: 100%; padding: 16px; margin: 10px 0; font-size: 20px;
+         border: none; border-radius: 10px; background: var(--green); color: #fff;
+         cursor: pointer; text-align: center; }
+  .btn.secondary { background: #e5e5e5; color: #1f2328; }
+  .btn:disabled { opacity: 0.5; }
+  label.camera { display: block; width: 100%; padding: 20px; margin: 10px 0; font-size: 22px;
+         border: none; border-radius: 10px; background: #0969da; color: #fff;
+         cursor: pointer; text-align: center; }
+  .result { border-radius: 10px; padding: 14px 16px; margin: 12px 0; font-size: 19px; }
+  .result.ok { background: #dafbe1; }
+  .result.bad { background: #ffebe9; }
+  .result.wait { background: #fff8c5; }
+  .pending { border-top: 1px solid #ddd; margin-top: 24px; padding-top: 8px; }
+  .pending li { margin: 12px 0; }
+  .pending button, .open button { font-size: 16px; padding: 8px 14px; margin-left: 8px; }
+  .open li { margin: 12px 0; }
+  select, input[type=text] { font-size: 18px; padding: 10px; width: 100%; margin: 6px 0; }
+  .error { background: #ffebe9; border-radius: 10px; padding: 14px; margin: 12px 0; }
+  .small { font-size: 15px; color: var(--grey); }
+</style>
+</head>
+<body>
+<div id="app"><p>Cargando…</p></div>
+<script>
+"use strict";
+const params = new URLSearchParams(location.search);
+const CODE = params.get("code") || "";
+const DEMO = params.get("demo") === "1";
+let RUN = params.get("run") || "";
+let tour = null, status = null, demoPhotos = null, overrideShot = null, pollTimer = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts || {});
+  if (r.status === 401) throw new Error("auth");
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+let voice = null;
+function pickVoice() {
+  if (!("speechSynthesis" in window)) return;
+  const vs = speechSynthesis.getVoices().filter(
+    v => v.lang && v.lang.toLowerCase().startsWith("es"));
+  voice = vs.find(v => v.lang.toLowerCase() === "es-us")
+    || vs.find(v => v.lang.toLowerCase() === "es-mx")
+    || vs[0] || null;
+}
+if ("speechSynthesis" in window) {
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+function speak(text) {
+  if (!("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  if (voice) u.voice = voice;
+  u.lang = (voice && voice.lang) || "es";
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function shotOfItem(itemId) {
+  for (const s of tour.shots) {
+    if ((s.item_ids || []).indexOf(itemId) >= 0) return s;
+  }
+  return null;
+}
+
+function itemsById() {
+  const map = {};
+  for (const room of status.rooms) for (const item of room.items) map[item.id] = item;
+  return map;
+}
+
+function currentShot() {
+  if (overrideShot) {
+    const s = tour.shots.find(x => x.shot_id === overrideShot);
+    if (s) return s;
+    overrideShot = null;
+  }
+  return status.current_shot;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  if (!RUN) return renderStart(app);
+  if (!tour || !status) { app.innerHTML = "<p>Cargando…</p>"; return; }
+  if (!status.current_shot && !status.checking.length && !overrideShot) {
+    return renderDone(app);
+  }
+  return renderShot(app);
+}
+
+async function renderStart(app) {
+  let props = [];
+  try { props = (await api("/api/properties")).properties; } catch (e) { return fail(app, e); }
+  const options = props.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
+  app.innerHTML = `<h1>Turno de limpieza</h1>
+    <label class="small" for="prop">Casa</label>
+    <select id="prop">${options}</select>
+    <button class="btn" id="start">Empezar</button>
+    ${DEMO ? '<p class="small">Modo demo: las fotos salen de una carpeta.</p>' : ""}`;
+  document.getElementById("start").onclick = startTour;
+}
+
+async function startTour() {
+  const app = document.getElementById("app");
+  const property = document.getElementById("prop").value;
+  app.innerHTML = "<p>Empezando…</p>";
+  try {
+    const created = await api("/api/runs", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({property: property, demo: DEMO}),
+    });
+    RUN = created.run_id;
+    const url = new URL(location.href);
+    url.searchParams.set("run", RUN);
+    history.replaceState(null, "", url);
+    await refresh();
+    const shot = currentShot();
+    if (shot) speak(shot.instruction_es);
+    render();
+  } catch (e) { fail(app, e); }
+}
+
+function progressHtml() {
+  const p = status.progress;
+  const pct = p.shots_total ? Math.round(100 * p.shots_taken / p.shots_total) : 0;
+  return `<div class="progress">Habitación ${Math.min(p.rooms_done + 1, p.rooms_total)} de ${p.rooms_total} · Foto ${p.shots_taken} de ${p.shots_total}</div>
+    <div class="bar"><div style="width:${pct}%"></div></div>`;
+}
+
+function shotResultHtml(shot) {
+  const byId = itemsById();
+  const items = (shot.item_ids || []).map(id => byId[id]).filter(Boolean);
+  const critical = items.filter(i => i.critical);
+  if (status.checking.length && !critical.every(i => i.status === "proven")) {
+    return `<div class="result wait">Revisando la foto…</div>`;
+  }
+  if (critical.length && critical.every(i => i.status === "proven")) {
+    return `<div class="result ok">✓ Listo</div>
+      <button class="btn" id="next">Siguiente</button>`;
+  }
+  const asks = critical.filter(i => i.request).map(i => `<p>${esc(i.request.cleaner)}</p>`).join("");
+  if (asks) {
+    return `<div class="result bad">${asks}</div>` + cameraHtml(shot, "Repetir foto");
+  }
+  if (critical.some(i => i.status === "needs photo")) {
+    return `<div class="result wait">Revisando la foto…</div>`;
+  }
+  return "";
+}
+
+function cameraHtml(shot, label) {
+  if (DEMO) {
+    const options = (demoPhotos || []).map(
+      p => `<option value="${esc(p.url)}">${esc(p.name)}</option>`).join("");
+    return `<label class="small" for="demoPick">Foto demo</label>
+      <select id="demoPick">${options}</select>
+      <button class="btn" id="snap">${esc(label || "Usar foto")}</button>`;
+  }
+  return `<label class="camera">${esc(label || "Fotografiar")}
+    <input type="file" id="snap" accept="image/*" capture="environment" hidden></label>`;
+}
+
+function renderShot(app) {
+  const shot = currentShot();
+  const taken = status.progress.shots_taken >= status.progress.shots_total && !shot;
+  let html = `<h1>Turno de limpieza</h1>` + progressHtml();
+  if (status.checking.length) html += `<div class="result wait">Revisando la foto… puedes seguir.</div>`;
+  if (shot) {
+    html += `<div class="instruction">${esc(shot.instruction_es)}</div>
+      <button class="btn secondary" id="repeat">Repetir</button>
+      <div id="shotAction">${shotResultHtml(shot) || cameraHtml(shot)}</div>`;
+  }
+  const byId = itemsById();
+  const pending = status.open.map(id => byId[id]).filter(i => i && i.request);
+  if (pending.length) {
+    html += `<div class="pending"><h1>Pendientes</h1><ul>` + pending.map(i =>
+      `<li>${esc(i.request.cleaner)} <button data-shot-for="${esc(i.id)}">Fotografiar</button></li>`
+    ).join("") + `</ul></div>`;
+  }
+  html += `<div id="err"></div>`;
+  app.innerHTML = html;
+  if (shot) {
+    document.getElementById("repeat").onclick = () => speak(shot.instruction_es);
+    const next = document.getElementById("next");
+    if (next) next.onclick = () => { overrideShot = null; render(); };
+    wireCamera(shot);
+  }
+  app.querySelectorAll("[data-shot-for]").forEach(b => {
+    b.onclick = () => {
+      const s = shotOfItem(b.getAttribute("data-shot-for"));
+      if (s) { overrideShot = s.shot_id; speak(s.instruction_es); render(); }
+    };
+  });
+}
+
+function wireCamera(shot) {
+  const snap = document.getElementById("snap");
+  if (!snap) return;
+  if (DEMO) {
+    snap.onclick = async () => {
+      const url = document.getElementById("demoPick").value;
+      const blob = await (await fetch(url)).blob();
+      upload(shot, new File([blob], "demo.jpg", {type: "image/jpeg"}));
+    };
+  } else {
+    snap.onchange = () => { if (snap.files.length) upload(shot, snap.files[0]); };
+  }
+}
+
+async function upload(shot, file) {
+  const err = document.getElementById("err");
+  const form = new FormData();
+  form.append("shot_id", shot.shot_id);
+  form.append("image", file);
+  try {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/photos`, {method: "POST", body: form});
+    overrideShot = null;
+    await refresh();
+    render();
+  } catch (e) {
+    if (err) err.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
+function renderDone(app) {
+  const byId = itemsById();
+  let html = `<h1>Turno terminado</h1>` + progressHtml();
+  if (!status.open.length) {
+    html += `<div class="result ok">✓ Todo listo</div>`;
+  } else {
+    html += `<p>Quedan ${status.open.length} temas:</p><ul class="open">` + status.open.map(id => {
+      const item = byId[id];
+      const text = item.request ? item.request.cleaner : item.label;
+      const s = shotOfItem(id);
+      const btn = s ? ` <button data-shot="${esc(s.shot_id)}">Fotografiar</button>` : "";
+      return `<li>${esc(text)}${btn}</li>`;
+    }).join("") + `</ul>`;
+  }
+  app.innerHTML = html;
+  app.querySelectorAll("[data-shot]").forEach(b => {
+    b.onclick = () => { overrideShot = b.getAttribute("data-shot"); render(); };
+  });
+}
+
+function fail(app, e) {
+  if (e.message === "auth") {
+    app.innerHTML = `<div class="error">Este enlace no tiene código. Pide el enlace completo.</div>`;
+  } else {
+    app.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
+async function refresh() {
+  const [t, s] = await Promise.all([
+    api(`/api/runs/${encodeURIComponent(RUN)}/tour`),
+    api(`/api/runs/${encodeURIComponent(RUN)}/status`),
+  ]);
+  tour = {shots: t.shots};
+  status = s;
+  if (DEMO && demoPhotos === null) {
+    try { demoPhotos = (await api("/api/demo-photos")).photos; }
+    catch (e) { demoPhotos = []; }
+  }
+}
+
+async function boot() {
+  const app = document.getElementById("app");
+  try {
+    if (RUN) {
+      await refresh();
+      pollTimer = setInterval(async () => {
+        try { await refresh(); render(); } catch (e) {}
+      }, 2000);
+    }
+    render();
+  } catch (e) { fail(app, e); }
+}
+boot();
+</script>
+</body>
+</html>

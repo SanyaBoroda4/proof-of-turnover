@@ -22,8 +22,8 @@ from datetime import datetime
 from pathlib import Path
 
 import qrcode
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 from pot import config, prompts
@@ -315,7 +315,82 @@ def create_app(client=None):
     def _server_ip():
         return {"ip": local_ip()}
 
+    @app.get("/api/properties")
+    def _properties():
+        found = []
+        base = config.PROJECT_ROOT / "properties"
+        if base.is_dir():
+            for path in sorted(base.iterdir()):
+                definition = path / "property.json"
+                if not definition.is_file():
+                    continue
+                try:
+                    data = json.loads(definition.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                found.append({"id": data.get("id", path.name),
+                              "name": data.get("name", path.name)})
+        return {"properties": found}
+
+    @app.get("/api/runs")
+    def _list_runs():
+        found = []
+        if config.RUNS_DIR.is_dir():
+            for path in sorted(config.RUNS_DIR.iterdir(), reverse=True):
+                if not (path / "first_look.json").is_file():
+                    continue
+                try:
+                    state = server.get_state(path.name)
+                    status = state.status()
+                except (OSError, ValueError):
+                    continue
+                found.append({"run_id": path.name,
+                              "property": status["property"],
+                              "started_at": status["started_at"],
+                              "agent_state": status["agent_state"]})
+        return {"runs": found}
+
+    @app.get("/api/demo-photos")
+    def _demo_photos():
+        photos = []
+        directory = config.DEMO_DIR / "photos"
+        if directory.is_dir():
+            for path in sorted(directory.iterdir()):
+                if path.is_file() and path.suffix.lower() in (".jpg", ".jpeg"):
+                    photos.append({"name": path.name,
+                                   "url": f"/api/demo-photos/{path.name}"})
+        return {"photos": photos}
+
+    @app.get("/api/demo-photos/{name}")
+    def _demo_photo(name: str):
+        if "/" in name or "\\" in name or ".." in name:
+            raise HTTPException(404, "No such demo photo")
+        path = config.DEMO_DIR / "photos" / name
+        if not path.is_file():
+            raise HTTPException(404, "No such demo photo")
+        return FileResponse(path, media_type="image/jpeg")
+
+    @app.get("/")
+    def _index(request: Request):
+        query = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(f"/host{query}", status_code=302)
+
+    @app.get("/clean")
+    def _clean_page():
+        return _page("clean.html")
+
+    @app.get("/host")
+    def _host_page():
+        return _page("host.html")
+
     return app
+
+
+def _page(name):
+    path = config.PROJECT_ROOT / "web" / name
+    if not path.is_file():
+        raise HTTPException(404, f"No {name} yet")
+    return FileResponse(path, media_type="text/html")
 
 
 def main(argv=None):
@@ -325,9 +400,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     app = create_app()
     code = app.state.server.code
-    print(f"Host:    http://127.0.0.1:{args.port}/host?code={code}")
-    print(f"Cleaner: http://{local_ip()}:{args.port}/clean?code={code}")
-    print("Open the cleaner link on the phone (same Wi-Fi as this PC).")
+    print(f"Host:    http://127.0.0.1:{args.port}/host?code={code}", flush=True)
+    print(f"Cleaner: http://{local_ip()}:{args.port}/clean?code={code}", flush=True)
+    print("Open the cleaner link on the phone (same Wi-Fi as this PC).", flush=True)
     import uvicorn
 
     uvicorn.run(app, host=args.host, port=args.port)

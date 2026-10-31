@@ -5,7 +5,7 @@ from datetime import datetime
 from PIL import Image
 from PIL.Image import Exif
 
-from pot.photos import load_photo_set, normalize_photo_id
+from pot.photos import ingest_file, load_photo_set, normalize_photo_id, read_taken_at
 
 
 def _jpeg(path, size, color, orientation=None, taken=None, edited=None):
@@ -89,3 +89,37 @@ def test_normalize_photo_id():
     assert normalize_photo_id("  'Photo P07' ") == "P07"
     assert normalize_photo_id("") == ""
     assert normalize_photo_id(None) == ""
+
+
+def test_read_taken_at_prefers_sub_ifd(tmp_path):
+    source = tmp_path / "a.jpg"
+    _jpeg(source, (64, 48), "blue", taken="2026:10:30 09:00:00",
+          edited="2026:10:31 18:00:00")
+    assert read_taken_at(source) == datetime(2026, 10, 30, 9, 0, 0)
+    plain = tmp_path / "b.jpg"
+    Image.new("RGB", (64, 48), "blue").save(plain, "JPEG")
+    assert read_taken_at(plain) is None
+    assert read_taken_at(tmp_path / "missing.jpg") is None
+
+
+def test_keep_bytes_preserves_check_size_upright_jpeg(tmp_path):
+    source = tmp_path / "a.jpg"
+    Image.new("RGB", (64, 48), "blue").save(source, "JPEG")
+    photo = ingest_file(source, tmp_path / "photos", "P01", keep_bytes=True)
+    assert photo.check_path.read_bytes() == source.read_bytes()
+    assert photo.overview_path.is_file()
+
+
+def test_keep_bytes_resaves_rotated_or_large_photos(tmp_path):
+    rotated = tmp_path / "rot.jpg"
+    _jpeg(rotated, (120, 80), "red", orientation=6)
+    photo = ingest_file(rotated, tmp_path / "photos", "P01", keep_bytes=True)
+    assert photo.check_path.read_bytes() != rotated.read_bytes()
+    with Image.open(photo.check_path) as image:
+        assert image.size == (80, 120)
+    big = tmp_path / "big.jpg"
+    Image.new("RGB", (2000, 100), "blue").save(big, "JPEG")
+    photo2 = ingest_file(big, tmp_path / "photos", "P02", keep_bytes=True)
+    assert photo2.check_path.read_bytes() != big.read_bytes()
+    with Image.open(photo2.check_path) as image:
+        assert max(image.size) <= 1600

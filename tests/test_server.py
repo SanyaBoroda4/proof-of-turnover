@@ -239,6 +239,74 @@ def test_qr_returns_png():
     assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_pages_need_code_and_serve_html():
+    test, code = _client()
+    assert test.get("/clean").status_code == 401
+    assert test.get("/host").status_code == 401
+    clean = test.get(f"/clean?code={code}")
+    assert clean.status_code == 200
+    assert "Turno de limpieza" in clean.text
+    host = test.get(f"/host?code={code}")
+    assert host.status_code == 200
+    assert "Turnover" in host.text
+    index = test.get(f"/?code={code}", follow_redirects=False)
+    assert index.status_code == 302
+    assert index.headers["location"].startswith("/host?")
+
+
+def test_properties_and_runs_lists():
+    test, code = _client()
+    props = test.get(f"/api/properties?code={code}").json()["properties"]
+    ids = {p["id"] for p in props}
+    assert {"demo-house", "rental-1"} <= ids
+    assert test.get(f"/api/runs?code={code}").json() == {"runs": []}
+    run_id = _create_run(test, code)
+    runs = test.get(f"/api/runs?code={code}").json()["runs"]
+    assert [r["run_id"] for r in runs] == [run_id]
+    assert runs[0]["property"] == "demo-house"
+    assert runs[0]["agent_state"] == "needs_input"
+
+
+def test_demo_upload_keeps_bytes(tmp_path):
+    test, code = _client()
+    run_id = _create_run(test, code, demo=True)
+    payload = _jpeg()
+    response = _upload(test, code, run_id, "master-bedroom-1", payload)
+    assert response.status_code == 200
+    check = tmp_path / "data" / "runs" / run_id / "photos" / "P01_check.jpg"
+    assert check.read_bytes() == payload
+    live_id = _create_run(test, code)
+    _upload(test, code, live_id, "master-bedroom-1", payload)
+    resaved = tmp_path / "data" / "runs" / live_id / "photos" / "P01_check.jpg"
+    assert resaved.read_bytes() != payload
+
+
+def test_demo_photos_endpoint(tmp_path, monkeypatch):
+    from pot import config
+
+    bundle = tmp_path / "bundle" / "photos"
+    bundle.mkdir(parents=True)
+    Image.new("RGB", (32, 24), "blue").save(bundle / "01.jpg", "JPEG")
+    (bundle / "notes.txt").write_text("ignored")
+    monkeypatch.setattr(config, "DEMO_DIR", tmp_path / "bundle")
+    test, code = _client()
+    photos = test.get(f"/api/demo-photos?code={code}").json()["photos"]
+    assert [p["name"] for p in photos] == ["01.jpg"]
+    blob = test.get(f"/api/demo-photos/01.jpg?code={code}")
+    assert blob.status_code == 200
+    assert blob.content[:2] == b"\xff\xd8"
+    assert test.get(f"/api/demo-photos/nope.jpg?code={code}").status_code == 404
+    assert test.get(f"/api/demo-photos/..%2Fnope?code={code}").status_code in (404, 400)
+
+
+def test_demo_photos_empty_without_bundle(tmp_path, monkeypatch):
+    from pot import config
+
+    monkeypatch.setattr(config, "DEMO_DIR", tmp_path / "missing")
+    test, code = _client()
+    assert test.get(f"/api/demo-photos?code={code}").json() == {"photos": []}
+
+
 def test_generate_tour_endpoint(tmp_path, monkeypatch):
     import shutil
 
