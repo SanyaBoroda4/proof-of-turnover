@@ -105,6 +105,43 @@ def _save_jpeg(image, path, long_side):
     copy.save(path, "JPEG", quality=90)
 
 
+def ingest_file(source_path, photos_dir, photo_id):
+    """Ingest one photo file as an upright check+overview pair; returns a Photo."""
+    source = Path(source_path)
+    if not source.is_file():
+        raise ValueError(f"Photo not found: {source}")
+    if source.suffix.lower() not in IMAGE_EXTENSIONS:
+        raise ValueError(f"Not an image (extension {source.suffix or 'none'}): {source.name}")
+    try:
+        with Image.open(source) as handle:
+            handle.load()
+            taken = _taken_at(handle)
+            image = ImageOps.exif_transpose(handle).convert("RGB")
+    except Exception as exc:
+        raise ValueError(f"Cannot be read as an image ({exc}): {source.name}") from exc
+    width, height = image.size
+    received = datetime.now()
+    photos_dir = Path(photos_dir)
+    photos_dir.mkdir(parents=True, exist_ok=True)
+    check_path = photos_dir / f"{photo_id}_check.jpg"
+    overview_path = photos_dir / f"{photo_id}_overview.jpg"
+    image.thumbnail((CHECK_LONG_SIDE, CHECK_LONG_SIDE), Image.LANCZOS)
+    image.save(check_path, "JPEG", quality=90)
+    with Image.open(check_path) as saved:
+        saved.load()
+        _save_jpeg(saved, overview_path, OVERVIEW_LONG_SIDE)
+    return Photo(
+        id=photo_id,
+        original_name=source.name,
+        taken_at=taken,
+        received_at=received,
+        check_path=check_path,
+        overview_path=overview_path,
+        width=width,
+        height=height,
+    )
+
+
 def load_photo_set(folder_or_files, run_dir):
     """Load photos into run_dir/photos/, returning a PhotoSet.
 

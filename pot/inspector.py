@@ -174,7 +174,7 @@ def _room_call_photos(room_photos, unknown_photos, room_label, notes):
     return chosen
 
 
-def _room_call(client, room_id, room_name, room_description, items, mine, others):
+def _room_call(client, room_id, room_name, room_description, items, mine, others, effort):
     notes = []
     chosen = _room_call_photos(mine, others, room_id, notes)
     content = []
@@ -189,7 +189,7 @@ def _room_call(client, room_id, room_name, room_description, items, mine, others
             content,
             instructions=prompts.first_look_instructions(room_name, room_description, items),
             schema=first_look_schema([item.id for item in items], photo_ids),
-            effort=prompts.REASONING_EFFORT,
+            effort=effort,
         )
     except MetaClientError as exc:
         notes.append(f"First look {room_id}: check failed: {exc}")
@@ -198,7 +198,7 @@ def _room_call(client, room_id, room_name, room_description, items, mine, others
     return claims, issues, notes
 
 
-def _house_calls(client, items, photos):
+def _house_calls(client, items, photos, effort):
     """Batched calls for items with no room; keep the first non-not_shown answer."""
     notes = []
     claims = {}
@@ -218,7 +218,7 @@ def _house_calls(client, items, photos):
                 content,
                 instructions=prompts.first_look_instructions(None, None, pending),
                 schema=first_look_schema([item.id for item in pending], photo_ids),
-                effort=prompts.REASONING_EFFORT,
+                effort=effort,
             )
         except MetaClientError as exc:
             notes.append(f"First look house batch {number}/{len(batches)}: check failed: {exc}")
@@ -238,9 +238,10 @@ def _house_calls(client, items, photos):
     return claims, issues, notes
 
 
-def first_look(client, photos, assignments, checklist, rooms=None):
+def first_look(client, photos, assignments, checklist, rooms=None, effort=None):
     """Claim every non-coverage checklist item; returns a FirstLook."""
     rooms = rooms or {}
+    effort = prompts.REASONING_EFFORT if effort is None else effort
     room_photos = {}
     unknown = []
     for photo in photos:
@@ -291,11 +292,11 @@ def first_look(client, photos, assignments, checklist, rooms=None):
         for task in tasks:
             room_id = task[0]
             if room_id == "house":
-                future = pool.submit(_house_calls, client, house_items, list(photos))
+                future = pool.submit(_house_calls, client, house_items, list(photos), effort)
             else:
                 _, name, description, items, mine, others = task
                 future = pool.submit(
-                    _room_call, client, room_id, name, description, items, mine, others
+                    _room_call, client, room_id, name, description, items, mine, others, effort
                 )
             futures[room_id] = future
         kept_unknown_issue = {}

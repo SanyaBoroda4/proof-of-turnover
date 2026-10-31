@@ -15,8 +15,11 @@ NEEDS_PROOF = "needs proof"
 PROBLEM = "problem"
 
 COVERED_CONFIDENCES = ("high", "medium")
-CAPTION_BAR_HEIGHT = 36
 BOX_WIDTH = 4
+CAPTION_FONT_PATHS = (
+    "C:/Windows/Fonts/arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+)
 
 
 @dataclass
@@ -35,17 +38,10 @@ class Verdict:
     worth_a_look: list = field(default_factory=list)  # non-critical, not proven
 
 
-def _room_ok(second, photo_unknown):
-    """Room rule shared by done and problem claims."""
-    if second.this_room == "no":
-        return False
-    if photo_unknown and second.this_room != "yes":
-        return False
-    return True
-
-
-def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_photo):
+def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_photo,
+               decision="none", rooms=None):
     """Apply the proof rule to one item; returns a ProofItem."""
+    rooms = rooms or {}
     if item.key == "coverage":
         if coverage == "covered" and first_room_photo:
             return ProofItem(item.id, PROVEN, "Room photographed", first_room_photo)
@@ -54,14 +50,18 @@ def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_pho
         return ProofItem(item.id, NEEDS_PROOF, "No photo shows it", "")
     if second is None:
         return ProofItem(item.id, NEEDS_PROOF, "Verification did not run", claim.photo_id)
+    if photo_unknown and decision != item.room_id:
+        if decision == "none":
+            return ProofItem(
+                item.id, NEEDS_PROOF, "Can't tell which room this photo shows", claim.photo_id
+            )
+        name = rooms.get(decision, {}).get("name", decision)
+        return ProofItem(
+            item.id, NEEDS_PROOF, f"This photo looks like the {name}", claim.photo_id
+        )
     if claim.status == "done":
         if second.this_room == "no":
             return ProofItem(item.id, NEEDS_PROOF, "Second look: photo shows another room", claim.photo_id)
-        if photo_unknown and second.this_room != "yes":
-            return ProofItem(
-                item.id, NEEDS_PROOF,
-                "Second look could not confirm the photo shows this room", claim.photo_id,
-            )
         if second.verdict == "not_done":
             return ProofItem(item.id, NEEDS_PROOF, "Second look says it is not done", claim.photo_id)
         if second.verdict != "done":
@@ -88,13 +88,20 @@ def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_pho
                 claim.photo_id,
             )
         return ProofItem(item.id, PROVEN, "Confirmed in the photo", claim.photo_id)
-    if _room_ok(second, photo_unknown) and second.verdict == "not_done":
+    if second.verdict == "not_done" and second.this_room != "no":
         reason = second.reason or claim.seen or "Photo shows it is not done"
         return ProofItem(item.id, PROBLEM, reason, claim.photo_id)
+    if second.verdict == "not_done":
+        return ProofItem(
+            item.id, NEEDS_PROOF,
+            f"Problem seen, but not sure this photo is the {item.room_name}",
+            claim.photo_id,
+        )
     return ProofItem(item.id, NEEDS_PROOF, "Checks disagree", claim.photo_id)
 
 
-def prove_all(checklist, claims, seconds, sams, assignments, coverage, photo_order):
+def prove_all(checklist, claims, seconds, sams, assignments, coverage, photo_order,
+              decisions, rooms):
     """Apply the proof rule to every item; returns {item_id: ProofItem}."""
     first_photo = {}
     for photo_id in photo_order:
@@ -116,6 +123,8 @@ def prove_all(checklist, claims, seconds, sams, assignments, coverage, photo_ord
             photo_unknown,
             coverage.get(item.room_id),
             first_photo.get(item.room_id),
+            decisions.get(photo_id, "none"),
+            rooms,
         )
     return proofs
 
@@ -148,12 +157,36 @@ def verdict(checklist, proofs):
     return result
 
 
-def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams):
-    """Save one annotated photo per proven/problem item under evidence/."""
+def _caption_font(image_height):
+    """A font about 3% of the image height, with a plain fallback."""
+    size = max(10, round(image_height * 0.03))
+    for path in CAPTION_FONT_PATHS:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _fit_text(draw, text, font, max_width):
+    if draw.textlength(text, font=font) <= max_width:
+        return text
+    while text and draw.textlength(text + "...", font=font) > max_width:
+        text = text[:-1]
+    return text + "..." if text else ""
+
+
+def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams=None):
+    """Save one annotated photo per proven/problem item under evidence/.
+
+    Proven items get their green SAM boxes; problem items get the red
+    problem-object boxes instead. The caption shows label + status on
+    line 1 and the reason on line 2.
+    """
+    problem_sams = problem_sams or {}
     evidence_dir = run_dir / "evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     paths = {}
-    font = ImageFont.load_default()
     for item_id in sorted(proofs):
         proof = proofs[item_id]
         if proof.status not in (PROVEN, PROBLEM):
@@ -163,20 +196,39 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams):
             continue
         with Image.open(photo.check_path) as source:
             source.load()
-            canvas = Image.new("RGB", (source.width, source.height + CAPTION_BAR_HEIGHT), "white")
-            canvas.paste(source, (0, CAPTION_BAR_HEIGHT))
+            font = _caption_font(source.height)
+            ascent, descent = font.getmetrics()
+            line_height = ascent + descent
+            pad = max(4, line_height // 3)
+            bar_height = pad + line_height * 2 + pad
+            canvas = Image.new("RGB", (source.width, source.height + bar_height), "white")
+            canvas.paste(source, (0, bar_height))
         draw = ImageDraw.Draw(canvas)
         label = items_by_id[item_id].label if item_id in items_by_id else item_id
-        draw.text((8, 10), f"{label} - {proof.status}", fill="black", font=font)
+        draw.text(
+            (8, pad),
+            _fit_text(draw, f"{label} - {proof.status}", font, source.width - 16),
+            fill="black",
+            font=font,
+        )
+        draw.text(
+            (8, pad + line_height + 2),
+            _fit_text(draw, proof.reason, font, source.width - 16),
+            fill="black",
+            font=font,
+        )
         color = (0, 180, 0) if proof.status == PROVEN else (220, 0, 0)
-        sam = sams.get(item_id)
+        if proof.status == PROBLEM:
+            sam = problem_sams.get(item_id)
+        else:
+            sam = sams.get(item_id)
         for box in sam.boxes if sam is not None else []:
             draw.rectangle(
                 [
                     int(box["left"]),
-                    int(box["top"]) + CAPTION_BAR_HEIGHT,
+                    int(box["top"]) + bar_height,
                     int(box["right"]),
-                    int(box["bottom"]) + CAPTION_BAR_HEIGHT,
+                    int(box["bottom"]) + bar_height,
                 ],
                 outline=color,
                 width=BOX_WIDTH,

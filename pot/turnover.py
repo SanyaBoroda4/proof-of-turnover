@@ -20,14 +20,64 @@ from pot.matcher import match_rooms
 from pot.meta_client import MetaClient, MetaClientError
 from pot.photos import load_photo_set, new_run_dir
 from pot.proof import PROVEN, prune_other_issues, prove_all, save_evidence, verdict
-from pot.verifier import verify
+from pot.requests import write_requests
+from pot.verifier import segment_problem_objects, verify
+
+
+def _sam_json(sam):
+    if sam is None:
+        return None
+    return {"prompt": sam.prompt, "count": sam.count, "boxes": sam.boxes}
+
+
+def build_proof_result(checklist, photos, proofs, claims, seconds, sams, problem_sams,
+                       host_verdict, other_issues, notes):
+    """Assemble the proof.json dict (shared by turnover, prove, recheck)."""
+    photos_by_id = {photo.id: photo for photo in photos}
+    items = {}
+    for item in checklist:
+        proof = proofs[item.id]
+        photo = photos_by_id.get(proof.photo_id)
+        claim = claims.get(item.id)
+        second = seconds.get(item.id)
+        items[item.id] = {
+            "status": proof.status,
+            "reason": proof.reason,
+            "photo_id": proof.photo_id,
+            "file": photo.original_name if photo is not None else None,
+            "claim": asdict(claim) if claim is not None else None,
+            "second_look": asdict(second) if second is not None else None,
+            "sam": _sam_json(sams.get(item.id)),
+            "problem_sam": _sam_json(problem_sams.get(item.id)),
+        }
+    return {
+        "verdict": {
+            "ready": host_verdict.ready,
+            "problems": host_verdict.problems,
+            "need_photo": host_verdict.need_photo,
+            "worth_a_look": host_verdict.worth_a_look,
+        },
+        "items": items,
+        "other_issues": [asdict(issue) for issue in other_issues],
+        "notes": list(notes),
+    }
+
+
+def print_requests(requests):
+    print(f"Requests ({len(requests)}):")
+    current_room = None
+    for request in requests:
+        if request["room_name"] != current_room:
+            current_room = request["room_name"]
+            print(f"  {current_room}:")
+        print(f"    - {request['cleaner']} (host: {request['host']})")
 
 
 def run_proof(client, run_dir, property, checklist, photos, match, look):
-    """Run verify + proof rule + evidence; save proof.json; return proof data."""
+    """Run verify + proof rule + evidence + requests; save JSONs; return data."""
     run_dir = Path(run_dir)
     rooms = {room["id"]: room for room in property["rooms"]}
-    verification = verify(client, checklist, look.claims, photos, rooms)
+    verification = verify(client, checklist, look.claims, photos, rooms, match.assignments)
     proofs = prove_all(
         checklist,
         look.claims,
@@ -36,47 +86,37 @@ def run_proof(client, run_dir, property, checklist, photos, match, look):
         match.assignments,
         match.coverage,
         [photo.id for photo in photos],
+        verification.room_decisions,
+        rooms,
     )
+    photos_by_id = {photo.id: photo for photo in photos}
+    problem_sams, problem_notes = segment_problem_objects(
+        client, proofs, verification.second_looks, photos_by_id
+    )
+    verification.notes.extend(problem_notes)
     pruned = prune_other_issues(look.other_issues, proofs, look.claims)
     host_verdict = verdict(checklist, proofs)
-    photos_by_id = {photo.id: photo for photo in photos}
-    items = {}
-    for item in checklist:
-        proof = proofs[item.id]
-        photo = photos_by_id.get(proof.photo_id)
-        claim = look.claims.get(item.id)
-        second = verification.second_looks.get(item.id)
-        sam = verification.sams.get(item.id)
-        items[item.id] = {
-            "status": proof.status,
-            "reason": proof.reason,
-            "photo_id": proof.photo_id,
-            "file": photo.original_name if photo is not None else None,
-            "claim": asdict(claim) if claim is not None else None,
-            "second_look": asdict(second) if second is not None else None,
-            "sam": {"count": sam.count, "boxes": sam.boxes} if sam is not None else None,
-        }
-    result = {
-        "verdict": {
-            "ready": host_verdict.ready,
-            "problems": host_verdict.problems,
-            "need_photo": host_verdict.need_photo,
-            "worth_a_look": host_verdict.worth_a_look,
-        },
-        "items": items,
-        "other_issues": [asdict(issue) for issue in pruned],
-        "notes": match.notes + look.notes + verification.notes,
-    }
+    requests, request_notes = write_requests(client, property, checklist, proofs)
+    (run_dir / "requests.json").write_text(
+        json.dumps({"requests": requests, "notes": request_notes}, indent=2), encoding="utf-8"
+    )
+    result = build_proof_result(
+        checklist, photos, proofs, look.claims, verification.second_looks,
+        verification.sams, problem_sams, host_verdict, pruned,
+        match.notes + look.notes + verification.notes + request_notes,
+    )
     (run_dir / "proof.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     save_evidence(
         run_dir, proofs, {item.id: item for item in checklist},
-        photos_by_id, verification.sams,
+        photos_by_id, verification.sams, problem_sams,
     )
     return {
         "proofs": proofs,
         "verdict": host_verdict,
         "other_issues": pruned,
         "verification": verification,
+        "problem_sams": problem_sams,
+        "requests": requests,
     }
 
 
@@ -157,6 +197,7 @@ def print_report(outcome, client):
     show("Problems", host_verdict.problems)
     show("Need a photo", host_verdict.need_photo)
     show("Worth a look", host_verdict.worth_a_look)
+    print_requests(outcome["proof"]["requests"])
     proven = sum(1 for proof in proofs.values() if proof.status == PROVEN)
     print(f"Proven: {proven}/{len(proofs)} items")
     calls, cached, model_seconds, tokens = _trace_totals(client.trace)

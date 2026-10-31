@@ -265,6 +265,14 @@ def test_transcribe_request_shape(tmp_path):
     assert post["files"] == {"audio": ("clip.wav", b"RIFF-fake-wav", "audio/wav")}
 
 
+def test_segment_image_empty_answer_returned_without_retry(tmp_path):
+    fake = _openai_fake([_FakeResponse("")])
+    client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,
+                        sleep=lambda seconds: None)
+    assert client.segment_image("find it", b"jpeg-bytes", "towel") == ""
+    assert len(fake.responses.calls) == 1
+
+
 def test_upload_file_returns_id(tmp_path):
     target = tmp_path / "frame.jpg"
     target.write_bytes(b"fake-frame")

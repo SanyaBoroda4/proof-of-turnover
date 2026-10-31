@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from pot import prompts
 from pot.meta_client import MetaClientError
+from pot.proof import PROBLEM
 from pot.sam import detect
 
 MAX_WORKERS = 6
@@ -29,6 +30,7 @@ class SecondLook:
     verdict: str  # done / not_done / unclear
     count_seen: int  # int, or None
     reason: str
+    problem_object: str = ""  # 1-3 words for what is wrong, or ""
 
 
 @dataclass
@@ -44,6 +46,7 @@ class SamCheck:
 class VerifyResult:
     second_looks: dict  # item_id -> SecondLook
     sams: dict  # item_id -> SamCheck
+    room_decisions: dict = field(default_factory=dict)  # photo_id -> room_id | "none"
     notes: list = field(default_factory=list)
 
 
@@ -55,8 +58,20 @@ def second_look_schema():
             "verdict": {"type": "string", "enum": list(VERDICTS)},
             "count_seen": {"type": ["integer", "null"]},
             "reason": {"type": "string"},
+            "problem_object": {"type": "string"},
         },
-        "required": ["this_room", "verdict", "count_seen", "reason"],
+        "required": ["this_room", "verdict", "count_seen", "reason", "problem_object"],
+        "additionalProperties": False,
+    }
+
+
+def room_decision_schema(room_ids):
+    return {
+        "type": "object",
+        "properties": {
+            "room_id": {"type": "string", "enum": list(room_ids) + ["none"]},
+        },
+        "required": ["room_id"],
         "additionalProperties": False,
     }
 
@@ -83,6 +98,9 @@ def _check_second_answer(answer, item, photo_id, notes):
     elif isinstance(count, bool) or not isinstance(count, int) or count < 0:
         notes.append(f"Second look {item.id}: invalid count_seen {count!r}, set to null")
         count = None
+    problem_object = answer.get("problem_object")
+    if not isinstance(problem_object, str):
+        problem_object = ""
     return SecondLook(
         item_id=item.id,
         photo_id=photo_id,
@@ -90,10 +108,11 @@ def _check_second_answer(answer, item, photo_id, notes):
         verdict=answer["verdict"],
         count_seen=count,
         reason=answer.get("reason") or "",
+        problem_object=problem_object,
     )
 
 
-def _second_look_call(client, item, photo, room_name, room_description):
+def _second_look_call(client, item, photo, room_name, room_description, effort):
     notes = []
     content = prompts.photo_parts(photo, prompts.VERIFY_PHOTO_SIZE)
     try:
@@ -104,7 +123,7 @@ def _second_look_call(client, item, photo, room_name, room_description):
                 room_name, room_description, item.requirement, item.min_count
             ),
             schema=second_look_schema(),
-            effort=prompts.VERIFY_EFFORT,
+            effort=effort,
         )
     except MetaClientError as exc:
         notes.append(f"Second look {item.id}: check failed: {exc}")
@@ -112,31 +131,56 @@ def _second_look_call(client, item, photo, room_name, room_description):
     return _check_second_answer(answer, item, photo.id, notes), notes
 
 
-def _sam_call(client, item, photo):
+def _sam_call(client, item_id, photo, prompt, purpose):
     notes = []
     try:
         output_text = client.segment_image(
-            f"sam {item.id} {photo.id} ({item.sam_prompt})",
+            purpose,
             photo.check_path.read_bytes(),
-            item.sam_prompt,
+            prompt,
         )
     except MetaClientError as exc:
-        notes.append(f"SAM {item.id}: check failed: {exc}")
-        return SamCheck(item.id, photo.id, item.sam_prompt, 0, []), notes
+        notes.append(f"SAM {item_id}: check failed: {exc}")
+        return SamCheck(item_id, photo.id, prompt, 0, []), notes
     try:
         boxes = detect(output_text, min_confidence=SAM_MIN_CONFIDENCE)
     except Exception as exc:
-        notes.append(f"SAM {item.id}: output unreadable ({exc}), counted as none")
-        return SamCheck(item.id, photo.id, item.sam_prompt, 0, []), notes
-    return SamCheck(item.id, photo.id, item.sam_prompt, len(boxes), boxes), notes
+        notes.append(f"SAM {item_id}: output unreadable ({exc}), counted as none")
+        return SamCheck(item_id, photo.id, prompt, 0, []), notes
+    return SamCheck(item_id, photo.id, prompt, len(boxes), boxes), notes
 
 
-def verify(client, checklist, claims, photos, rooms=None):
-    """Second-look + SAM checks for done/problem claims; returns VerifyResult."""
+def _room_decision_call(client, photo, room_ids, rooms, effort):
+    notes = []
+    content = prompts.photo_parts(photo, prompts.VERIFY_PHOTO_SIZE)
+    candidates = [rooms[room_id] for room_id in room_ids if room_id in rooms]
+    try:
+        answer = client.respond(
+            f"room decision {photo.id} ({','.join(room_ids)})",
+            content,
+            instructions=prompts.room_decision_instructions(candidates),
+            schema=room_decision_schema(room_ids),
+            effort=effort,
+        )
+    except MetaClientError as exc:
+        notes.append(f"Room decision {photo.id}: check failed: {exc}")
+        return "none", notes
+    room_id = answer.get("room_id") if isinstance(answer, dict) else None
+    if room_id not in list(room_ids) + ["none"]:
+        notes.append(f"Room decision {photo.id}: bad answer {room_id!r}, treated as none")
+        return "none", notes
+    return room_id, notes
+
+
+def verify(client, checklist, claims, photos, rooms=None, assignments=None, effort=None):
+    """Second-look + SAM + room-decision checks; returns a VerifyResult."""
     rooms = rooms or {}
+    assignments = assignments or {}
+    effort = prompts.verify_effort() if effort is None else effort
     by_id = {item.id: item for item in checklist}
     photos_by_id = {photo.id: photo for photo in photos}
     jobs = []
+    cited_unknown = {}
     for item_id in sorted(claims):
         claim = claims[item_id]
         if claim.status not in ("done", "problem") or not claim.photo_id:
@@ -147,28 +191,70 @@ def verify(client, checklist, claims, photos, rooms=None):
             continue
         room = rooms.get(item.room_id, {})
         jobs.append(
-            ("look", item, photo, room.get("name") or item.room_name,
-             room.get("description"))
+            ("look", item.id, (_second_look_call, (client, item, photo,
+                                                  room.get("name") or item.room_name,
+                                                  room.get("description"), effort)))
         )
         if item.sam_prompt:
-            jobs.append(("sam", item, photo, None, None))
+            jobs.append(
+                ("sam", item.id, (_sam_call, (client, item.id, photo, item.sam_prompt,
+                                              f"sam {item.id} {photo.id} ({item.sam_prompt})")))
+            )
+        assignment = assignments.get(claim.photo_id)
+        if assignment is None or assignment.room_id == "unknown":
+            cited_unknown.setdefault(claim.photo_id, set()).add(item.room_id)
+    for photo_id in sorted(cited_unknown):
+        photo = photos_by_id.get(photo_id)
+        if photo is None:
+            continue
+        room_ids = sorted(cited_unknown[photo_id])
+        jobs.append(
+            ("room", photo_id, (_room_decision_call, (client, photo, room_ids, rooms, effort)))
+        )
 
     seconds = {}
     sams = {}
+    decisions = {}
     notes = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = []
-        for kind, item, photo, name, description in jobs:
-            if kind == "look":
-                future = pool.submit(_second_look_call, client, item, photo, name, description)
-            else:
-                future = pool.submit(_sam_call, client, item, photo)
-            futures.append((kind, item.id, future))
-        for kind, item_id, future in sorted(futures):
+        for kind, key, (func, args) in jobs:
+            futures.append((kind, key, pool.submit(func, *args)))
+        for kind, key, future in sorted(futures, key=lambda entry: (entry[0], entry[1])):
             result, job_notes = future.result()
             notes.extend(job_notes)
             if kind == "look":
-                seconds[item_id] = result
+                seconds[key] = result
+            elif kind == "sam":
+                sams[key] = result
             else:
-                sams[item_id] = result
-    return VerifyResult(second_looks=seconds, sams=sams, notes=notes)
+                decisions[key] = result
+    return VerifyResult(second_looks=seconds, sams=sams, room_decisions=decisions, notes=notes)
+
+
+def segment_problem_objects(client, proofs, seconds, photos_by_id):
+    """SAM-segment each final problem's problem_object; returns {item_id: SamCheck}."""
+    jobs = []
+    for item_id in sorted(proofs):
+        if proofs[item_id].status != PROBLEM:
+            continue
+        second = seconds.get(item_id)
+        photo = photos_by_id.get(proofs[item_id].photo_id)
+        if second is None or not second.problem_object or photo is None:
+            continue
+        jobs.append((item_id, photo, second.problem_object))
+    found = {}
+    notes = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = [
+            (item_id, pool.submit(
+                _sam_call, client, item_id, photo, prompt,
+                f"sam problem {item_id} {photo.id} ({prompt})",
+            ))
+            for item_id, photo, prompt in jobs
+        ]
+        for item_id, future in sorted(futures):
+            result, job_notes = future.result()
+            notes.extend(job_notes)
+            found[item_id] = result
+    return found, notes

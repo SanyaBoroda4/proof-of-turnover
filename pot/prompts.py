@@ -6,9 +6,16 @@ words, the photo labels and the image parts.
 """
 
 import base64
+import os
 
 REASONING_EFFORT = "medium"
 VERIFY_EFFORT = "medium"
+RECHECK_EFFORT = "low"
+
+
+def verify_effort():
+    """Reasoning effort for verify calls; POT_VERIFY_EFFORT overrides."""
+    return os.environ.get("POT_VERIFY_EFFORT", VERIFY_EFFORT)
 MATCH_PHOTO_SIZE = "overview"  # 768 px copies are enough to match rooms
 FIRST_LOOK_PHOTO_SIZE = "check"  # 1600 px copies keep small details (stains)
 VERIFY_PHOTO_SIZE = "check"  # second look also needs full detail
@@ -120,4 +127,54 @@ Rules:
 - verdict: "done" only when the photo clearly shows the requirement is met; "not_done" only when it clearly shows it is NOT met; otherwise "unclear".
 - Never guess. Judge only what is actually visible in this photo.
 - count_seen: how many relevant objects are visible in this photo (an integer, or null when the requirement has no minimum number or you cannot count).
-- reason: why, in English, at most 25 words."""
+- reason: why, in English, at most 25 words.
+- problem_object: when something is wrong in this photo, a 1-3 word noun phrase for what is wrong (for example "brown stain", "toothbrush", "blue cloth", "empty shelf"); "" when nothing is wrong."""
+
+
+def room_decision_instructions(rooms):
+    room_lines = "\n".join(_room_line(room) for room in rooms)
+    return f"""You decide which room a single photo shows. Look only at the photo below.
+
+Candidate rooms:
+{room_lines}
+
+Rules:
+- Answer with the id of the room the photo clearly shows.
+- Answer "none" when the photo clearly shows none of these rooms, or when you cannot tell.
+- Never guess. Compare what the photo shows with the room names and descriptions."""
+
+
+_LANGUAGE_NAMES = {
+    "es": "Spanish",
+    "en": "English",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "it": "Italian",
+}
+
+
+def _language_name(code):
+    return _LANGUAGE_NAMES.get((code or "").lower(), code)
+
+
+def requests_instructions(cleaner_language, entries):
+    cleaner = _language_name(cleaner_language)
+    lines = []
+    for entry in entries:
+        lines.append(
+            f"- {entry['item_id']} ({entry['room_name']}): {entry['label']} - "
+            f"{entry['requirement']} [status: {entry['status']} - {entry['reason']}]"
+        )
+    item_lines = "\n".join(lines)
+    return f"""You write short re-cleaning requests for a cleaner. For each item below write one request.
+
+Rules:
+- Write each request in {cleaner} plus an English version for the host.
+- For a problem item: say what to fix and ask for a new photo afterwards.
+- For an item that needs proof: say exactly what to photograph.
+- Keep each request to one sentence.
+- Examples (in Spanish): "Limpia la mancha del fondo del microondas y envía una foto nueva." / "Envía una foto de la toalla de manos en el baño de visitas."
+
+Items:
+{item_lines}"""

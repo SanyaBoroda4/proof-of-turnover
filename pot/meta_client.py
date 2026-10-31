@@ -402,8 +402,8 @@ class MetaClient:
                 metadata={"include_confidence": "true", "mask_encoding": "one_bit"},
             )
             text = getattr(response, "output_text", "") or ""
-            if not text.strip():
-                raise _RetryableError(f"{purpose}: empty answer from {self.sam_model}")
+            # An empty SAM answer means "nothing found", not a failure:
+            # return it as-is and never retry it.
             usage = _usage_of(response)
             return text, {"output_text": text, "usage": usage}
 

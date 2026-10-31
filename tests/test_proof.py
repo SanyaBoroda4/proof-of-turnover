@@ -54,12 +54,12 @@ _DEFAULT = object()
 
 
 def _prove(item=_DEFAULT, claim=_DEFAULT, second=_DEFAULT, sam=_DEFAULT, unknown=False,
-           coverage="covered", first_photo="P01"):
+           coverage="covered", first_photo="P01", decision="none", rooms=None):
     item = _item() if item is _DEFAULT else item
     claim = _claim() if claim is _DEFAULT else claim
     second = _second() if second is _DEFAULT else second
     sam = _sam() if sam is _DEFAULT else sam
-    return prove_item(item, claim, second, sam, unknown, coverage, first_photo)
+    return prove_item(item, claim, second, sam, unknown, coverage, first_photo, decision, rooms)
 
 
 def test_not_shown_needs_proof():
@@ -96,9 +96,22 @@ def test_done_photo_of_another_room_needs_proof():
     assert "another room" in proof.reason
 
 
-def test_done_unknown_photo_needs_yes():
-    assert _prove(unknown=True, second=_second(this_room="unclear")).status == NEEDS_PROOF
-    assert _prove(unknown=True, second=_second(this_room="yes")).status == PROVEN
+def _rooms():
+    return {
+        "bed": {"id": "bed", "name": "Bed"},
+        "bath": {"id": "bath", "name": "Bath"},
+    }
+
+
+def test_done_unknown_photo_uses_room_decision():
+    decided = _prove(unknown=True, decision="bed", rooms=_rooms())
+    assert decided.status == PROVEN
+    other = _prove(unknown=True, decision="bath", rooms=_rooms())
+    assert other.status == NEEDS_PROOF
+    assert other.reason == "This photo looks like the Bath"
+    missing = _prove(unknown=True, rooms=_rooms())
+    assert missing.status == NEEDS_PROOF
+    assert missing.reason == "Can't tell which room this photo shows"
 
 
 def test_done_room_matched_photo_tolerates_unclear_room():
@@ -163,15 +176,23 @@ def test_problem_wrong_room_disagrees():
     assert proof.status == NEEDS_PROOF
 
 
-def test_problem_unknown_photo_needs_yes():
-    proof = _prove(claim=_claim(status="problem"),
-                   second=_second(verdict="not_done", this_room="unclear"),
-                   unknown=True)
-    assert proof.status == NEEDS_PROOF
+def test_problem_unknown_photo_uses_room_decision():
     proof = _prove(claim=_claim(status="problem"),
                    second=_second(verdict="not_done", this_room="yes"),
-                   unknown=True)
+                   unknown=True, decision="bed", rooms=_rooms())
     assert proof.status == PROBLEM
+    proof = _prove(claim=_claim(status="problem"),
+                   second=_second(verdict="not_done", this_room="yes"),
+                   unknown=True, decision="bath", rooms=_rooms())
+    assert proof.status == NEEDS_PROOF
+    assert proof.reason == "This photo looks like the Bath"
+
+
+def test_problem_seen_but_room_unsure():
+    proof = _prove(claim=_claim(status="problem"),
+                   second=_second(verdict="not_done", this_room="no"))
+    assert proof.status == NEEDS_PROOF
+    assert proof.reason == "Problem seen, but not sure this photo is the Bed"
 
 
 def test_coverage_covered_is_proven_with_first_photo():
@@ -199,8 +220,8 @@ def test_prove_all_wires_unknown_and_first_photo():
         "P09": Assignment("P09", "unknown", "low", "x"),
     }
     proofs = prove_all([bed, coverage], claims, seconds, sams, assignments,
-                       {"bed": "covered"}, ["P01", "P09"])
-    assert proofs["bed.beds_made"].status == PROVEN  # unknown photo + this_room yes
+                       {"bed": "covered"}, ["P01", "P09"], {"P09": "bed"}, _rooms())
+    assert proofs["bed.beds_made"].status == PROVEN  # unknown photo decided bed
     assert proofs["bed.coverage"].photo_id == "P01"  # first matched photo cited
 
 
@@ -245,6 +266,25 @@ def test_verdict_ready_only_when_all_critical_proven():
     assert missing.worth_a_look == ["c.z"]  # non-critical problem never blocks
 
 
+def _has_color(img, pred):
+    pixels = img.load()
+    return any(
+        pred(pixels[x, y])
+        for x in range(img.width)
+        for y in range(img.height)
+    )
+
+
+def _is_green(pixel):
+    red, green, blue = pixel
+    return green > 150 and red < 60 and blue < 60
+
+
+def _is_red(pixel):
+    red, green, blue = pixel
+    return red > 150 and green < 60 and blue < 60
+
+
 def test_evidence_images_drawn_with_caption(tmp_path):
     photos = make_photos(tmp_path / "photos", 1)
     photo = photos[0]
@@ -257,16 +297,17 @@ def test_evidence_images_drawn_with_caption(tmp_path):
     items = {"bed.beds_made": _item(), "bed.other": _item(id="bed.other", key="other")}
     sams = {
         "bed.beds_made": SamCheck("bed.beds_made", "P01", "bed", 1, [_box()]),
-        "bed.other": SamCheck("bed.other", "P01", "bed", 1, [_box()]),
+        "bed.other": SamCheck("bed.other", "P01", "bed", 1, [_box(left=20)]),
     }
-    paths = save_evidence(tmp_path, proofs, items, {"P01": photo}, sams)
+    problem_sams = {"bed.other": SamCheck("bed.other", "P01", "stain", 1, [_box()])}
+    paths = save_evidence(tmp_path, proofs, items, {"P01": photo}, sams, problem_sams)
     assert set(paths) == {"bed.beds_made", "bed.other"}
     with Image.open(paths["bed.beds_made"]) as img:
-        assert img.size == (32, 24 + 36)
-        assert img.getpixel((5, 5)) == (255, 255, 255)  # caption bar
-        red, green, blue = img.getpixel((6, 36 + 10))  # green box edge (JPEG: tolerant)
-        assert green > 150 and red < 60 and blue < 60
+        assert img.size[0] == 32 and img.size[1] > 24 + 20  # caption bar added
+        assert img.getpixel((2, 2)) == (255, 255, 255)
+        assert _has_color(img, _is_green)
+        assert not _has_color(img, _is_red)
     with Image.open(paths["bed.other"]) as img:
-        red, green, blue = img.getpixel((6, 36 + 10))  # red box edge
-        assert red > 150 and green < 60 and blue < 60
+        assert _has_color(img, _is_red)  # problem-object boxes, not item boxes
+        assert not _has_color(img, _is_green)
     assert not (Path(tmp_path) / "evidence" / "bed.skip.jpg").exists()

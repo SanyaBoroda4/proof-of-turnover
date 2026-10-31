@@ -5,7 +5,8 @@ import base64
 from pot.checklist import build_checklist
 from pot.inspector import Claim
 from pot.meta_client import MetaClientError
-from pot.verifier import SamCheck, SecondLook, verify
+from pot.proof import PROBLEM, PROVEN, ProofItem
+from pot.verifier import SamCheck, SecondLook, segment_problem_objects, verify
 from tests.fakes import FakeSpark, image_count, make_photos, tiny_property
 
 
@@ -22,10 +23,12 @@ def _claims(status="done", photo_id="P01"):
 
 
 def test_second_look_gets_only_cited_check_photo(tmp_path):
+    from pot.matcher import Assignment
     photos = make_photos(tmp_path / "photos", 2)
     claims = {"bed.beds_made": Claim("bed.beds_made", "done", "P02", "x", 1)}
     client = FakeSpark()
-    result = verify(client, _checklist(), claims, photos)
+    result = verify(client, _checklist(), claims, photos,
+                    assignments={"P02": Assignment("P02", "bed", "high", "x")})
     assert len(client.calls) == 1
     call = client.calls[0]
     assert image_count(call["content"]) == 1
@@ -101,6 +104,80 @@ def test_failed_calls_degrade_and_run_continues(tmp_path):
     assert result.sams["bed.beds_made"].count == 0
     assert result.sams["bed.beds_made"].boxes == []
     assert sum("check failed" in note for note in result.notes) == 1 + 4
+
+
+def test_room_decision_asks_citing_rooms_only(tmp_path):
+    from pot.matcher import Assignment
+    photos = make_photos(tmp_path / "photos", 1)
+    claims = {
+        "bed.beds_made": Claim("bed.beds_made", "done", "P01", "x", 1),
+        "bath.towels": Claim("bath.towels", "problem", "P01", "y", 1),
+    }
+    assignments = {"P01": Assignment("P01", "unknown", "low", "")}
+    client = FakeSpark()
+    result = verify(client, _checklist(), claims, photos,
+                    rooms={r["id"]: r for r in tiny_property()["rooms"]},
+                    assignments=assignments)
+    assert result.room_decisions == {"P01": "bath"}  # default fake picks first candidate
+    decision_calls = [c for c in client.calls if c["purpose"].startswith("room decision")]
+    assert len(decision_calls) == 1
+    assert image_count(decision_calls[0]["content"]) == 1
+    assert decision_calls[0]["schema"]["properties"]["room_id"]["enum"] == ["bath", "bed", "none"]
+    assert "Bed" in decision_calls[0]["instructions"]
+    assert "oak headboard" in decision_calls[0]["instructions"]
+
+
+def test_room_decision_bad_answer_and_failure_become_none(tmp_path):
+    from pot.matcher import Assignment
+    photos = make_photos(tmp_path / "photos", 2)
+    claims = {"bed.beds_made": Claim("bed.beds_made", "done", "P01", "x", 1)}
+
+    def bad(call):
+        return {"room_id": "attic"}
+
+    assignments = {"P01": Assignment("P01", "unknown", "low", "")}
+    result = verify(FakeSpark(decider=bad), _checklist(), claims, photos, assignments=assignments)
+    assert result.room_decisions == {"P01": "none"}
+    assert any("bad answer" in note for note in result.notes)
+
+    def boom(call):
+        raise MetaClientError("decide: boom")
+
+    result = verify(FakeSpark(decider=boom), _checklist(), claims, photos, assignments=assignments)
+    assert result.room_decisions == {"P01": "none"}
+    assert any("check failed" in note for note in result.notes)
+
+
+def test_segment_problem_objects_uses_problem_object(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    proofs = {
+        "bed.beds_made": ProofItem("bed.beds_made", PROBLEM, "stained", "P01"),
+        "bath.towels": ProofItem("bath.towels", PROVEN, "ok", "P01"),
+        "bath.sink": ProofItem("bath.sink", PROBLEM, "x", "P01"),
+    }
+    seconds = {
+        "bed.beds_made": SecondLook("bed.beds_made", "P01", "yes", "not_done", None,
+                                    "stained", "brown stain"),
+        "bath.sink": SecondLook("bath.sink", "P01", "yes", "not_done", None, "dirty", ""),
+    }
+    client = FakeSpark()
+    found, notes = segment_problem_objects(client, proofs, seconds, {"P01": photos[0]})
+    assert set(found) == {"bed.beds_made"}  # proven skipped, empty object skipped
+    assert found["bed.beds_made"].prompt == "brown stain"
+    assert found["bed.beds_made"].count == 3
+    assert len(client.sam_calls) == 1
+    assert notes == []
+
+
+def test_verify_effort_env_override(tmp_path, monkeypatch):
+    from pot.matcher import Assignment
+    photos = make_photos(tmp_path / "photos", 1)
+    claims = {"bed.beds_made": Claim("bed.beds_made", "done", "P01", "x", 1)}
+    assignments = {"P01": Assignment("P01", "bed", "high", "x")}
+    monkeypatch.setenv("POT_VERIFY_EFFORT", "low")
+    client = FakeSpark()
+    verify(client, _checklist(), claims, photos, assignments=assignments)
+    assert client.calls[0]["effort"] == "low"
 
 
 def test_sam_unreadable_output_counts_as_none(tmp_path, monkeypatch):

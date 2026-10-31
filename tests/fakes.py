@@ -101,6 +101,22 @@ def _confirm_everything(call):
         "verdict": "done",
         "count_seen": 5,
         "reason": "looks good",
+        "problem_object": "",
+    }
+
+
+def _decide_first(call):
+    enum = call["schema"]["properties"]["room_id"]["enum"]
+    return {"room_id": enum[0]}
+
+
+def _request_everything(call):
+    enum = call["schema"]["properties"]["requests"]["items"]["properties"]["item_id"]["enum"]
+    return {
+        "requests": [
+            {"item_id": item_id, "cleaner": f"Foto {item_id}", "host": f"Photo {item_id}"}
+            for item_id in enum
+        ]
     }
 
 
@@ -112,13 +128,16 @@ SAM_FIXTURE = (
 class FakeSpark:
     """Duck-typed stand-in for MetaClient.respond()/segment_image()."""
 
-    def __init__(self, matcher=None, inspector=None, verifier=None, sam=None):
+    def __init__(self, matcher=None, inspector=None, verifier=None, sam=None,
+                 decider=None, requester=None):
         self.calls = []
         self.sam_calls = []
         self._matcher = matcher or _unknown_everything
         self._inspector = inspector or _not_shown_everything
         self._verifier = verifier or _confirm_everything
         self._sam = sam if sam is not None else (lambda call: SAM_FIXTURE)
+        self._decider = decider or _decide_first
+        self._requester = requester or _request_everything
         self.trace = []
 
     def respond(
@@ -138,6 +157,10 @@ class FakeSpark:
             return self._matcher(call)
         if "verdict" in props:
             return self._verifier(call)
+        if "room_id" in props:
+            return self._decider(call)
+        if "requests" in props:
+            return self._requester(call)
         return self._inspector(call)
 
     def segment_image(self, purpose, jpeg_bytes, prompt):
