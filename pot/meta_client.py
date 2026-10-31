@@ -120,8 +120,8 @@ def _usage_of(response):
 
 
 def _schema_name(purpose):
-    slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", purpose).strip("_")[:64] or "response"
-    return f"{slug}_output"
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", purpose).strip("_") or "response"
+    return f"{slug}_output"[:64]
 
 
 def _read_bytes_or_missing(path):

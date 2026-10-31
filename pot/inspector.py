@@ -144,7 +144,7 @@ def _check_room_answer(answer, items, photo_ids, room_label, notes, unknown_ids=
             status=status,
             photo_id=photo_id,
             seen=seen,
-            count_seen=_check_count(entry, item, notes),
+            count_seen=_check_count(entry, item, notes) if status != "not_shown" else None,
         )
     for item in items:
         if item.id not in claims:
@@ -179,7 +179,7 @@ def _room_call(client, room_id, room_name, room_description, items, mine, others
     chosen = _room_call_photos(mine, others, room_id, notes)
     content = []
     for photo in chosen:
-        content.extend(prompts.photo_parts(photo))
+        content.extend(prompts.photo_parts(photo, prompts.FIRST_LOOK_PHOTO_SIZE))
     photo_ids = [photo.id for photo in chosen]
     label = room_id if room_name is None else f"{room_id} ({room_name})"
     unknown_ids = {photo.id for photo in chosen} & {photo.id for photo in others}
@@ -210,7 +210,7 @@ def _house_calls(client, items, photos):
             break
         content = []
         for photo in batch:
-            content.extend(prompts.photo_parts(photo))
+            content.extend(prompts.photo_parts(photo, prompts.FIRST_LOOK_PHOTO_SIZE))
         photo_ids = [photo.id for photo in batch]
         try:
             answer = client.respond(

@@ -169,6 +169,16 @@ def test_schema_returns_parsed_json(tmp_path):
     }
 
 
+def test_schema_name_capped_at_64_chars(tmp_path):
+    fake = _openai_fake([_FakeResponse('{"a": 1}')])
+    client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,
+                        sleep=lambda seconds: None)
+    client.respond("first look kitchen (P01,P02,P03,P04,P05,P06,P07,P08,P09,P10)", CONTENT,
+                   schema={"type": "object"})
+    name = fake.responses.calls[0]["text"]["format"]["name"]
+    assert len(name) <= 64
+
+
 def test_second_identical_call_comes_from_cache(tmp_path):
     client = _client(tmp_path, [_FakeResponse("hi")])
     assert client.respond("greet", CONTENT) == "hi"

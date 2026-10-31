@@ -132,6 +132,64 @@ def test_new_room_types_build_with_coverage_first(tmp_path):
     ]
 
 
+def test_beds_list_makes_one_item_per_bed(tmp_path):
+    data = _valid_property(rooms=[
+        {"id": "master", "type": "bedroom", "name": "Master", "floor": 2,
+         "beds": ["king bed", "queen bed"]},
+    ])
+    base = _write_property(tmp_path, "test-house", data)
+    items = {item.id: item for item in build_checklist(load_property("test-house", properties_dir=base))}
+    assert items["master.bed_1"].label == "King bed made"
+    assert items["master.bed_1"].requirement == "King bed made: sheets and blanket pulled up, pillows in place"
+    assert items["master.bed_1"].min_count == 1
+    assert items["master.bed_2"].label == "Queen bed made"
+    assert "master.beds_made" not in items
+
+
+def test_bad_beds_list_raises_clear_error(tmp_path):
+    data = _valid_property(rooms=[
+        {"id": "master", "type": "bedroom", "name": "Master", "floor": 2, "beds": ["king bed", ""]},
+    ])
+    base = _write_property(tmp_path, "test-house", data)
+    with pytest.raises(PropertyError, match="beds"):
+        load_property("test-house", properties_dir=base)
+
+
+def test_extra_item_replaces_template_item(tmp_path):
+    data = _valid_property(extra_items=[
+        {"key": "trash", "label": "Bins", "requirement": "Custom bins rule", "room": "kitchen"},
+    ])
+    base = _write_property(tmp_path, "test-house", data)
+    items = build_checklist(load_property("test-house", properties_dir=base))
+    trash = [item for item in items if item.id == "kitchen.trash"]
+    assert len(trash) == 1
+    assert trash[0].requirement == "Custom bins rule"
+
+
+def test_duplicate_extra_items_rejected(tmp_path):
+    data = _valid_property(extra_items=[
+        {"key": "x", "label": "X", "requirement": "one", "room": "kitchen"},
+        {"key": "x", "label": "X", "requirement": "two", "room": "kitchen"},
+    ])
+    base = _write_property(tmp_path, "test-house", data)
+    with pytest.raises(PropertyError, match="kitchen.x"):
+        load_property("test-house", properties_dir=base)
+
+
+def test_toilet_and_floor_requirements():
+    from pot.rooms import TEMPLATES
+
+    toilets = [spec for specs in TEMPLATES.values() for spec in specs if spec["key"] == "toilet"]
+    assert toilets
+    for spec in toilets:
+        assert spec["requirement"] == "Toilet bowl, seat and base clean"
+        assert "lid" not in spec["label"].lower()
+    floors = [spec for specs in TEMPLATES.values() for spec in specs if spec["key"] == "floor_clear"]
+    assert floors
+    for spec in floors:
+        assert spec["requirement"] == "Floor is clean: nothing left on it, no spots, spills or crumbs"
+
+
 def test_extra_items_attach_to_room_or_house(tmp_path):
     data = _valid_property(
         extra_items=[

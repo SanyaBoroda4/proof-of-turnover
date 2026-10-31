@@ -113,7 +113,7 @@ def match_rooms(client, photos, property):
         batch_ids = [photo.id for photo in batch]
         content = []
         for photo in batch:
-            content.extend(prompts.photo_parts(photo))
+            content.extend(prompts.photo_parts(photo, prompts.MATCH_PHOTO_SIZE))
         purpose = f"match rooms batch {number}/{len(batches)} ({batch_ids[0]}-{batch_ids[-1]})"
         try:
             answer = client.respond(

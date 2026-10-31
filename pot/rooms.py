@@ -49,7 +49,7 @@ TEMPLATES = {
         {
             "key": "floor_clear",
             "label": "Floor clear",
-            "requirement": "Floor is clear: nothing left on the floor",
+            "requirement": "Floor is clean: nothing left on it, no spots, spills or crumbs",
             "sam_prompt": None,
             "min_count": None,
             "critical": True,
@@ -77,8 +77,8 @@ TEMPLATES = {
         },
         {
             "key": "toilet",
-            "label": "Toilet clean, lid down",
-            "requirement": "Toilet is clean with the lid down",
+            "label": "Toilet clean",
+            "requirement": "Toilet bowl, seat and base clean",
             "sam_prompt": "toilet",
             "min_count": 1,
             "critical": True,
@@ -150,7 +150,7 @@ TEMPLATES = {
         {
             "key": "floor_clear",
             "label": "Floor clear",
-            "requirement": "Floor is clear: nothing left on the floor",
+            "requirement": "Floor is clean: nothing left on it, no spots, spills or crumbs",
             "sam_prompt": None,
             "min_count": None,
             "critical": True,
@@ -169,8 +169,8 @@ TEMPLATES = {
     "half_bathroom": [
         {
             "key": "toilet",
-            "label": "Toilet clean, lid down",
-            "requirement": "Toilet is clean with the lid down",
+            "label": "Toilet clean",
+            "requirement": "Toilet bowl, seat and base clean",
             "sam_prompt": "toilet",
             "min_count": 1,
             "critical": True,
@@ -220,7 +220,7 @@ TEMPLATES = {
         {
             "key": "floor_clear",
             "label": "Floor clear",
-            "requirement": "Floor is clear: nothing left on the floor",
+            "requirement": "Floor is clean: nothing left on it, no spots, spills or crumbs",
             "sam_prompt": None,
             "min_count": None,
             "critical": True,
@@ -238,7 +238,7 @@ TEMPLATES = {
         {
             "key": "floor_clear",
             "label": "Floor clear",
-            "requirement": "Floor is clear: nothing left on the floor",
+            "requirement": "Floor is clean: nothing left on it, no spots, spills or crumbs",
             "sam_prompt": None,
             "min_count": None,
             "critical": True,
@@ -264,7 +264,7 @@ TEMPLATES = {
         {
             "key": "floor_clear",
             "label": "Floor clear",
-            "requirement": "Floor is clear: nothing left on the floor",
+            "requirement": "Floor is clean: nothing left on it, no spots, spills or crumbs",
             "sam_prompt": None,
             "min_count": None,
             "critical": True,
@@ -274,7 +274,7 @@ TEMPLATES = {
         {
             "key": "floor_clear",
             "label": "Floors and stairs clear",
-            "requirement": "Floors and stairs are clear",
+            "requirement": "Floor is clean: nothing left on it, no spots, spills or crumbs",
             "sam_prompt": None,
             "min_count": None,
             "critical": True,
@@ -292,7 +292,7 @@ TEMPLATES = {
         {
             "key": "floor_clear",
             "label": "Floor clear",
-            "requirement": "Floor is clear: nothing left on the floor",
+            "requirement": "Floor is clean: nothing left on it, no spots, spills or crumbs",
             "sam_prompt": None,
             "min_count": None,
             "critical": True,
@@ -331,10 +331,33 @@ def _render(spec, room):
     }
 
 
+def _bed_items(room):
+    """One made-bed item per named bed (beds given as a list)."""
+    items = []
+    for number, name in enumerate(room["beds"], start=1):
+        titled = name[:1].upper() + name[1:]
+        items.append(
+            {
+                "key": f"bed_{number}",
+                "label": f"{titled} made",
+                "requirement": (
+                    f"{titled} made: sheets and blanket pulled up, pillows in place"
+                ),
+                "sam_prompt": "bed",
+                "min_count": 1,
+                "critical": True,
+            }
+        )
+    return items
+
+
 def items_for_room(room):
     """Resolve the template items for one room dict, coverage first."""
     items = [_render(COVERAGE_ITEM, room)]
     for spec in TEMPLATES[room["type"]]:
+        if spec["key"] == "beds_made" and isinstance(room.get("beds"), list):
+            items.extend(_bed_items(room))
+            continue
         only_if = spec.get("only_if")
         if only_if is not None and room.get(only_if) is None:
             continue

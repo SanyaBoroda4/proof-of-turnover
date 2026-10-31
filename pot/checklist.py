@@ -52,6 +52,18 @@ def _need_positive_int(mapping, field, where):
     return value
 
 
+def _need_beds(mapping, where):
+    value = mapping.get("beds")
+    if isinstance(value, list):
+        if not value or any(not isinstance(name, str) or not name.strip() for name in value):
+            raise PropertyError(
+                f"{where}: field 'beds' must be a positive integer or a "
+                "non-empty list of bed names"
+            )
+        return value
+    return _need_positive_int(mapping, "beds", where)
+
+
 def _validate_room(data, index, property_id, seen_ids):
     where = f"Property '{property_id}', room #{index + 1}"
     if not isinstance(data, dict):
@@ -74,7 +86,9 @@ def _validate_room(data, index, property_id, seen_ids):
         raise PropertyError(f"{where}: field 'beds' is required for a bedroom")
     if room_type == "bathroom" and data.get("towels") is None:
         raise PropertyError(f"{where}: field 'towels' is required for a bathroom")
-    for field in ("beds", "towels", "coffee_pods"):
+    if data.get("beds") is not None:
+        _need_beds(data, where)
+    for field in ("towels", "coffee_pods"):
         if data.get(field) is not None:
             _need_positive_int(data, field, where)
     if data.get("description") is not None:
@@ -130,6 +144,14 @@ def load_property(property_id, properties_dir=None):
     data["extra_items"] = [
         _validate_extra(item, i, property_id, rooms_by_id) for i, item in enumerate(extra_items)
     ]
+    seen_extra_ids = set()
+    for item in data["extra_items"]:
+        extra_id = f"{item.get('room') or 'house'}.{item['key']}"
+        if extra_id in seen_extra_ids:
+            raise PropertyError(
+                f"Property '{property_id}': duplicate extra item id '{extra_id}'"
+            )
+        seen_extra_ids.add(extra_id)
     return data
 
 
@@ -153,26 +175,31 @@ def build_checklist(property):
                 )
             )
     rooms_by_id = {room["id"]: room for room in property["rooms"]}
+    by_id = {item.id: index for index, item in enumerate(items)}
     for extra in property.get("extra_items", []):
         room = rooms_by_id.get(extra.get("room"))
         if room is None:
             room_id, room_name, floor = "house", "Whole house", None
         else:
             room_id, room_name, floor = room["id"], room["name"], room["floor"]
-        items.append(
-            ChecklistItem(
-                id=f"{room_id}.{extra['key']}",
-                room_id=room_id,
-                room_name=room_name,
-                floor=floor,
-                key=extra["key"],
-                label=extra["label"],
-                requirement=extra["requirement"],
-                sam_prompt=extra.get("sam_prompt"),
-                min_count=extra.get("min_count"),
-                critical=extra.get("critical", True),
-            )
+        replacement = ChecklistItem(
+            id=f"{room_id}.{extra['key']}",
+            room_id=room_id,
+            room_name=room_name,
+            floor=floor,
+            key=extra["key"],
+            label=extra["label"],
+            requirement=extra["requirement"],
+            sam_prompt=extra.get("sam_prompt"),
+            min_count=extra.get("min_count"),
+            critical=extra.get("critical", True),
         )
+        if replacement.id in by_id:
+            # An extra with the same room and key replaces the template item.
+            items[by_id[replacement.id]] = replacement
+        else:
+            by_id[replacement.id] = len(items)
+            items.append(replacement)
     return items
 
 

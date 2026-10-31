@@ -1,5 +1,7 @@
 """Offline tests for pot.matcher with a fake client."""
 
+import base64
+
 from pot.checklist import build_checklist
 from pot.matcher import match_rooms
 from pot.meta_client import MetaClientError
@@ -121,3 +123,15 @@ def test_failed_batch_becomes_unknown_and_run_continues(tmp_path):
     assert all(a.room_id == "bed" for pid, a in result.assignments.items() if pid >= "P41")
     assert any("check failed" in note for note in result.notes)
     assert result.coverage["bed"] == "covered"
+
+
+def test_matcher_sends_overview_copies_and_bed_names(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    prop = tiny_property()
+    prop["rooms"][0]["beds"] = ["king bed", "queen bed"]
+    client = FakeSpark()
+    match_rooms(client, photos, prop)
+    part = next(p for p in client.calls[0]["content"] if p["type"] == "input_image")
+    sent = base64.b64decode(part["image_url"].split(",", 1)[1])
+    assert sent == photos[0].overview_path.read_bytes()
+    assert "2 beds: king bed, queen bed" in client.calls[0]["instructions"]

@@ -41,6 +41,7 @@ def run_turnover(photo_folder, property_id, client, run_dir=None):
         "photos": [
             {
                 "id": photo.id,
+                "file": photo.original_name,
                 "room_id": match.assignments[photo.id].room_id,
                 "confidence": match.assignments[photo.id].confidence,
                 "seen": match.assignments[photo.id].seen,

@@ -58,6 +58,7 @@ def test_run_turnover_writes_first_look_json(tmp_path):
     saved = json.loads((run_dir / "first_look.json").read_text(encoding="utf-8"))
     assert saved["property"] == "demo-house"
     assert [p["id"] for p in saved["photos"]] == ["P01", "P02"]
+    assert [p["file"] for p in saved["photos"]] == ["a.jpg", "b.png"]
     assert set(saved["coverage"]) == {
         "master-bedroom", "guest-bedroom", "master-bathroom", "hall-bathroom",
         "kitchen", "living-room", "patio",

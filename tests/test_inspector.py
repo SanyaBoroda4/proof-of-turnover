@@ -1,5 +1,7 @@
 """Offline tests for pot.inspector with a fake client."""
 
+import base64
+
 from pot.checklist import build_checklist
 from pot.inspector import first_look
 from pot.matcher import Assignment
@@ -44,6 +46,7 @@ def test_each_room_call_gets_own_photos_and_items(tmp_path):
     assert "Bed" in bed_call["instructions"]
     assert "oak headboard" in bed_call["instructions"]
     assert all(c.status == "not_shown" for c in look.claims.values())
+    assert look.notes == []
     assert ".coverage" not in " ".join(
         item_id for call in client.calls for item_id in _item_enum(call)
     )
@@ -126,8 +129,8 @@ def test_count_forced_null_without_min_count(tmp_path):
         enum = _item_enum(call)
         return {
             "claims": [
-                {"item_id": item_id, "status": "not_shown", "photo_id": "",
-                 "seen": "", "count_seen": 5}
+                {"item_id": item_id, "status": "done", "photo_id": "P01",
+                 "seen": "x", "count_seen": 5}
                 for item_id in enum
             ],
             "other_issues": [],
@@ -136,6 +139,26 @@ def test_count_forced_null_without_min_count(tmp_path):
     look = first_look(FakeSpark(inspector=counted), photos, assignments, _checklist())
     assert look.claims["bed.no_belongings"].count_seen is None
     assert look.claims["bed.beds_made"].count_seen == 5
+
+
+def test_not_shown_count_always_null_without_note(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    assignments = _assignments([("P01", "bed")])
+
+    def counted(call):
+        enum = _item_enum(call)
+        return {
+            "claims": [
+                {"item_id": item_id, "status": "not_shown", "photo_id": "",
+                 "seen": "", "count_seen": None}
+                for item_id in enum
+            ],
+            "other_issues": [],
+        }
+
+    look = first_look(FakeSpark(inspector=counted), photos, assignments, _checklist())
+    assert look.claims["bed.beds_made"].count_seen is None
+    assert not any("count_seen" in note for note in look.notes)
 
 
 def test_no_photos_no_calls():
@@ -322,3 +345,13 @@ def test_failed_room_call_becomes_not_shown_and_run_continues(tmp_path):
     assert look.claims["bed.beds_made"].status == "not_shown"
     assert look.claims["bath.towels"].status == "done"
     assert any("check failed" in note for note in look.notes)
+
+
+def test_first_look_sends_check_copies(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    assignments = _assignments([("P01", "bed")])
+    client = FakeSpark()
+    first_look(client, photos, assignments, _checklist())
+    part = next(p for p in client.calls[0]["content"] if p["type"] == "input_image")
+    sent = base64.b64decode(part["image_url"].split(",", 1)[1])
+    assert sent == photos[0].check_path.read_bytes()

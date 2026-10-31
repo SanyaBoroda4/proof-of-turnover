@@ -8,12 +8,13 @@ words, the photo labels and the image parts.
 import base64
 
 REASONING_EFFORT = "medium"
-MODEL_PHOTO_SIZE = "overview"  # "overview" (768 px) or "check" (1600 px)
+MATCH_PHOTO_SIZE = "overview"  # 768 px copies are enough to match rooms
+FIRST_LOOK_PHOTO_SIZE = "check"  # 1600 px copies keep small details (stains)
 
 
-def model_photo_path(photo):
+def model_photo_path(photo, size):
     """Which saved copy of a photo to send to the model."""
-    if MODEL_PHOTO_SIZE == "check":
+    if size == "check":
         return photo.check_path
     return photo.overview_path
 
@@ -22,9 +23,9 @@ def photo_label(photo_id):
     return f"Photo {photo_id}"
 
 
-def photo_parts(photo):
+def photo_parts(photo, size):
     """The input_text label + input_image parts for one photo."""
-    raw = base64.b64encode(model_photo_path(photo).read_bytes()).decode("ascii")
+    raw = base64.b64encode(model_photo_path(photo, size).read_bytes()).decode("ascii")
     return [
         {"type": "input_text", "text": photo_label(photo.id)},
         {"type": "input_image", "image_url": f"data:image/jpeg;base64,{raw}"},
@@ -33,8 +34,11 @@ def photo_parts(photo):
 
 def _room_line(room):
     bits = [room["name"], room["type"], f"floor {room['floor']}"]
-    if room.get("beds") is not None:
-        bits.append(f"{room['beds']} bed" if room["beds"] == 1 else f"{room['beds']} beds")
+    beds = room.get("beds")
+    if isinstance(beds, list):
+        bits.append(f"{len(beds)} beds: {', '.join(beds)}")
+    elif beds is not None:
+        bits.append(f"{beds} bed" if beds == 1 else f"{beds} beds")
     if room.get("towels") is not None:
         bits.append(f"{room['towels']} towel" if room["towels"] == 1 else f"{room['towels']} towels")
     line = f"- {room['id']}: " + ", ".join(bits)
