@@ -1,0 +1,121 @@
+"""Shared fakes for first-look tests: tiny photos and a scriptable client."""
+
+from datetime import datetime
+from pathlib import Path
+
+from PIL import Image
+
+from pot.photos import Photo
+
+
+def make_photos(directory, count):
+    """Build count tiny Photo objects backed by real JPEG files."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    photos = []
+    for i in range(1, count + 1):
+        photo_id = f"P{i:02d}"
+        check_path = directory / f"{photo_id}_check.jpg"
+        overview_path = directory / f"{photo_id}_overview.jpg"
+        Image.new("RGB", (16, 12), (i % 256, 100, 50)).save(overview_path, "JPEG")
+        Image.new("RGB", (32, 24), (i % 256, 100, 50)).save(check_path, "JPEG")
+        photos.append(
+            Photo(
+                id=photo_id,
+                original_name=f"{photo_id}.jpg",
+                taken_at=None,
+                received_at=datetime.now(),
+                check_path=check_path,
+                overview_path=overview_path,
+                width=32,
+                height=24,
+            )
+        )
+    return photos
+
+
+def photo_ids_in(content):
+    """Photo ids from the "Photo Pxx" label parts of a request."""
+    ids = []
+    for part in content:
+        if part.get("type") == "input_text" and part.get("text", "").startswith("Photo "):
+            ids.append(part["text"].split(" ", 1)[1])
+    return ids
+
+
+def image_count(content):
+    return sum(1 for part in content if part.get("type") == "input_image")
+
+
+def tiny_property():
+    return {
+        "id": "tiny",
+        "name": "Tiny",
+        "cleaner_language": "es",
+        "host_language": "en",
+        "rooms": [
+            {
+                "id": "bed",
+                "type": "bedroom",
+                "name": "Bed",
+                "floor": 1,
+                "beds": 1,
+                "description": "oak headboard",
+            },
+            {
+                "id": "bath",
+                "type": "bathroom",
+                "name": "Bath",
+                "floor": 1,
+                "towels": 2,
+                "description": "grey tiles",
+            },
+        ],
+        "extra_items": [],
+    }
+
+
+def _unknown_everything(call):
+    return {
+        "matches": [
+            {"photo_id": pid, "room_id": "unknown", "confidence": "low", "seen": ""}
+            for pid in photo_ids_in(call["content"])
+        ]
+    }
+
+
+def _not_shown_everything(call):
+    enum = call["schema"]["properties"]["claims"]["items"]["properties"]["item_id"]["enum"]
+    return {
+        "claims": [
+            {"item_id": item_id, "status": "not_shown", "photo_id": "", "seen": "", "count_seen": None}
+            for item_id in enum
+        ],
+        "other_issues": [],
+    }
+
+
+class FakeSpark:
+    """Duck-typed stand-in for MetaClient.respond()."""
+
+    def __init__(self, matcher=None, inspector=None):
+        self.calls = []
+        self._matcher = matcher or _unknown_everything
+        self._inspector = inspector or _not_shown_everything
+        self.trace = []
+
+    def respond(
+        self, purpose, content, instructions=None, schema=None,
+        max_output_tokens=16000, effort="medium",
+    ):
+        call = {
+            "purpose": purpose,
+            "content": content,
+            "instructions": instructions,
+            "schema": schema,
+        }
+        self.calls.append(call)
+        props = (schema or {}).get("properties", {})
+        if "matches" in props:
+            return self._matcher(call)
+        return self._inspector(call)

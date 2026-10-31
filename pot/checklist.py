@@ -77,6 +77,8 @@ def _validate_room(data, index, property_id, seen_ids):
     for field in ("beds", "towels", "coffee_pods"):
         if data.get(field) is not None:
             _need_positive_int(data, field, where)
+    if data.get("description") is not None:
+        _need_str(data, "description", where)
     return data
 
 

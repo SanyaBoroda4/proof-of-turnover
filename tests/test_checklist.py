@@ -7,6 +7,12 @@ import pytest
 from pot.checklist import PropertyError, build_checklist, load_property
 
 
+def test_demo_house_descriptions_kept_on_rooms():
+    rooms = {room["id"]: room for room in load_property("demo-house")["rooms"]}
+    assert rooms["master-bathroom"]["description"] == "double sink, grey tiles"
+    assert all(room.get("description") for room in rooms.values())
+
+
 def _by_id(items):
     return {item.id: item for item in items}
 
@@ -70,6 +76,14 @@ def test_missing_rooms_field_raises_clear_error(tmp_path):
     del data["rooms"]
     base = _write_property(tmp_path, "test-house", data)
     with pytest.raises(PropertyError, match="rooms"):
+        load_property("test-house", properties_dir=base)
+
+
+def test_bad_description_raises_clear_error(tmp_path):
+    data = _valid_property()
+    data["rooms"][0]["description"] = 42
+    base = _write_property(tmp_path, "test-house", data)
+    with pytest.raises(PropertyError, match="description"):
         load_property("test-house", properties_dir=base)
 
 

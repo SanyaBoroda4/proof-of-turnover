@@ -143,7 +143,8 @@ def load_photo_set(folder_or_files, run_dir):
     return result
 
 
-def _new_run_dir():
+def new_run_dir():
+    """Create a fresh timestamped folder under data/runs/."""
     runs = Path("data/runs")
     runs.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("run-%Y%m%d-%H%M%S")
@@ -164,7 +165,7 @@ def main(argv):
     if not folder.is_dir():
         print(f"Not a folder: {folder}", file=sys.stderr)
         return 1
-    run_dir = _new_run_dir()
+    run_dir = new_run_dir()
     photos = load_photo_set(folder, run_dir)
     print(f"Run: {run_dir}")
     print(f"{'ID':4} {'File':32} {'Taken at':16} Size")

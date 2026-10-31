@@ -17,6 +17,8 @@ import hashlib
 import json
 import os
 import re
+import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -163,6 +165,7 @@ class MetaClient:
         self._sleep = sleep
         self._timeout = timeout
         self.trace = []
+        self._lock = threading.Lock()
 
     def _wait(self, seconds):
         if self._sleep is not None:
@@ -172,28 +175,32 @@ class MetaClient:
 
     def _ensure_openai(self, purpose):
         if self._openai_client is None:
-            if not self._api_key:
-                raise MetaClientError(
-                    f"{purpose}: MODEL_API_KEY is not set "
-                    "(copy .env.example to .env and add your key)"
-                )
-            # SDK-level retries off: this client owns the retry policy.
-            self._openai_client = OpenAI(
-                base_url=self.base_url,
-                api_key=self._api_key,
-                max_retries=0,
-                timeout=self._timeout,
-            )
+            with self._lock:
+                if self._openai_client is None:
+                    if not self._api_key:
+                        raise MetaClientError(
+                            f"{purpose}: MODEL_API_KEY is not set "
+                            "(copy .env.example to .env and add your key)"
+                        )
+                    # SDK-level retries off: this client owns the retry policy.
+                    self._openai_client = OpenAI(
+                        base_url=self.base_url,
+                        api_key=self._api_key,
+                        max_retries=0,
+                        timeout=self._timeout,
+                    )
         return self._openai_client
 
     def _ensure_http(self, purpose):
         if self._http_client is None:
-            if not self._api_key:
-                raise MetaClientError(
-                    f"{purpose}: MODEL_API_KEY is not set "
-                    "(copy .env.example to .env and add your key)"
-                )
-            self._http_client = httpx.Client(timeout=self._timeout)
+            with self._lock:
+                if self._http_client is None:
+                    if not self._api_key:
+                        raise MetaClientError(
+                            f"{purpose}: MODEL_API_KEY is not set "
+                            "(copy .env.example to .env and add your key)"
+                        )
+                    self._http_client = httpx.Client(timeout=self._timeout)
         return self._http_client
 
     def _append_trace(self, purpose, model, started, attempts, cache, ok, usage, error=None):
@@ -208,15 +215,49 @@ class MetaClient:
         }
         if error is not None:
             entry["error"] = error
-        self.trace.append(entry)
+        with self._lock:
+            self.trace.append(entry)
+
+    def _write_cache_atomically(self, path, record):
+        """Write a cache file via temp file + os.replace, never partial.
+
+        Writes are serialized: on Windows two threads replacing the same
+        file at once can fail, and serializing keeps that race away.
+        """
+        with self._lock:
+            fd, tmp_name = tempfile.mkstemp(
+                dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    json.dump(record, handle, indent=2, sort_keys=True)
+                os.replace(tmp_name, path)
+            except BaseException:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+                raise
+
+    def _read_cache(self, path):
+        """Read a cache file, or None when missing.
+
+        Serialized with writes: on Windows a file open for reading cannot
+        be replaced, so an unlocked read can break another thread's write.
+        """
+        with self._lock:
+            if not path.exists():
+                return None
+            return path.read_text(encoding="utf-8")
 
     def _execute(self, *, purpose, model, request, call, rebuild):
         started = time.monotonic()
         redacted = _redact(request)
         key = _cache_key(redacted)
         path = self.cache_dir / f"{key}.json"
-        if path.exists():
-            record = json.loads(path.read_text(encoding="utf-8"))
+        cached = self._read_cache(path)
+        if cached is not None:
+            record = json.loads(cached)
             result = rebuild(copy.deepcopy(record["answer"]))
             self._append_trace(
                 purpose, model, started, 0, "hit", True, record["answer"].get("usage")
@@ -254,7 +295,7 @@ class MetaClient:
                     self._wait(backoff_delay(attempt))
                 continue
             record = {"purpose": purpose, "model": model, "request": redacted, "answer": answer}
-            path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+            self._write_cache_atomically(path, record)
             self._append_trace(
                 purpose, model, started, attempts, "miss", True, answer.get("usage")
             )
