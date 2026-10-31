@@ -7,6 +7,7 @@ JPEGs: a check copy (max 1600 px long side) and an overview copy
 (max 768 px long side).
 """
 
+import shutil
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -15,6 +16,8 @@ from pathlib import Path
 from typing import NamedTuple, Union
 
 from PIL import Image, ImageOps
+
+from pot import config
 
 try:
     from pillow_heif import register_heif_opener
@@ -99,14 +102,38 @@ def _taken_at(image):
     return None
 
 
+def read_taken_at(source_path):
+    """Camera time of an image file, or None when it cannot be read."""
+    try:
+        with Image.open(source_path) as handle:
+            handle.load()
+            return _taken_at(handle)
+    except Exception:
+        return None
+
+
 def _save_jpeg(image, path, long_side):
     copy = image.copy()
     copy.thumbnail((long_side, long_side), Image.LANCZOS)
     copy.save(path, "JPEG", quality=90)
 
 
-def ingest_file(source_path, photos_dir, photo_id):
-    """Ingest one photo file as an upright check+overview pair; returns a Photo."""
+def _is_upright(handle):
+    """True when no EXIF rotation applies (orientation missing or 1)."""
+    try:
+        orientation = handle.getexif().get(274)
+    except Exception:
+        return True
+    return orientation in (None, 1)
+
+
+def ingest_file(source_path, photos_dir, photo_id, keep_bytes=False):
+    """Ingest one photo file as an upright check+overview pair; returns a Photo.
+
+    With keep_bytes (demo mode), an uploaded JPEG that is already check
+    size and upright is kept byte for byte, so the recorded request matches
+    exactly on replay.
+    """
     source = Path(source_path)
     if not source.is_file():
         raise ValueError(f"Photo not found: {source}")
@@ -116,17 +143,30 @@ def ingest_file(source_path, photos_dir, photo_id):
         with Image.open(source) as handle:
             handle.load()
             taken = _taken_at(handle)
-            image = ImageOps.exif_transpose(handle).convert("RGB")
+            if (
+                keep_bytes
+                and source.suffix.lower() in (".jpg", ".jpeg")
+                and max(handle.size) <= CHECK_LONG_SIDE
+                and _is_upright(handle)
+            ):
+                width, height = handle.size
+                image = None
+            else:
+                image = ImageOps.exif_transpose(handle).convert("RGB")
     except Exception as exc:
         raise ValueError(f"Cannot be read as an image ({exc}): {source.name}") from exc
-    width, height = image.size
+    if image is not None:
+        width, height = image.size
     received = datetime.now()
     photos_dir = Path(photos_dir)
     photos_dir.mkdir(parents=True, exist_ok=True)
     check_path = photos_dir / f"{photo_id}_check.jpg"
     overview_path = photos_dir / f"{photo_id}_overview.jpg"
-    image.thumbnail((CHECK_LONG_SIDE, CHECK_LONG_SIDE), Image.LANCZOS)
-    image.save(check_path, "JPEG", quality=90)
+    if image is None:
+        shutil.copyfile(source, check_path)
+    else:
+        image.thumbnail((CHECK_LONG_SIDE, CHECK_LONG_SIDE), Image.LANCZOS)
+        image.save(check_path, "JPEG", quality=90)
     with Image.open(check_path) as saved:
         saved.load()
         _save_jpeg(saved, overview_path, OVERVIEW_LONG_SIDE)
@@ -219,8 +259,8 @@ def load_photo_set(folder_or_files, run_dir):
 
 
 def new_run_dir():
-    """Create a fresh timestamped folder under data/runs/."""
-    runs = Path("data/runs")
+    """Create a fresh timestamped folder under the runs dir."""
+    runs = config.RUNS_DIR
     runs.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("run-%Y%m%d-%H%M%S")
     candidate = runs / stamp

@@ -178,3 +178,42 @@ Rules:
 
 Items:
 {item_lines}"""
+
+
+def tour_instructions(property, checklist, has_plan_image):
+    room_lines = "\n".join(_room_line(room) for room in property["rooms"])
+    item_lines = []
+    for room in property["rooms"]:
+        room_items = [item for item in checklist if item.room_id == room["id"]]
+        item_lines.append(f"{room['name']}:")
+        for item in room_items:
+            if item.key == "coverage":
+                continue
+            flag = "critical" if item.critical else "optional"
+            item_lines.append(f"  - {item.id}: {item.label} - {item.requirement} [{flag}]")
+    house_items = [item for item in checklist if item.room_id == "house"]
+    if house_items:
+        item_lines.append("Whole house:")
+        for item in house_items:
+            flag = "critical" if item.critical else "optional"
+            item_lines.append(f"  - {item.id}: {item.label} - {item.requirement} [{flag}]")
+    plan_note = (
+        "Use the attached floor plan to order the rooms into a sensible walking route. "
+        if has_plan_image
+        else ""
+    )
+    return f"""You plan a cleaner's photo tour through a vacation rental. {plan_note}Group the checklist items below into shots: one photo per shot, room by room.
+
+Rooms:
+{room_lines}
+
+Checklist:
+{chr(10).join(item_lines)}
+
+Rules:
+- Order the shots as a walking route: finish one room before starting the next, following the floor plan when one is attached.
+- Each shot names its room and the item ids one photo of that spot can show; keep each shot to one spot (for example "the open fridge", "the beds").
+- Do not list coverage items: a room counts as photographed as soon as any photo of it arrives.
+- Whole-house items belong in a suitable room's shot, not in their own shot.
+- Every critical item must appear in at least one shot.
+- instruction_es: one short Spanish sentence telling the cleaner what to photograph (it is read aloud to her); instruction_en: the English version for the host."""

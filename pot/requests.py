@@ -32,11 +32,12 @@ def requests_schema(item_ids):
     }
 
 
-def write_requests(client, property, checklist, proofs, effort=None):
+def write_requests(client, property, checklist, proofs, effort=None, item_ids=None):
     """Write requests for unproven critical items; returns (requests, notes).
 
     Requests are grouped by room in house order (whole-house items last).
-    Makes no call when everything critical is proven.
+    Makes no call when everything critical is proven. With item_ids, only
+    those items are considered (one tour photo writes only its own shot).
     """
     effort = prompts.REASONING_EFFORT if effort is None else effort
     by_id = {item.id: item for item in checklist}
@@ -45,6 +46,7 @@ def write_requests(client, property, checklist, proofs, effort=None):
         item for item in checklist
         if item.critical and proofs.get(item.id) is not None
         and proofs[item.id].status != PROVEN
+        and (item_ids is None or item.id in item_ids)
     ]
     if not wanted:
         return [], []

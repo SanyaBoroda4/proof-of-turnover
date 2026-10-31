@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from pot import prompts
-from pot.meta_client import MetaClientError
+from pot.meta_client import MetaClientError, submit_with_context
 from pot.proof import PROBLEM
 from pot.sam import detect
 
@@ -112,7 +112,8 @@ def _check_second_answer(answer, item, photo_id, notes):
     )
 
 
-def _second_look_call(client, item, photo, room_name, room_description, effort):
+def check_second_look(client, item, photo, room_name, room_description, effort):
+    """One second-look call; failures become unclear, never raise."""
     notes = []
     content = prompts.photo_parts(photo, prompts.VERIFY_PHOTO_SIZE)
     try:
@@ -131,7 +132,8 @@ def _second_look_call(client, item, photo, room_name, room_description, effort):
     return _check_second_answer(answer, item, photo.id, notes), notes
 
 
-def _sam_call(client, item_id, photo, prompt, purpose):
+def check_sam(client, item_id, photo, prompt, purpose):
+    """One SAM segmentation; failures count as not found, never raise."""
     notes = []
     try:
         output_text = client.segment_image(
@@ -191,13 +193,13 @@ def verify(client, checklist, claims, photos, rooms=None, assignments=None, effo
             continue
         room = rooms.get(item.room_id, {})
         jobs.append(
-            ("look", item.id, (_second_look_call, (client, item, photo,
+            ("look", item.id, (check_second_look, (client, item, photo,
                                                   room.get("name") or item.room_name,
                                                   room.get("description"), effort)))
         )
         if item.sam_prompt:
             jobs.append(
-                ("sam", item.id, (_sam_call, (client, item.id, photo, item.sam_prompt,
+                ("sam", item.id, (check_sam, (client, item.id, photo, item.sam_prompt,
                                               f"sam {item.id} {photo.id} ({item.sam_prompt})")))
             )
         assignment = assignments.get(claim.photo_id)
@@ -219,7 +221,7 @@ def verify(client, checklist, claims, photos, rooms=None, assignments=None, effo
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = []
         for kind, key, (func, args) in jobs:
-            futures.append((kind, key, pool.submit(func, *args)))
+            futures.append((kind, key, submit_with_context(pool, func, *args)))
         for kind, key, future in sorted(futures, key=lambda entry: (entry[0], entry[1])):
             result, job_notes = future.result()
             notes.extend(job_notes)
@@ -247,8 +249,8 @@ def segment_problem_objects(client, proofs, seconds, photos_by_id):
     notes = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = [
-            (item_id, pool.submit(
-                _sam_call, client, item_id, photo, prompt,
+            (item_id, submit_with_context(
+                pool, check_sam, client, item_id, photo, prompt,
                 f"sam problem {item_id} {photo.id} ({prompt})",
             ))
             for item_id, photo, prompt in jobs

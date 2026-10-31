@@ -281,3 +281,72 @@ def test_upload_file_returns_id(tmp_path):
                         sleep=lambda seconds: None)
     assert client.upload_file("upload frame", target) == "file-abc"
     assert fake.files.calls[0]["purpose"] == "user_data"
+
+
+def test_max_calls_limits_concurrent_live_calls(tmp_path):
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    in_flight = 0
+    peak = 0
+    lock = threading.Lock()
+    release = threading.Event()
+
+    class _Gate:
+        def create(self, **kwargs):
+            nonlocal in_flight, peak
+            with lock:
+                in_flight += 1
+                peak = max(peak, in_flight)
+            try:
+                assert release.wait(timeout=10)
+            finally:
+                with lock:
+                    in_flight -= 1
+            return _FakeResponse("ok")
+
+    fake = SimpleNamespace(responses=_Gate())
+    client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,
+                        sleep=lambda seconds: None, max_calls=2)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [
+            pool.submit(client.respond, f"call {i}",
+                        [{"type": "input_text", "text": f"hi {i}"}])
+            for i in range(4)
+        ]
+        deadline = time.monotonic() + 10
+        while True:
+            with lock:
+                if in_flight == 2:
+                    break
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        release.set()
+        assert [future.result() for future in futures] == ["ok"] * 4
+    assert peak == 2
+
+
+def test_max_calls_read_from_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("POT_MAX_CALLS", "3")
+    client = MetaClient(cache_dir=tmp_path, api_key="k",
+                        openai_client=_openai_fake([_FakeResponse("hi")]),
+                        sleep=lambda seconds: None)
+    assert client._slots._value == 3
+
+
+def test_hooks_fire_with_photo_id_from_context(tmp_path):
+    from pot.meta_client import call_context
+
+    seen = []
+    client = MetaClient(cache_dir=tmp_path, api_key="k",
+                        openai_client=_openai_fake([_FakeResponse("hi")]),
+                        sleep=lambda seconds: None)
+    client.add_hook(seen.append)
+    token = call_context.set({"run_dir": "run-x", "photo_id": "P07"})
+    try:
+        client.respond("greet", CONTENT)
+    finally:
+        call_context.reset(token)
+    assert [entry["photo_id"] for entry in seen] == ["P07"]
+    assert client.trace[-1]["photo_id"] == "P07"

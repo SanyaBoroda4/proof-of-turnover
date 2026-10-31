@@ -1,58 +1,208 @@
-"""Re-check one room with one new photo.
+"""Re-check one room with one new photo, live or from the CLI.
 
 Usage: python -m pot.recheck <run folder> <photo file> --room <room id>
 
-Adds the photo to the run, runs the first look on it for the room's
-not-yet-proven items, then second look, SAM and the proof rule for the
-new claims. Updates proof.json, evidence, requests and the verdict.
-A proven item only changes if the new photo shows it is now not done.
+Three phases so photos checked at the same time never clash:
+(a) RunState.claim_photo* numbers and saves the photo under the run lock;
+(b) run_photo_checks() runs the model calls with no lock held;
+(c) RunState.merge_result() merges under the lock, in arrival order.
+
+Tour mode checks in parallel: the first look, the second looks and the
+item SAMs all start together (the second look never sees the first
+look's answer) and each problem-object SAM starts as soon as its second
+look returns. The proof rule is unchanged. A proven item only changes
+when a newer photo shows it is now not done.
 """
 
 import argparse
-import json
 import sys
 import time
-from dataclasses import asdict
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from pathlib import Path
 
 from pot import prompts
-from pot.inspector import OtherIssue, first_look
+from pot.inspector import first_look
 from pot.matcher import Assignment
-from pot.meta_client import MetaClient, MetaClientError
-from pot.photos import ingest_file
-from pot.proof import PROBLEM, PROVEN, ProofItem, prune_other_issues, prove_all, save_evidence, verdict
-from pot.prove import load_run
+from pot.meta_client import MetaClient, MetaClientError, submit_with_context
+from pot.proof import PROBLEM, PROVEN, prove_all, verdict
 from pot.requests import write_requests
-from pot.turnover import build_proof_result, print_requests
-from pot.verifier import SamCheck, SecondLook, segment_problem_objects, verify
+from pot.runs import RunState
+from pot.turnover import print_requests
+from pot.verifier import (
+    MAX_WORKERS,
+    check_sam,
+    check_second_look,
+    segment_problem_objects,
+    verify,
+)
 
 
-def _next_photo_id(photos):
-    taken = set()
-    for photo in photos:
-        if photo.id.startswith("P") and photo.id[1:].isdigit():
-            taken.add(int(photo.id[1:]))
-    return f"P{(max(taken) + 1) if taken else 1:02d}"
+def _fresh_ids_for(claims, photo_id):
+    return [
+        item_id for item_id, claim in claims.items()
+        if claim.status in ("done", "problem") and claim.photo_id == photo_id
+    ]
 
 
-def _rebuild_saved(proof_data):
-    proofs, seconds, sams, problem_sams = {}, {}, {}, {}
-    for item_id, entry in proof_data["items"].items():
-        proofs[item_id] = ProofItem(
-            item_id=item_id, status=entry["status"],
-            reason=entry["reason"], photo_id=entry["photo_id"],
+def check_photo_sequential(client, photo, room_id, rooms, items, effort=None):
+    """First look, then verify; returns a fresh dict for merge_result."""
+    effort = prompts.RECHECK_EFFORT if effort is None else effort
+    checked = [item for item in items if item.key != "coverage"]
+    assignment = Assignment(photo.id, room_id, "high", "")
+    fresh = first_look(
+        client, [photo], {photo.id: assignment}, checked, rooms, effort=effort
+    )
+    fresh_ids = _fresh_ids_for(fresh.claims, photo.id)
+    seconds, sams, decisions = {}, {}, {}
+    notes = list(fresh.notes)
+    if fresh_ids:
+        verification = verify(
+            client, checked,
+            {item_id: fresh.claims[item_id] for item_id in fresh_ids},
+            [photo], rooms, {photo.id: assignment}, effort=effort,
         )
-        if entry.get("second_look") is not None:
-            seconds[item_id] = SecondLook(**entry["second_look"])
-        if entry.get("sam") is not None:
-            sam = entry["sam"]
-            sams[item_id] = SamCheck(item_id, entry["photo_id"], sam["prompt"],
-                                     sam["count"], sam["boxes"])
-        if entry.get("problem_sam") is not None:
-            sam = entry["problem_sam"]
-            problem_sams[item_id] = SamCheck(item_id, entry["photo_id"], sam["prompt"],
-                                             sam["count"], sam["boxes"])
-    return proofs, seconds, sams, problem_sams
+        seconds.update(verification.second_looks)
+        sams.update(verification.sams)
+        decisions.update(verification.room_decisions)
+        notes.extend(verification.notes)
+    return {
+        "claims": dict(fresh.claims),
+        "seconds": seconds,
+        "sams": sams,
+        "problem_sams": {},
+        "issues": list(fresh.other_issues),
+        "notes": notes,
+        "fresh_ids": fresh_ids,
+        "decisions": decisions,
+    }
+
+
+def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
+    """First look + second looks + item SAMs together; problem SAM chained.
+
+    Everything starts at once; each problem-object SAM starts as soon as
+    its second look returns. Same proof inputs as the sequential path.
+    """
+    effort = prompts.RECHECK_EFFORT if effort is None else effort
+    room = rooms.get(room_id, {})
+    room_name = room.get("name") or room_id
+    room_desc = room.get("description")
+    checked = [item for item in items if item.key != "coverage"]
+    assignment = Assignment(photo.id, room_id, "high", "")
+    claims, seconds, sams, problem_sams = {}, {}, {}, {}
+    issues, notes = [], []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        pending = {}
+        pending[submit_with_context(
+            pool, first_look, client, [photo], {photo.id: assignment},
+            checked, rooms, effort,
+        )] = ("first", None)
+        for item in checked:
+            name = room_name if item.room_id != "house" else item.room_name
+            desc = room_desc if item.room_id != "house" else None
+            pending[submit_with_context(
+                pool, check_second_look, client, item, photo, name, desc, effort
+            )] = ("second", item)
+            if item.sam_prompt:
+                pending[submit_with_context(
+                    pool, check_sam, client, item.id, photo, item.sam_prompt,
+                    f"sam {item.id} {photo.id} ({item.sam_prompt})",
+                )] = ("sam", item)
+        claims_known = False
+        chained = set()
+
+        def maybe_chain(item_id):
+            if item_id in chained or not claims_known:
+                return
+            claim = claims.get(item_id)
+            second = seconds.get(item_id)
+            if (
+                claim is not None and claim.status == "problem"
+                and second is not None and second.verdict == "not_done"
+                and second.problem_object
+            ):
+                chained.add(item_id)
+                pending[submit_with_context(
+                    pool, check_sam, client, item_id, photo, second.problem_object,
+                    f"sam problem {item_id} {photo.id} ({second.problem_object})",
+                )] = ("problem", item_id)
+
+        while pending:
+            done, _ = wait(set(pending), return_when=FIRST_COMPLETED)
+            for future in done:
+                kind, ref = pending.pop(future)
+                if kind == "first":
+                    result = future.result()
+                    claims.update(result.claims)
+                    issues.extend(result.other_issues)
+                    notes.extend(result.notes)
+                    claims_known = True
+                    for item_id in seconds:
+                        maybe_chain(item_id)
+                elif kind == "second":
+                    second, job_notes = future.result()
+                    seconds[ref.id] = second
+                    notes.extend(job_notes)
+                    maybe_chain(ref.id)
+                elif kind == "sam":
+                    sam, job_notes = future.result()
+                    sams[ref.id] = sam
+                    notes.extend(job_notes)
+                else:
+                    sam, job_notes = future.result()
+                    problem_sams[ref] = sam
+                    notes.extend(job_notes)
+    return {
+        "claims": claims,
+        "seconds": seconds,
+        "sams": sams,
+        "problem_sams": problem_sams,
+        "issues": issues,
+        "notes": notes,
+        "fresh_ids": _fresh_ids_for(claims, photo.id),
+        "decisions": {},
+    }
+
+
+def run_photo_checks(client, state, photo_id, items, parallel, effort=None):
+    """Phase (b): lock-free model calls for one claimed photo.
+
+    Returns the fresh dict for RunState.merge_result. The sequential path
+    segments problem objects after a preliminary prove; the parallel path
+    already chained them.
+    """
+    photo = state.photos_by_id[photo_id]
+    room_id = state.assignments[photo_id].room_id
+    if parallel:
+        return check_photo_parallel(client, photo, room_id, state.rooms, items, effort)
+    fresh = check_photo_sequential(client, photo, room_id, state.rooms, items, effort)
+    if fresh["fresh_ids"]:
+        snap = state.snapshot()
+        acc_claims = dict(snap["claims"])
+        acc_seconds = dict(snap["seconds"])
+        acc_sams = dict(snap["sams"])
+        for item_id in fresh["fresh_ids"]:
+            acc_claims[item_id] = fresh["claims"][item_id]
+            if item_id in fresh["seconds"]:
+                acc_seconds[item_id] = fresh["seconds"][item_id]
+            if item_id in fresh["sams"]:
+                acc_sams[item_id] = fresh["sams"][item_id]
+        prelim = prove_all(
+            state.checklist, acc_claims, acc_seconds, acc_sams,
+            snap["assignments"], snap["coverage"],
+            [photo.id for photo in state.photos], snap["decisions"], state.rooms,
+        )
+        candidates = {
+            item_id: prelim[item_id] for item_id in fresh["fresh_ids"]
+            if prelim[item_id].status == PROBLEM
+        }
+        if candidates:
+            found, problem_notes = segment_problem_objects(
+                client, candidates, acc_seconds, {photo.id: photo}
+            )
+            fresh["problem_sams"].update(found)
+            fresh["notes"].extend(problem_notes)
+    return fresh
 
 
 def recheck_photo(client, run_dir, photo_file, room_id, effort=None):
@@ -66,120 +216,27 @@ def recheck_photo(client, run_dir, photo_file, room_id, effort=None):
         raise ValueError(f"No first_look.json in {run_dir}")
     if not proof_path.is_file():
         raise ValueError(f"No proof.json in {run_dir}; run the full turnover first")
-    outcome = load_run(run_dir)
-    property = outcome["property"]
-    rooms = {room["id"]: room for room in property["rooms"]}
-    if room_id not in rooms:
-        raise ValueError(f"Unknown room '{room_id}' for property '{property['id']}'")
-    checklist = outcome["checklist"]
-    photos = outcome["photos"]
-    match = outcome["match"]
-    look = outcome["look"]
-
-    new_id = _next_photo_id(photos)
-    photo = ingest_file(photo_file, run_dir / "photos", new_id)
-    photos.append(photo)
-    match.assignments[new_id] = Assignment(new_id, room_id, "high", "")
-    match.coverage[room_id] = "covered"
-
-    proof_data = json.loads(proof_path.read_text(encoding="utf-8"))
-    old_proofs, seconds, sams, problem_sams = _rebuild_saved(proof_data)
+    state = RunState.load(run_dir)
+    if room_id not in state.rooms:
+        raise ValueError(
+            f"Unknown room '{room_id}' for property '{state.property['id']}'"
+        )
+    photo, _seq = state.claim_photo_for_room(photo_file, room_id)
     subset = [
-        item for item in checklist
+        item for item in state.checklist
         if item.room_id == room_id and item.key != "coverage"
-        and old_proofs.get(item.id, ProofItem(item.id, "needs proof", "", "")).status != PROVEN
+        and state.proofs[item.id].status != PROVEN
     ]
-    new_issues = []
-    fresh_ids = set()
-    recheck_notes = [f"Re-check {new_id} ({photo.original_name}) added for {room_id}"]
-    if subset:
-        fresh = first_look(client, [photo], {new_id: match.assignments[new_id]},
-                           subset, rooms, effort=effort)
-        recheck_notes.extend(fresh.notes)
-        new_issues.extend(fresh.other_issues)
-        for item_id, claim in fresh.claims.items():
-            if claim.status in ("done", "problem"):
-                look.claims[item_id] = claim
-                fresh_ids.add(item_id)
-    if fresh_ids:
-        verification = verify(
-            client, checklist,
-            {item_id: look.claims[item_id] for item_id in fresh_ids},
-            [photo], rooms, match.assignments, effort=effort,
-        )
-        recheck_notes.extend(verification.notes)
-        seconds.update(verification.second_looks)
-        sams.update(verification.sams)
-    else:
-        verification = None
-
-    fresh_proofs = prove_all(
-        checklist, look.claims, seconds, sams, match.assignments,
-        match.coverage, [photo.id for photo in photos], {}, rooms,
+    fresh = run_photo_checks(client, state, photo.id, subset, parallel=False, effort=effort)
+    merged = state.merge_result(photo.id, fresh)
+    requests, request_notes = write_requests(
+        client, state.property, state.checklist, state.proofs, effort=effort
     )
-    proofs = {}
-    for item in checklist:
-        old = old_proofs[item.id]
-        new = fresh_proofs[item.id]
-        if item.id in fresh_ids and (old.status != PROVEN or new.status == PROBLEM):
-            proofs[item.id] = new
-        else:
-            proofs[item.id] = old
-    photos_by_id = {photo.id: photo for photo in photos}
-    need_problem_sam = {}
-    for item_id, proof in proofs.items():
-        if proof.status != PROBLEM:
-            continue
-        old_sam = problem_sams.get(item_id)
-        if old_sam is not None and old_proofs[item_id].photo_id == proof.photo_id:
-            continue
-        need_problem_sam[item_id] = proof
-    if need_problem_sam:
-        found, problem_notes = segment_problem_objects(
-            client, need_problem_sam, seconds, photos_by_id
-        )
-        recheck_notes.extend(problem_notes)
-        problem_sams.update(found)
-    problem_sams = {item_id: problem_sams[item_id] for item_id in problem_sams
-                    if proofs[item_id].status == PROBLEM}
-    old_issues = proof_data.get("other_issues", [])
-    merged_issues = [OtherIssue(**issue) for issue in old_issues] + new_issues
-    pruned = prune_other_issues(merged_issues, proofs, look.claims)
-    host_verdict = verdict(checklist, proofs)
-    requests, request_notes = write_requests(client, property, checklist, proofs, effort=effort)
-    recheck_notes.extend(request_notes)
-    (run_dir / "requests.json").write_text(
-        json.dumps({"requests": requests, "notes": request_notes}, indent=2), encoding="utf-8"
-    )
-    result = build_proof_result(
-        checklist, photos, proofs, look.claims, seconds, sams, problem_sams,
-        host_verdict, pruned, proof_data.get("notes", []) + recheck_notes,
-    )
-    proof_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    save_evidence(
-        run_dir, proofs, {item.id: item for item in checklist},
-        photos_by_id, sams, problem_sams,
-    )
-    first_data = json.loads(first_path.read_text(encoding="utf-8"))
-    first_data["photos"].append({
-        "id": new_id, "file": photo.original_name, "room_id": room_id,
-        "confidence": "high", "seen": "",
-    })
-    first_data["coverage"][room_id] = "covered"
-    for item_id in fresh_ids:
-        first_data["claims"][item_id] = asdict(look.claims[item_id])
-    first_data.setdefault("other_issues", []).extend(asdict(i) for i in new_issues)
-    first_data.setdefault("notes", []).extend(recheck_notes)
-    first_path.write_text(json.dumps(first_data, indent=2), encoding="utf-8")
-
-    changes = {
-        item.id: (old_proofs[item.id].status, proofs[item.id].status)
-        for item in checklist
-        if old_proofs[item.id].status != proofs[item.id].status
-    }
+    state.store_requests(requests, request_notes)
+    host_verdict = verdict(state.checklist, state.proofs)
     return {
-        "photo_id": new_id,
-        "changes": changes,
+        "photo_id": photo.id,
+        "changes": merged["changes"],
         "verdict": host_verdict,
         "requests": requests,
         "elapsed_seconds": time.monotonic() - started,
@@ -202,7 +259,7 @@ def main(argv):
         for item_id, (old, new) in summary["changes"].items():
             print(f"{item_id}: {old} -> {new}")
     else:
-        print("No changes.")
+        print(f"No changes.")
     print("READY" if summary["verdict"].ready else "NOT READY")
     print_requests(summary["requests"])
     print(f"Re-check took {summary['elapsed_seconds']:.1f} s")

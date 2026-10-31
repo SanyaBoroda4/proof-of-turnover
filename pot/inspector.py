@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from pot import prompts
-from pot.meta_client import MetaClientError
+from pot.meta_client import MetaClientError, submit_with_context
 from pot.photos import normalize_photo_id
 
 ROOM_MAX_IMAGES = 40
@@ -292,11 +292,14 @@ def first_look(client, photos, assignments, checklist, rooms=None, effort=None):
         for task in tasks:
             room_id = task[0]
             if room_id == "house":
-                future = pool.submit(_house_calls, client, house_items, list(photos), effort)
+                future = submit_with_context(
+                    pool, _house_calls, client, house_items, list(photos), effort
+                )
             else:
                 _, name, description, items, mine, others = task
-                future = pool.submit(
-                    _room_call, client, room_id, name, description, items, mine, others, effort
+                future = submit_with_context(
+                    pool, _room_call, client, room_id, name, description,
+                    items, mine, others, effort,
                 )
             futures[room_id] = future
         kept_unknown_issue = {}

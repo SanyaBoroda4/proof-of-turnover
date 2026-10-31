@@ -42,6 +42,23 @@ def test_requests_grouped_by_room_in_house_order():
     assert notes == []
 
 
+def test_item_ids_subset_writes_only_those():
+    prop = tiny_property()
+    checklist = build_checklist(prop)
+    proofs = _proofs({
+        "bed.beds_made": NEEDS_PROOF,
+        "bed.floor_clear": NEEDS_PROOF,
+        "bath.towels": NEEDS_PROOF,
+    })
+    client = FakeSpark()
+    requests, notes = write_requests(
+        client, prop, checklist, proofs, item_ids={"bed.beds_made"}
+    )
+    assert [r["item_id"] for r in requests] == ["bed.beds_made"]
+    assert notes == []
+    assert len(client.calls) == 1
+
+
 def test_no_call_when_everything_proven():
     prop = tiny_property()
     checklist = build_checklist(prop)

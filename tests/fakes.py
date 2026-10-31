@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from pot.meta_client import call_context
 from pot.photos import Photo
 
 
@@ -120,6 +121,10 @@ def _request_everything(call):
     }
 
 
+def _empty_tour(call):
+    return {"shots": []}
+
+
 SAM_FIXTURE = (
     Path(__file__).with_name("fixtures") / "sam_three_squares.txt"
 ).read_text(encoding="utf-8")
@@ -129,7 +134,7 @@ class FakeSpark:
     """Duck-typed stand-in for MetaClient.respond()/segment_image()."""
 
     def __init__(self, matcher=None, inspector=None, verifier=None, sam=None,
-                 decider=None, requester=None):
+                 decider=None, requester=None, tour=None):
         self.calls = []
         self.sam_calls = []
         self._matcher = matcher or _unknown_everything
@@ -138,7 +143,28 @@ class FakeSpark:
         self._sam = sam if sam is not None else (lambda call: SAM_FIXTURE)
         self._decider = decider or _decide_first
         self._requester = requester or _request_everything
+        self._tour = tour or _empty_tour
         self.trace = []
+        self._hooks = []
+
+    def add_hook(self, func):
+        """Mirror MetaClient.add_hook for the per-run call log."""
+        self._hooks.append(func)
+
+    def _fire(self, purpose, model):
+        context = call_context.get() or {}
+        entry = {
+            "purpose": purpose,
+            "model": model,
+            "seconds": 0.0,
+            "attempts": 1,
+            "cache": "miss",
+            "ok": True,
+            "usage": None,
+            "photo_id": context.get("photo_id"),
+        }
+        for func in self._hooks:
+            func(dict(entry))
 
     def respond(
         self, purpose, content, instructions=None, schema=None,
@@ -152,6 +178,7 @@ class FakeSpark:
             "effort": effort,
         }
         self.calls.append(call)
+        self._fire(purpose, "test-spark")
         props = (schema or {}).get("properties", {})
         if "matches" in props:
             return self._matcher(call)
@@ -161,11 +188,14 @@ class FakeSpark:
             return self._decider(call)
         if "requests" in props:
             return self._requester(call)
+        if "shots" in props:
+            return self._tour(call)
         return self._inspector(call)
 
     def segment_image(self, purpose, jpeg_bytes, prompt):
         call = {"purpose": purpose, "jpeg_bytes": jpeg_bytes, "prompt": prompt}
         self.sam_calls.append(call)
+        self._fire(purpose, "test-sam")
         outcome = self._sam(call)
         if isinstance(outcome, Exception):
             raise outcome

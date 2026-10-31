@@ -6,6 +6,8 @@ those into the host's ready / not-ready answer. save_evidence() draws
 one annotated photo per proven/problem item.
 """
 
+import os
+import tempfile
 from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw, ImageFont
@@ -38,9 +40,20 @@ class Verdict:
     worth_a_look: list = field(default_factory=list)  # non-critical, not proven
 
 
+def _join_names(names):
+    if len(names) < 2:
+        return names[0] if names else "?"
+    return ", ".join(names[:-1]) + " or " + names[-1]
+
+
 def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_photo,
-               decision="none", rooms=None):
-    """Apply the proof rule to one item; returns a ProofItem."""
+               decision="none", rooms=None, candidate_ids=()):
+    """Apply the proof rule to one item; returns a ProofItem.
+
+    candidate_ids are the rooms (sorted) whose claims cite this photo; a
+    problem the second look confirms on a room-undecided photo is still
+    reported once, under the first candidate room.
+    """
     rooms = rooms or {}
     if item.key == "coverage":
         if coverage == "covered" and first_room_photo:
@@ -52,13 +65,36 @@ def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_pho
         return ProofItem(item.id, NEEDS_PROOF, "Verification did not run", claim.photo_id)
     if photo_unknown and decision != item.room_id:
         if decision == "none":
+            if (
+                claim.status == "problem"
+                and second.verdict == "not_done"
+                and second.this_room != "no"
+            ):
+                first = candidate_ids[0] if candidate_ids else item.room_id
+                if item.room_id == first:
+                    names = _join_names(
+                        [rooms.get(room_id, {}).get("name", room_id) for room_id in candidate_ids]
+                        or [rooms.get(item.room_id, {}).get("name", item.room_id)]
+                    )
+                    return ProofItem(
+                        item.id, PROBLEM, f"room not confirmed: {names}", claim.photo_id
+                    )
+                first_name = rooms.get(first, {}).get("name", first)
+                return ProofItem(
+                    item.id, NEEDS_PROOF,
+                    f"Same problem reported for the {first_name}", claim.photo_id,
+                )
+            if claim.status == "done":
+                return ProofItem(
+                    item.id, NEEDS_PROOF, "Can't tell which room this photo shows", claim.photo_id
+                )
+            # A problem claim the second look did not confirm: fall through
+            # to the normal disagreement reasons below.
+        else:
+            name = rooms.get(decision, {}).get("name", decision)
             return ProofItem(
-                item.id, NEEDS_PROOF, "Can't tell which room this photo shows", claim.photo_id
+                item.id, NEEDS_PROOF, f"This photo looks like the {name}", claim.photo_id
             )
-        name = rooms.get(decision, {}).get("name", decision)
-        return ProofItem(
-            item.id, NEEDS_PROOF, f"This photo looks like the {name}", claim.photo_id
-        )
     if claim.status == "done":
         if second.this_room == "no":
             return ProofItem(item.id, NEEDS_PROOF, "Second look: photo shows another room", claim.photo_id)
@@ -109,6 +145,11 @@ def prove_all(checklist, claims, seconds, sams, assignments, coverage, photo_ord
         if assignment is None or assignment.confidence not in COVERED_CONFIDENCES:
             continue
         first_photo.setdefault(assignment.room_id, photo_id)
+    citing = {}
+    for item in checklist:
+        claim = claims.get(item.id)
+        if claim is not None and claim.status in ("done", "problem") and claim.photo_id:
+            citing.setdefault(claim.photo_id, set()).add(item.room_id)
     proofs = {}
     for item in checklist:
         claim = claims.get(item.id)
@@ -125,6 +166,7 @@ def prove_all(checklist, claims, seconds, sams, assignments, coverage, photo_ord
             first_photo.get(item.room_id),
             decisions.get(photo_id, "none"),
             rooms,
+            sorted(citing.get(photo_id, ())),
         )
     return proofs
 
@@ -176,18 +218,21 @@ def _fit_text(draw, text, font, max_width):
     return text + "..." if text else ""
 
 
-def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams=None):
+def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams=None,
+                  item_ids=None):
     """Save one annotated photo per proven/problem item under evidence/.
 
     Proven items get their green SAM boxes; problem items get the red
     problem-object boxes instead. The caption shows label + status on
-    line 1 and the reason on line 2.
+    line 1 and the reason on line 2. With item_ids, only those are saved.
     """
     problem_sams = problem_sams or {}
     evidence_dir = run_dir / "evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     paths = {}
     for item_id in sorted(proofs):
+        if item_ids is not None and item_id not in item_ids:
+            continue
         proof = proofs[item_id]
         if proof.status not in (PROVEN, PROBLEM):
             continue
@@ -234,6 +279,18 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
                 width=BOX_WIDTH,
             )
         path = evidence_dir / f"{item_id}.jpg"
-        canvas.save(path, "JPEG", quality=90)
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(evidence_dir), prefix=path.name + ".", suffix=".tmp"
+        )
+        try:
+            os.close(fd)
+            canvas.save(tmp_name, "JPEG", quality=90)
+            os.replace(tmp_name, path)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
         paths[item_id] = path
     return paths

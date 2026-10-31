@@ -21,8 +21,25 @@ ASR_MODEL = os.environ.get("ASR_MODEL", "muse-voice-transcribe-1.0")
 
 REPLAY = os.environ.get("POT_REPLAY") == "1"
 
-RUNS_DIR = Path("data/runs")
-MODEL_CACHE_DIR = Path("data/model_cache")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _project_dir(env_name, default):
+    """A data dir anchored at the project folder, with an env override.
+
+    All paths stay relative to the project folder no matter which folder
+    the server starts in; the env var may point anywhere (used by the
+    judge replay bundle).
+    """
+    value = os.environ.get(env_name)
+    path = Path(value) if value else PROJECT_ROOT / default
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return path
+
+
+RUNS_DIR = _project_dir("POT_RUNS_DIR", "data/runs")
+MODEL_CACHE_DIR = _project_dir("POT_MODEL_CACHE_DIR", "data/model_cache")
 
 
 def ensure_dirs():

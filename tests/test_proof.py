@@ -54,12 +54,14 @@ _DEFAULT = object()
 
 
 def _prove(item=_DEFAULT, claim=_DEFAULT, second=_DEFAULT, sam=_DEFAULT, unknown=False,
-           coverage="covered", first_photo="P01", decision="none", rooms=None):
+           coverage="covered", first_photo="P01", decision="none", rooms=None,
+           candidates=()):
     item = _item() if item is _DEFAULT else item
     claim = _claim() if claim is _DEFAULT else claim
     second = _second() if second is _DEFAULT else second
     sam = _sam() if sam is _DEFAULT else sam
-    return prove_item(item, claim, second, sam, unknown, coverage, first_photo, decision, rooms)
+    return prove_item(item, claim, second, sam, unknown, coverage, first_photo,
+                      decision, rooms, candidates)
 
 
 def test_not_shown_needs_proof():
@@ -174,6 +176,71 @@ def test_problem_second_done_or_unclear_disagrees():
 def test_problem_wrong_room_disagrees():
     proof = _prove(claim=_claim(status="problem"), second=_second(verdict="not_done", this_room="no"))
     assert proof.status == NEEDS_PROOF
+
+
+def test_problem_undecided_room_reported_once_with_candidates():
+    second = _second(verdict="not_done", this_room="unclear")
+    bath_item = _item(id="bath.no_guest_items", room_id="bath", room_name="Bath",
+                      key="no_guest_items")
+    first = _prove(item=bath_item, claim=_claim(status="problem"), second=second,
+                   unknown=True, decision="none", rooms=_rooms(),
+                   candidates=("bath", "bed"))
+    assert first.status == PROBLEM
+    assert first.reason == "room not confirmed: Bath or Bed"
+    other = _prove(claim=_claim(status="problem"), second=second, unknown=True,
+                   decision="none", rooms=_rooms(), candidates=("bath", "bed"))
+    assert other.status == NEEDS_PROOF
+    assert other.reason == "Same problem reported for the Bath"
+
+
+def test_problem_undecided_room_single_candidate():
+    second = _second(verdict="not_done", this_room="unclear")
+    proof = _prove(claim=_claim(status="problem"), second=second, unknown=True,
+                   decision="none", rooms=_rooms(), candidates=("bed",))
+    assert proof.status == PROBLEM
+    assert proof.reason == "room not confirmed: Bed"
+
+
+def test_problem_undecided_room_unconfirmed_stays_needs_proof():
+    proof = _prove(claim=_claim(status="problem"), second=_second(verdict="unclear"),
+                   unknown=True, decision="none", rooms=_rooms(), candidates=("bed",))
+    assert proof.status == NEEDS_PROOF
+    assert "disagree" in proof.reason
+    proof = _prove(claim=_claim(status="problem"),
+                   second=_second(verdict="not_done", this_room="no"),
+                   unknown=True, decision="none", rooms=_rooms(), candidates=("bed",))
+    assert proof.status == NEEDS_PROOF
+    assert "not sure this photo is the Bed" in proof.reason
+
+
+def test_done_undecided_room_still_needs_proof():
+    proof = _prove(unknown=True, decision="none", rooms=_rooms(), candidates=("bed",))
+    assert proof.status == NEEDS_PROOF
+    assert proof.reason == "Can't tell which room this photo shows"
+
+
+def test_prove_all_computes_candidates_from_claims():
+    items = [
+        _item(),
+        _item(id="bath.no_guest_items", room_id="bath", room_name="Bath",
+              key="no_guest_items", sam_prompt=None, min_count=None),
+    ]
+    claims = {
+        "bed.beds_made": _claim(status="problem"),
+        "bath.no_guest_items": Claim(item_id="bath.no_guest_items", status="problem",
+                                     photo_id="P01", seen="mess", count_seen=None),
+    }
+    seconds = {
+        "bed.beds_made": _second(verdict="not_done", this_room="unclear"),
+        "bath.no_guest_items": SecondLook(item_id="bath.no_guest_items", photo_id="P01",
+                                          this_room="unclear", verdict="not_done",
+                                          count_seen=None, reason="mess"),
+    }
+    proofs = prove_all(items, claims, seconds, {"bed.beds_made": _sam()}, {},
+                       {}, ["P01"], {}, _rooms())
+    assert proofs["bath.no_guest_items"].status == PROBLEM
+    assert proofs["bath.no_guest_items"].reason == "room not confirmed: Bath or Bed"
+    assert proofs["bed.beds_made"].status == NEEDS_PROOF
 
 
 def test_problem_unknown_photo_uses_room_decision():

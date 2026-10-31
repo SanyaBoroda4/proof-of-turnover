@@ -17,9 +17,11 @@ import hashlib
 import json
 import os
 import re
+import sys
 import tempfile
 import threading
 import time
+from contextvars import ContextVar, copy_context
 from pathlib import Path
 
 import httpx
@@ -31,6 +33,29 @@ MAX_RETRIES = 6
 BACKOFF_BASE_SECONDS = 1.0
 BACKOFF_MAX_SECONDS = 20.0
 DEFAULT_TIMEOUT = 300.0
+DEFAULT_MAX_CALLS = 6
+
+#: Where the current call belongs: {"run_dir": str, "photo_id": str|None}.
+#: Workers set this so the per-run call log can route each Meta call.
+call_context = ContextVar("pot_call_context", default=None)
+
+
+def submit_with_context(pool, func, *args, **kwargs):
+    """pool.submit that carries the caller's contextvars into the worker.
+
+    Thread pools start workers with a blank context; without this the
+    per-run call log cannot route calls made in nested pools.
+    """
+    context = copy_context()
+    return pool.submit(lambda: context.run(func, *args, **kwargs))
+
+
+def max_calls_limit():
+    """How many Meta calls may be in flight at once (POT_MAX_CALLS)."""
+    try:
+        return max(1, int(os.environ.get("POT_MAX_CALLS", str(DEFAULT_MAX_CALLS))))
+    except ValueError:
+        return DEFAULT_MAX_CALLS
 
 
 class MetaClientError(Exception):
@@ -148,6 +173,7 @@ class MetaClient:
         http_client=None,
         sleep=None,
         timeout=DEFAULT_TIMEOUT,
+        max_calls=None,
     ):
         self._api_key = api_key if api_key is not None else os.environ.get("MODEL_API_KEY", "")
         self.base_url = base_url or config.BASE_URL
@@ -166,6 +192,15 @@ class MetaClient:
         self._timeout = timeout
         self.trace = []
         self._lock = threading.Lock()
+        self._slots = threading.BoundedSemaphore(
+            max(1, max_calls if max_calls is not None else max_calls_limit())
+        )
+        self._hooks = []
+
+    def add_hook(self, func):
+        """Call func(entry) after every traced call (per-run logs)."""
+        with self._lock:
+            self._hooks.append(func)
 
     def _wait(self, seconds):
         if self._sleep is not None:
@@ -204,6 +239,7 @@ class MetaClient:
         return self._http_client
 
     def _append_trace(self, purpose, model, started, attempts, cache, ok, usage, error=None):
+        context = call_context.get() or {}
         entry = {
             "purpose": purpose,
             "model": model,
@@ -212,11 +248,18 @@ class MetaClient:
             "cache": cache,
             "ok": ok,
             "usage": usage,
+            "photo_id": context.get("photo_id"),
         }
         if error is not None:
             entry["error"] = error
         with self._lock:
             self.trace.append(entry)
+            hooks = list(self._hooks)
+        for func in hooks:
+            try:
+                func(dict(entry))
+            except Exception as exc:  # noqa: BLE001 - logging never breaks the call
+                print(f"MetaClient hook failed: {exc}", file=sys.stderr)
 
     def _write_cache_atomically(self, path, record):
         """Write a cache file via temp file + os.replace, never partial.
@@ -270,6 +313,13 @@ class MetaClient:
             )
             self._append_trace(purpose, model, started, 0, "miss", False, None, error)
             raise ReplayCacheMissError(error)
+        # One overall limit on live calls: cache hits and replay misses
+        # above never wait, but the network section holds a slot, so three
+        # photos in flight still send at most POT_MAX_CALLS at once.
+        with self._slots:
+            return self._execute_live(purpose, model, redacted, path, call, started)
+
+    def _execute_live(self, purpose, model, redacted, path, call, started):
         attempts = 0
         last_error = None
         for attempt in range(1 + MAX_RETRIES):
