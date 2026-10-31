@@ -233,6 +233,7 @@ def recheck_photo(client, run_dir, photo_file, room_id, effort=None):
         client, state.property, state.checklist, state.proofs, effort=effort
     )
     state.store_requests(requests, request_notes)
+    state.finish_photo(photo.id)
     host_verdict = verdict(state.checklist, state.proofs)
     return {
         "photo_id": photo.id,

@@ -159,6 +159,7 @@ def _check_worker(server, state, photo_id):
                 effort=prompts.RECHECK_EFFORT, item_ids=set(merged["failed"]),
             )
             state.store_requests(requests, notes)
+        state.finish_photo(photo_id)
     except Exception as exc:  # noqa: BLE001 - a photo check never kills the server
         state.mark_failed(photo_id, f"Photo {photo_id}: check failed: {exc}")
     finally:

@@ -181,8 +181,20 @@ def test_status_marks_untaken_shots_not_yet(tmp_path):
     assert all(i["status"] == NOT_YET for i in bath["items"] if i["id"] != "bath.coverage")
     bed = next(r for r in status["rooms"] if r["id"] == "bed")
     assert bed["items"][1]["status"] == PROVEN
+    rest = [i for i in bed["items"][2:] if i["status"] == "needs photo"]
+    assert rest and all(i["reason"] == "No photo shows it" for i in rest)
     assert status["progress"]["shots_taken"] == 1
     assert status["current_shot"]["shot_id"] == "bath-1"
+
+
+def test_photo_stays_checking_until_finished(tmp_path):
+    state = _state(tmp_path)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u", "a.jpg")), "bed-1")
+    assert photo.id in state.status()["checking"]
+    state.merge_result(photo.id, _fresh_done(photo.id, [_bed_item(state)]))
+    assert photo.id in state.status()["checking"]
+    state.finish_photo(photo.id)
+    assert photo.id not in state.status()["checking"]
 
 
 def test_coverage_proven_at_claim_before_merge(tmp_path):

@@ -329,6 +329,22 @@ class RunState:
                     self.decided_seq[item_id] = seq
                     if new.status != current.status:
                         changes[item_id] = (current.status, new.status)
+            shot_id = self.photo_shot.get(photo_id, "")
+            if shot_id:
+                try:
+                    wanted = set(self._shot(shot_id).get("item_ids", []))
+                except ValueError:
+                    wanted = set()
+                for item_id in wanted:
+                    proof = self.proofs.get(item_id)
+                    if (
+                        proof is not None and proof.status == NEEDS_PROOF
+                        and proof.reason == "No photo yet"
+                        and item_id not in self.decided_seq
+                    ):
+                        self.proofs[item_id] = ProofItem(
+                            item_id, NEEDS_PROOF, "No photo shows it", photo_id
+                        )
             for item_id, sam in fresh.get("problem_sams", {}).items():
                 if self.proofs.get(item_id) is not None and self.proofs[item_id].status == PROBLEM:
                     self.problem_sams[item_id] = sam
@@ -340,7 +356,6 @@ class RunState:
                 self.other_issues + fresh.get("issues", []), self.proofs, self.claims
             )
             self.notes.extend(fresh.get("notes", []))
-            self.checking.discard(photo_id)
             elapsed = fresh.get("elapsed_seconds")
             if elapsed is not None:
                 self.photo_seconds[photo_id] = elapsed
@@ -366,6 +381,12 @@ class RunState:
             and self.items_by_id[item_id].critical
             and self.proofs[item_id].status != PROVEN
         ]
+
+    def finish_photo(self, photo_id):
+        """The photo's check, including its requests, is fully stored."""
+        with self.lock:
+            self.checking.discard(photo_id)
+            self._save_locked()
 
     def mark_failed(self, photo_id, note):
         """Drop a photo from checking after a worker error."""
