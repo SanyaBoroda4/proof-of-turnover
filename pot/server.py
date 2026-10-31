@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from pot import config, prompts
 from pot.checklist import PropertyError, build_checklist, load_property
 from pot.meta_client import MetaClient, MetaClientError, call_context
+from pot import setup as setup_mod
 from pot.notes import MAX_NOTE_BYTES, NotesError, add_voice_note
 from pot.photos import new_run_dir
 from pot.recheck import run_photo_checks
@@ -110,6 +111,37 @@ class SignoffBody(BaseModel):
     decision: str
     notes: str = ""
     item_ids: list = []
+
+
+class SetupCreate(BaseModel):
+    name: str
+    floors: int = 1
+    bedrooms: int = 0
+    full_baths: int = 0
+    half_baths: int = 0
+    kitchen: bool = False
+    living_room: bool = False
+    dining_room: bool = False
+    laundry: bool = False
+    back_porch: bool = False
+    front_porch: bool = False
+    language: str = "es"
+
+
+class RoomUpdate(BaseModel):
+    name: str | None = None
+    floor: int | None = None
+    rules: str | None = None
+    beds: list | None = None
+    towels: int | None = None
+    items: list | None = None
+    skipped: bool | None = None
+
+
+class RoomAdd(BaseModel):
+    type: str
+    name: str
+    floor: int = 1
 
 
 class ServerState:
@@ -413,7 +445,7 @@ def create_app(client=None):
     @app.get("/api/properties")
     def _properties():
         found = []
-        base = config.PROJECT_ROOT / "properties"
+        base = config.PROPERTIES_DIR
         if base.is_dir():
             for path in sorted(base.iterdir()):
                 definition = path / "property.json"
@@ -469,6 +501,160 @@ def create_app(client=None):
             raise HTTPException(404, "No such demo photo")
         return FileResponse(path, media_type="image/jpeg")
 
+    def need_setup(setup_id):
+        if not setup_mod.SETUP_ID_PATTERN.match(setup_id or ""):
+            raise HTTPException(400, f"Bad setup id {setup_id!r}")
+        try:
+            return setup_mod.load_setup(setup_id)
+        except setup_mod.SetupNotFound as exc:
+            raise HTTPException(404, str(exc))
+
+    def _setup_room(setup_id, room_id):
+        need_setup(setup_id)
+        _checked_id(room_id, "room")
+
+    @app.post("/api/setups")
+    def _create_setup(body: SetupCreate):
+        try:
+            created = setup_mod.create_setup(
+                body.name, body.floors, body.bedrooms, body.full_baths,
+                body.half_baths, body.kitchen, body.living_room,
+                body.dining_room, body.laundry, body.back_porch,
+                body.front_porch, body.language,
+            )
+        except setup_mod.SetupError as exc:
+            raise HTTPException(400, str(exc))
+        return {"setup_id": created["id"], "rooms": created["rooms"]}
+
+    @app.get("/api/setups/{setup_id}")
+    def _get_setup(setup_id: str):
+        return need_setup(setup_id)
+
+    @app.put("/api/setups/{setup_id}/rooms/{room_id}")
+    def _update_setup_room(setup_id: str, room_id: str, body: RoomUpdate):
+        _setup_room(setup_id, room_id)
+        edits = {
+            key: value for key, value in {
+                "name": body.name, "floor": body.floor, "rules": body.rules,
+                "beds": body.beds, "towels": body.towels, "items": body.items,
+                "skipped": body.skipped,
+            }.items() if value is not None
+        }
+        try:
+            return setup_mod.update_room(setup_id, room_id, edits)
+        except setup_mod.SetupNotFound as exc:
+            raise HTTPException(404, str(exc))
+        except setup_mod.SetupError as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.post("/api/setups/{setup_id}/rooms")
+    def _add_setup_room(setup_id: str, body: RoomAdd):
+        need_setup(setup_id)
+        try:
+            return setup_mod.add_room(setup_id, body.type, body.name, body.floor)
+        except setup_mod.SetupError as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.post("/api/setups/{setup_id}/rooms/{room_id}/photos")
+    def _setup_photo(setup_id: str, room_id: str, image: UploadFile = File(...)):
+        _setup_room(setup_id, room_id)
+        try:
+            return setup_mod.add_room_photo(
+                setup_id, room_id, image.filename or "photo.jpg", image.file.read()
+            )
+        except setup_mod.SetupNotFound as exc:
+            raise HTTPException(404, str(exc))
+        except setup_mod.SetupError as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.delete("/api/setups/{setup_id}/rooms/{room_id}/photos/{n}")
+    def _delete_setup_photo(setup_id: str, room_id: str, n: int):
+        _setup_room(setup_id, room_id)
+        try:
+            return setup_mod.delete_room_photo(setup_id, room_id, n)
+        except setup_mod.SetupNotFound as exc:
+            raise HTTPException(404, str(exc))
+        except setup_mod.SetupError as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.get("/api/setups/{setup_id}/rooms/{room_id}/photos/{n}")
+    def _setup_photo_file(setup_id: str, room_id: str, n: int):
+        _setup_room(setup_id, room_id)
+        try:
+            blob = setup_mod.read_room_photo(setup_id, room_id, n)
+        except setup_mod.SetupNotFound as exc:
+            raise HTTPException(404, str(exc))
+        if blob is None:
+            raise HTTPException(404, f"No photo {n} in room '{room_id}'")
+        return Response(blob, media_type="image/jpeg", headers=dict(LONG_CACHE))
+
+    @app.post("/api/setups/{setup_id}/rooms/{room_id}/voice")
+    def _setup_voice(setup_id: str, room_id: str, audio: UploadFile = File(...)):
+        _setup_room(setup_id, room_id)
+        blob = audio.file.read(MAX_NOTE_BYTES + 1)
+        token = call_context.set(
+            {"run_dir": str(config.SETUPS_DIR / setup_id), "photo_id": None})
+        try:
+            try:
+                return setup_mod.room_voice_note(
+                    server.client, setup_id, room_id, blob, audio.filename or "rule",
+                )
+            except setup_mod.SetupNotFound as exc:
+                raise HTTPException(404, str(exc))
+            except setup_mod.SetupError as exc:
+                raise HTTPException(400, str(exc))
+            except MetaClientError as exc:
+                raise HTTPException(502, str(exc))
+        finally:
+            call_context.reset(token)
+
+    @app.post("/api/setups/{setup_id}/rooms/{room_id}/draft")
+    def _setup_draft(setup_id: str, room_id: str):
+        _setup_room(setup_id, room_id)
+        token = call_context.set(
+            {"run_dir": str(config.SETUPS_DIR / setup_id), "photo_id": None})
+        try:
+            try:
+                return setup_mod.draft_room(server.client, setup_id, room_id)
+            except setup_mod.SetupNotFound as exc:
+                raise HTTPException(404, str(exc))
+            except setup_mod.SetupError as exc:
+                raise HTTPException(400, str(exc))
+            except MetaClientError as exc:
+                raise HTTPException(502, str(exc))
+        finally:
+            call_context.reset(token)
+
+    @app.post("/api/setups/{setup_id}/save")
+    def _save_setup(setup_id: str):
+        need_setup(setup_id)
+        token = call_context.set(
+            {"run_dir": str(config.SETUPS_DIR / setup_id), "photo_id": None})
+        try:
+            try:
+                return setup_mod.save_setup(server.client, setup_id)
+            except setup_mod.SetupError as exc:
+                raise HTTPException(400, str(exc))
+            except PropertyError as exc:
+                raise HTTPException(500, str(exc))
+        finally:
+            call_context.reset(token)
+
+    @app.post("/api/setups/{setup_id}/tour")
+    def _retry_setup_tour(setup_id: str):
+        need_setup(setup_id)
+        token = call_context.set(
+            {"run_dir": str(config.SETUPS_DIR / setup_id), "photo_id": None})
+        try:
+            try:
+                return setup_mod.retry_tour(server.client, setup_id)
+            except setup_mod.SetupError as exc:
+                raise HTTPException(400, str(exc))
+            except PropertyError as exc:
+                raise HTTPException(500, str(exc))
+        finally:
+            call_context.reset(token)
+
     @app.get("/")
     def _index(request: Request):
         query = f"?{request.url.query}" if request.url.query else ""
@@ -481,6 +667,10 @@ def create_app(client=None):
     @app.get("/host")
     def _host_page():
         return _page("host.html")
+
+    @app.get("/setup")
+    def _setup_page():
+        return _page("setup.html")
 
     return app
 

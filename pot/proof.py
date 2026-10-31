@@ -267,7 +267,14 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
             sam = problem_sams.get(item_id)
         else:
             sam = sams.get(item_id)
-        for box in sam.boxes if sam is not None else []:
+        boxes = list(sam.boxes) if sam is not None else []
+        if proof.status == PROBLEM and not boxes:
+            # A problem photo always shows red: frame the whole photo.
+            boxes = [{
+                "left": 0, "top": 0,
+                "right": source.width - 1, "bottom": source.height - 1,
+            }]
+        for box in boxes:
             draw.rectangle(
                 [
                     int(box["left"]),

@@ -91,7 +91,8 @@ def run_proof(client, run_dir, property, checklist, photos, match, look):
     )
     photos_by_id = {photo.id: photo for photo in photos}
     problem_sams, problem_notes = segment_problem_objects(
-        client, proofs, verification.second_looks, photos_by_id
+        client, proofs, verification.second_looks, photos_by_id,
+        items_by_id={item.id: item for item in checklist},
     )
     verification.notes.extend(problem_notes)
     pruned = prune_other_issues(look.other_issues, proofs, look.claims)

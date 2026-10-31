@@ -384,3 +384,25 @@ def test_proven_count_caption_reads_seen_needed():
     proof = _prove(sam=_sam(count=2))
     assert proof.status == PROVEN
     assert proof.reason == "Confirmed in the photo (2 seen, 1 needed)"
+
+
+def test_problem_without_boxes_gets_red_frame(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    photo = photos[0]
+    from pot.proof import ProofItem
+    proofs = {
+        "bed.framed": ProofItem("bed.framed", PROBLEM, "bad", "P01"),
+        "bed.proven": ProofItem("bed.proven", PROVEN, "ok", "P01"),
+    }
+    items = {"bed.framed": _item(id="bed.framed", key="framed"),
+             "bed.proven": _item(id="bed.proven", key="proven")}
+    problem_sams = {
+        "bed.framed": SamCheck("bed.framed", "P01", "stain", 0, []),
+    }
+    paths = save_evidence(tmp_path, proofs, items, {"P01": photo}, {}, problem_sams)
+    with Image.open(paths["bed.framed"]) as img:
+        assert _has_color(img, _is_red)  # the whole-photo frame
+        pixels = img.load()
+        assert any(_is_red(pixels[1, y]) for y in range(13, img.height - 1))
+    with Image.open(paths["bed.proven"]) as img:
+        assert not _has_color(img, _is_red)  # proven items unchanged

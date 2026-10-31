@@ -32,6 +32,7 @@ from pot.verifier import (
     MAX_WORKERS,
     check_sam,
     check_second_look,
+    refine_problem_area,
     refine_problem_boxes,
     segment_problem_objects,
     verify,
@@ -89,6 +90,7 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
     room_name = room.get("name") or room_id
     room_desc = room.get("description")
     checked = [item for item in items if item.key != "coverage"]
+    by_id = {item.id: item for item in checked}
     assignment = Assignment(photo.id, room_id, "high", "")
     claims, seconds, sams, problem_sams = {}, {}, {}, {}
     issues, notes = [], []
@@ -117,15 +119,21 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
                 return
             claim = claims.get(item_id)
             second = seconds.get(item_id)
+            area = by_id[item_id].problem_area if item_id in by_id else None
             if (
                 claim is not None and claim.status == "problem"
                 and second is not None and second.verdict == "not_done"
-                and second.problem_object
+                and (second.problem_object or area)
             ):
                 chained.add(item_id)
+                if area:
+                    prompt = area
+                    purpose = f"sam problem area {item_id} {photo.id} ({area})"
+                else:
+                    prompt = second.problem_object
+                    purpose = f"sam problem {item_id} {photo.id} ({prompt})"
                 pending[submit_with_context(
-                    pool, check_sam, client, item_id, photo, second.problem_object,
-                    f"sam problem {item_id} {photo.id} ({second.problem_object})",
+                    pool, check_sam, client, item_id, photo, prompt, purpose,
                 )] = ("problem", item_id)
 
         while pending:
@@ -154,7 +162,14 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
                     problem_sams[ref] = sam
                     notes.extend(job_notes)
     for item_id, sam in list(problem_sams.items()):
-        if sam.count > 1:
+        item = by_id.get(item_id)
+        if item is not None and item.problem_area:
+            picked, job_notes = refine_problem_area(
+                client, item, photo, sam, seconds[item_id].problem_object, effort
+            )
+            notes.extend(job_notes)
+            problem_sams[item_id] = picked
+        elif sam.count > 1:
             picked, job_notes = refine_problem_boxes(
                 client, item_id, photo, sam, seconds[item_id].problem_object, effort
             )
@@ -206,7 +221,8 @@ def run_photo_checks(client, state, photo_id, items, parallel, effort=None):
         }
         if candidates:
             found, problem_notes = segment_problem_objects(
-                client, candidates, acc_seconds, {photo.id: photo}, effort
+                client, candidates, acc_seconds, {photo.id: photo}, effort,
+                items_by_id={item.id: item for item in state.checklist},
             )
             fresh["problem_sams"].update(found)
             fresh["notes"].extend(problem_notes)

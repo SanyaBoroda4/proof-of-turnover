@@ -15,8 +15,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from pot import prompts
-from pot.checklist import DEFAULT_PROPERTIES_DIR, PropertyError, build_checklist, load_property
+from pot import config, prompts
+from pot.checklist import PropertyError, build_checklist, load_property
 from pot.meta_client import MetaClient, MetaClientError
 
 TOUR_FILENAME = "tour.json"
@@ -59,7 +59,7 @@ def tour_schema():
 
 
 def _property_dir(property_id, properties_dir=None):
-    base = Path(properties_dir) if properties_dir is not None else DEFAULT_PROPERTIES_DIR
+    base = Path(properties_dir) if properties_dir is not None else config.PROPERTIES_DIR
     return base / property_id
 
 

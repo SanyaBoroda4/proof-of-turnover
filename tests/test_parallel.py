@@ -125,3 +125,33 @@ def test_parallel_skips_problem_sam_without_problem_object(tmp_path):
     fresh = check_photo_parallel(client, photo_a, "bed", first.rooms, items)
     assert fresh["problem_sams"] == {}
     assert not any("sam problem" in c["purpose"] for c in client.sam_calls)
+
+
+def test_parallel_problem_area_starts_without_object(tmp_path):
+    from dataclasses import replace
+
+    first, _second_state, photo_a, _photo_b = _photos(tmp_path)
+    items = [i for i in first.checklist if i.room_id == "bed" and i.key != "coverage"]
+    area = replace(items[0], problem_area="bedroom")
+
+    def inspector(call):
+        return {
+            "claims": [
+                {"item_id": area.id, "status": "problem", "photo_id": "P01",
+                 "seen": "a mess", "count_seen": None}
+            ],
+            "other_issues": [],
+        }
+
+    def verifier(call):
+        return {"this_room": "yes", "verdict": "not_done", "count_seen": None,
+                "reason": "a mess", "problem_object": ""}
+
+    client = FakeSpark(inspector=inspector, verifier=verifier)
+    fresh = check_photo_parallel(client, photo_a, "bed", first.rooms, [area])
+    assert set(fresh["problem_sams"]) == {area.id}
+    assert fresh["problem_sams"][area.id].prompt == "bedroom"
+    purposes = [c["purpose"] for c in client.sam_calls]
+    assert any(p.startswith(f"sam problem area {area.id}") for p in purposes)
+    picks = [c["purpose"] for c in client.calls]
+    assert any(p.startswith(f"pick problem area {area.id}") for p in picks)

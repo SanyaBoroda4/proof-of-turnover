@@ -212,8 +212,7 @@ def test_cli_writes_tour(tmp_path, monkeypatch, capsys):
     definition = json.loads(Path("properties/demo-house/property.json").read_text(encoding="utf-8"))
     definition["id"] = "tiny"
     (props / "property.json").write_text(json.dumps(definition), encoding="utf-8")
-    monkeypatch.setattr("pot.checklist.DEFAULT_PROPERTIES_DIR", tmp_path / "properties")
-    monkeypatch.setattr("pot.tour.DEFAULT_PROPERTIES_DIR", tmp_path / "properties")
+    monkeypatch.setattr("pot.config.PROPERTIES_DIR", tmp_path / "properties")
     monkeypatch.setattr(tour_mod, "MetaClient", lambda *a, **k: FakeSpark(
         tour=lambda call: {"shots": []}))
     assert tour_mod.main(["pot.tour", "tiny"]) == 0

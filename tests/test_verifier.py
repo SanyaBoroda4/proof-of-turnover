@@ -7,7 +7,13 @@ from pot.inspector import Claim
 from pot.meta_client import MetaClientError
 from pot.proof import PROBLEM, PROVEN, ProofItem
 from pot.verifier import SamCheck, SecondLook, segment_problem_objects, verify
-from tests.fakes import FakeSpark, image_count, make_photos, tiny_property
+from tests.fakes import (
+    SAM_FIXTURE,
+    FakeSpark,
+    image_count,
+    make_photos,
+    tiny_property,
+)
 
 
 def _checklist():
@@ -301,3 +307,83 @@ def test_refine_problem_boxes_many_boxes_draw_one_area_box(tmp_path):
     assert (area["left"], area["top"], area["right"], area["bottom"]) == (0, 0, 16, 8)
     assert area["confidence"] == 0.9
     assert notes == ["Box pick for bed.beds_made skipped (9 boxes): drew 1 area box"]
+
+
+def _area_item():
+    from pot.checklist import ChecklistItem
+
+    return ChecklistItem(
+        id="bed.fridge", room_id="bed", room_name="Bed", floor=1, key="fridge",
+        label="Fridge", requirement="Fridge doors open for the photo: shelves empty.",
+        sam_prompt=None, min_count=None, critical=True,
+        problem_area="refrigerator")
+
+
+def test_refine_problem_area_picks_outlining_boxes(tmp_path):
+    from pot.verifier import refine_problem_area
+
+    photos = make_photos(tmp_path / "photos", 1)
+    sam = SamCheck("bed.fridge", "P01", "refrigerator", 3, _numbered_boxes(3))
+    client = FakeSpark(picker=lambda call: {"boxes": [2]})
+    kept, notes = refine_problem_area(
+        client, _area_item(), photos[0], sam, "jar")
+    assert len(client.calls) == 1
+    call = client.calls[0]
+    assert call["purpose"] == "pick problem area bed.fridge P01"
+    assert 'candidate outlines of "refrigerator"' in call["instructions"]
+    assert "Fridge doors open for the photo" in call["instructions"]
+    assert kept.count == 1 and kept.prompt == "refrigerator"
+    assert notes == ["Box pick for bed.fridge: kept 1 of 3"]
+
+
+def test_refine_problem_area_zero_boxes_falls_back_to_object(tmp_path):
+    from pot.verifier import refine_problem_area
+
+    def sam_by_prompt(call):
+        return "" if call["prompt"] == "refrigerator" else SAM_FIXTURE
+
+    photos = make_photos(tmp_path / "photos", 1)
+    empty = SamCheck("bed.fridge", "P01", "refrigerator", 0, [])
+    client = FakeSpark(sam=sam_by_prompt)
+    kept, notes = refine_problem_area(
+        client, _area_item(), photos[0], empty, "jar")
+    assert kept.count == 3  # the object path found the jars
+    assert kept.prompt == "jar"
+    assert any("found nothing" in note for note in notes)
+
+
+def test_refine_problem_area_zero_boxes_and_no_object(tmp_path):
+    from pot.verifier import refine_problem_area
+
+    photos = make_photos(tmp_path / "photos", 1)
+    empty = SamCheck("bed.fridge", "P01", "refrigerator", 0, [])
+    client = FakeSpark()
+    kept, notes = refine_problem_area(client, _area_item(), photos[0], empty, "")
+    assert kept.count == 0 and notes == []
+    assert client.calls == [] and client.sam_calls == []
+
+
+def test_segment_problem_area_starts_without_object(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    proofs = {
+        "bed.fridge": ProofItem("bed.fridge", PROBLEM, "full", "P01"),
+        "bed.beds_made": ProofItem("bed.beds_made", PROBLEM, "messy", "P01"),
+    }
+    seconds = {
+        "bed.fridge": SecondLook("bed.fridge", "P01", "yes", "not_done", None,
+                                 "full", ""),
+        "bed.beds_made": SecondLook("bed.beds_made", "P01", "yes", "not_done",
+                                    None, "messy", "dirty pile"),
+    }
+    items_by_id = {"bed.fridge": _area_item()}
+    client = FakeSpark()
+    found, notes = segment_problem_objects(
+        client, proofs, seconds, {"P01": photos[0]}, items_by_id=items_by_id)
+    assert set(found) == {"bed.fridge", "bed.beds_made"}
+    assert found["bed.fridge"].prompt == "refrigerator"  # started with no object
+    purposes = [c["purpose"] for c in client.sam_calls]
+    assert any(p.startswith("sam problem area bed.fridge") for p in purposes)
+    assert any(p.startswith("sam problem bed.beds_made") for p in purposes)
+    picks = [c["purpose"] for c in client.calls]
+    assert any(p.startswith("pick problem area bed.fridge") for p in picks)
+    assert any(p.startswith("pick problem boxes bed.beds_made") for p in picks)

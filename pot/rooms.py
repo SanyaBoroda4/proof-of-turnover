@@ -328,6 +328,7 @@ def _render(spec, room):
         "sam_prompt": spec["sam_prompt"],
         "min_count": _resolve_min_count(spec, room),
         "critical": spec["critical"],
+        "problem_area": spec.get("problem_area"),
     }
 
 
@@ -346,6 +347,7 @@ def _bed_items(room):
                 "sam_prompt": "bed",
                 "min_count": 1,
                 "critical": True,
+                "problem_area": None,
             }
         )
     return items

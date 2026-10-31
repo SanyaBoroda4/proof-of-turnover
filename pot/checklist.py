@@ -11,9 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from pot import config
 from pot.rooms import ROOM_TYPES, items_for_room
-
-DEFAULT_PROPERTIES_DIR = Path(__file__).resolve().parent.parent / "properties"
 
 
 class PropertyError(ValueError):
@@ -32,6 +31,7 @@ class ChecklistItem:
     sam_prompt: Optional[str]
     min_count: Optional[int]
     critical: bool
+    problem_area: Optional[str] = None
 
 
 def _is_int(value):
@@ -114,12 +114,17 @@ def _validate_extra(item, index, property_id, rooms_by_id):
     critical = item.get("critical", True)
     if not isinstance(critical, bool):
         raise PropertyError(f"{where}: field 'critical' must be true or false")
+    area = item.get("problem_area")
+    if area is not None and (not isinstance(area, str) or not area.strip() or len(area) > 40):
+        raise PropertyError(
+            f"{where}: field 'problem_area' must be a string of up to 40 characters or null"
+        )
     return item
 
 
 def load_property(property_id, properties_dir=None):
     """Load and validate properties/<property_id>/property.json."""
-    base = Path(properties_dir) if properties_dir is not None else DEFAULT_PROPERTIES_DIR
+    base = Path(properties_dir) if properties_dir is not None else config.PROPERTIES_DIR
     path = base / property_id / "property.json"
     if not path.is_file():
         raise PropertyError(f"Property '{property_id}': file not found: {path}")
@@ -127,6 +132,11 @@ def load_property(property_id, properties_dir=None):
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise PropertyError(f"Property '{property_id}': invalid JSON: {exc}") from exc
+    return validate_property(data, property_id)
+
+
+def validate_property(data, property_id):
+    """Validate a property dict with the same rules as load_property."""
     if not isinstance(data, dict):
         raise PropertyError(f"Property '{property_id}': file must contain an object")
     where = f"Property '{property_id}'"
@@ -172,6 +182,7 @@ def build_checklist(property):
                     sam_prompt=spec["sam_prompt"],
                     min_count=spec["min_count"],
                     critical=spec["critical"],
+                    problem_area=spec.get("problem_area"),
                 )
             )
     rooms_by_id = {room["id"]: room for room in property["rooms"]}
@@ -193,6 +204,7 @@ def build_checklist(property):
             sam_prompt=extra.get("sam_prompt"),
             min_count=extra.get("min_count"),
             critical=extra.get("critical", True),
+            problem_area=extra.get("problem_area"),
         )
         if replacement.id in by_id:
             # An extra with the same room and key replaces the template item.
@@ -219,15 +231,21 @@ def main(argv):
         room_items = [item for item in items if item.room_id == room["id"]]
         print(f"Floor {room['floor']} - {room['name']} ({room['type']})")
         for item in room_items:
-            flag = "critical" if item.critical else "optional"
-            print(f"  [{flag}] {item.id}: {item.label} - {item.requirement}")
+            print(f"  {_item_line(item)}")
     house_items = [item for item in items if item.room_id == "house"]
     if house_items:
         print("Whole house")
         for item in house_items:
-            flag = "critical" if item.critical else "optional"
-            print(f"  [{flag}] {item.id}: {item.label} - {item.requirement}")
+            print(f"  {_item_line(item)}")
     return 0
+
+
+def _item_line(item):
+    flag = "critical" if item.critical else "optional"
+    line = f"[{flag}] {item.id}: {item.label} - {item.requirement}"
+    if item.problem_area:
+        line += f" [area: {item.problem_area}]"
+    return line
 
 
 if __name__ == "__main__":

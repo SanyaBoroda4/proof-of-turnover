@@ -4,3 +4,6 @@ data/
 __pycache__
 .idea
 .pytest_cache/
+properties/*
+!properties/rental-1/
+!properties/demo-house/

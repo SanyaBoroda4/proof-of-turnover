@@ -386,8 +386,7 @@ def test_generate_tour_endpoint(tmp_path, monkeypatch):
     props = tmp_path / "properties" / "demo-house"
     props.mkdir(parents=True)
     shutil.copy(Path("properties/demo-house/property.json"), props / "property.json")
-    monkeypatch.setattr("pot.checklist.DEFAULT_PROPERTIES_DIR", tmp_path / "properties")
-    monkeypatch.setattr("pot.tour.DEFAULT_PROPERTIES_DIR", tmp_path / "properties")
+    monkeypatch.setattr("pot.config.PROPERTIES_DIR", tmp_path / "properties")
 
     def tour(call):
         return {"shots": [{

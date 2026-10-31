@@ -290,22 +290,14 @@ def _area_box(boxes):
     }
 
 
-def pick_problem_boxes(client, item_id, photo, sam, problem_object, effort=None):
-    """Keep only the problem boxes Muse Spark confirms; returns (SamCheck, notes).
-
-    With one box there is nothing to choose, so no call is made. With
-    several, the model sees them numbered and picks the ones showing what
-    is wrong; "none" keeps no box (the caption still explains).
-    """
-    effort = prompts.verify_effort() if effort is None else effort
-    if sam.count <= 1:
-        return sam, []
+def _pick_boxes(client, item_id, photo, sam, purpose, instructions, effort):
+    """One numbered-boxes pick call; returns (SamCheck, notes)."""
     raw = base64.b64encode(_numbered_boxes_jpeg(photo, sam.boxes)).decode("ascii")
     try:
         answer = client.respond(
-            f"pick problem boxes {item_id} {photo.id} ({problem_object})",
+            purpose,
             [{"type": "input_image", "image_url": f"data:image/jpeg;base64,{raw}"}],
-            instructions=prompts.pick_boxes_instructions(problem_object, sam.count),
+            instructions=instructions,
             schema=prompts.pick_boxes_schema(),
             effort=effort,
         )
@@ -327,6 +319,37 @@ def pick_problem_boxes(client, item_id, photo, sam, problem_object, effort=None)
     return SamCheck(item_id, sam.photo_id, sam.prompt, len(kept), kept), [note]
 
 
+def pick_problem_boxes(client, item_id, photo, sam, problem_object, effort=None):
+    """Keep only the problem boxes Muse Spark confirms; returns (SamCheck, notes).
+
+    With one box there is nothing to choose, so no call is made. With
+    several, the model sees them numbered and picks the ones showing what
+    is wrong; "none" keeps no box (the caption still explains).
+    """
+    effort = prompts.verify_effort() if effort is None else effort
+    if sam.count <= 1:
+        return sam, []
+    return _pick_boxes(
+        client, item_id, photo, sam,
+        f"pick problem boxes {item_id} {photo.id} ({problem_object})",
+        prompts.pick_boxes_instructions(problem_object, sam.count),
+        effort,
+    )
+
+
+def pick_problem_area(client, item, photo, sam, effort=None):
+    """Keep the boxes outlining the item's problem_area; returns (SamCheck, notes)."""
+    effort = prompts.verify_effort() if effort is None else effort
+    if sam.count <= 1:
+        return sam, []
+    return _pick_boxes(
+        client, item.id, photo, sam,
+        f"pick problem area {item.id} {photo.id}",
+        prompts.pick_area_instructions(item.problem_area, sam.count, item.requirement),
+        effort,
+    )
+
+
 def refine_problem_boxes(client, item_id, photo, sam, problem_object, effort=None):
     """Narrow a problem SAM result; returns (SamCheck, notes).
 
@@ -345,45 +368,98 @@ def refine_problem_boxes(client, item_id, photo, sam, problem_object, effort=Non
     return pick_problem_boxes(client, item_id, photo, sam, problem_object, effort)
 
 
-def segment_problem_objects(client, proofs, seconds, photos_by_id, effort=None):
-    """SAM-segment each final problem's problem_object; returns {item_id: SamCheck}.
+def refine_problem_area(client, item, photo, sam, problem_object, effort=None):
+    """Refine an area-prompted problem SAM; returns (SamCheck, notes).
 
-    Multi-box results go through one Muse Spark pick call per item.
+    sam is the raw result of SAM on item.problem_area. One box is
+    kept; 2-8 boxes go through one area pick call; more than 8 become
+    one area box with no call. Zero boxes fall back to SAM on
+    problem_object with today's refinement (empty when that is "").
+    Both the live and the batch path share this helper.
     """
     effort = prompts.verify_effort() if effort is None else effort
+    if sam.count == 1:
+        return sam, []
+    if 2 <= sam.count <= MAX_PICK_BOXES:
+        return pick_problem_area(client, item, photo, sam, effort)
+    if sam.count > MAX_PICK_BOXES:
+        area = _area_box(sam.boxes)
+        note = (f"Box pick for {item.id} skipped "
+                f"({sam.count} boxes): drew 1 area box")
+        return SamCheck(item.id, sam.photo_id, sam.prompt, 1, [area]), [note]
+    if not problem_object:
+        return sam, []
+    obj, notes = check_sam(
+        client, item.id, photo, problem_object,
+        f"sam problem {item.id} {photo.id} ({problem_object})",
+    )
+    notes.insert(0, f"Area '{item.problem_area}' found nothing for {item.id}; "
+                    f"tried '{problem_object}'")
+    refined, refine_notes = refine_problem_boxes(
+        client, item.id, photo, obj, problem_object, effort
+    )
+    return refined, notes + refine_notes
+
+
+def segment_problem_objects(client, proofs, seconds, photos_by_id, effort=None,
+                            items_by_id=None):
+    """SAM-segment each final problem's problem_object; returns {item_id: SamCheck}.
+
+    Items with a problem_area are segmented on the area instead (even
+    when the second look named no object) and refined with the shared
+    area helper. Multi-box results go through one Muse Spark pick call
+    per item.
+    """
+    effort = prompts.verify_effort() if effort is None else effort
+    items_by_id = items_by_id or {}
     jobs = []
     for item_id in sorted(proofs):
         if proofs[item_id].status != PROBLEM:
             continue
         second = seconds.get(item_id)
         photo = photos_by_id.get(proofs[item_id].photo_id)
-        if second is None or not second.problem_object or photo is None:
+        item = items_by_id.get(item_id)
+        area = item.problem_area if item is not None else None
+        if second is None or photo is None:
             continue
-        jobs.append((item_id, photo, second.problem_object))
+        if not second.problem_object and not area:
+            continue
+        if area:
+            prompt = area
+            purpose = f"sam problem area {item_id} {photo.id} ({area})"
+        else:
+            prompt = second.problem_object
+            purpose = f"sam problem {item_id} {photo.id} ({prompt})"
+        jobs.append((item_id, item, photo, prompt, purpose))
     found = {}
     notes = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = [
             (item_id, submit_with_context(
-                pool, check_sam, client, item_id, photo, prompt,
-                f"sam problem {item_id} {photo.id} ({prompt})",
+                pool, check_sam, client, item_id, photo, prompt, purpose,
             ))
-            for item_id, photo, prompt in jobs
+            for item_id, item, photo, prompt, purpose in jobs
         ]
         sams = {}
         for item_id, future in sorted(futures):
             result, job_notes = future.result()
             notes.extend(job_notes)
             sams[item_id] = result
-        picks = [
-            (item_id, submit_with_context(
-                pool, refine_problem_boxes, client, item_id,
-                photos_by_id[proofs[item_id].photo_id], sams[item_id],
-                seconds[item_id].problem_object, effort,
-            ))
-            for item_id in sorted(sams)
-            if sams[item_id].count > 1
-        ]
+        picks = []
+        for item_id in sorted(sams):
+            item = items_by_id.get(item_id)
+            photo = photos_by_id[proofs[item_id].photo_id]
+            if item is not None and item.problem_area:
+                func = refine_problem_area
+                args = (client, item, photo, sams[item_id],
+                        seconds[item_id].problem_object, effort)
+            elif sams[item_id].count > 1:
+                func = refine_problem_boxes
+                args = (client, item_id, photo, sams[item_id],
+                        seconds[item_id].problem_object, effort)
+            else:
+                continue
+            picks.append((item_id, submit_with_context(pool, func, *args)))
         for item_id, future in picks:
             result, job_notes = future.result()
             notes.extend(job_notes)

@@ -177,6 +177,22 @@ def _english_note(call):
     }
 
 
+def _empty_draft(call):
+    return {
+        "description": "a plain room",
+        "beds": [],
+        "towels": 0,
+        "items": [],
+        "unclear_rules": [],
+    }
+
+
+def _echo_rule(call):
+    texts = [part.get("text", "") for part in call["content"]
+             if part.get("type") == "input_text"]
+    return {"english": "EN: " + " ".join(texts)}
+
+
 SAM_FIXTURE = (
     Path(__file__).with_name("fixtures") / "sam_three_squares.txt"
 ).read_text(encoding="utf-8")
@@ -187,7 +203,7 @@ class FakeSpark:
 
     def __init__(self, matcher=None, inspector=None, verifier=None, sam=None,
                  decider=None, requester=None, tour=None, picker=None,
-                 transcript=None, noter=None):
+                 transcript=None, noter=None, drafter=None, ruler=None):
         self.calls = []
         self.sam_calls = []
         self.transcribe_calls = []
@@ -201,6 +217,8 @@ class FakeSpark:
         self._picker = picker or _keep_all_boxes
         self._transcript = transcript or _spanish_note
         self._noter = noter or _english_note
+        self._drafter = drafter or _empty_draft
+        self._ruler = ruler or _echo_rule
         self.trace = []
         self._hooks = []
 
@@ -251,6 +269,10 @@ class FakeSpark:
             return self._picker(call)
         if "translation" in props:
             return self._noter(call)
+        if "unclear_rules" in props:
+            return self._drafter(call)
+        if "english" in props:
+            return self._ruler(call)
         return self._inspector(call)
 
     def segment_image(self, purpose, jpeg_bytes, prompt):

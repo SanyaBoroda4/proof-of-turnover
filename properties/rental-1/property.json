@@ -247,7 +247,8 @@
       "requirement": "Main compartment of the fridge (doors opened for the photo): shelves and drawers empty and clean, no food or drinks left; judge the inside, the doors need not be in the photo",
       "sam_prompt": null,
       "min_count": null,
-      "critical": true
+      "critical": true,
+      "problem_area": "refrigerator"
     },
     {
       "room": "kitchen",
@@ -256,7 +257,8 @@
       "requirement": "Left fridge door open: all its door shelves empty, no food, drinks or jars left",
       "sam_prompt": null,
       "min_count": null,
-      "critical": true
+      "critical": true,
+      "problem_area": "refrigerator door"
     },
     {
       "room": "kitchen",
@@ -265,7 +267,8 @@
       "requirement": "Right fridge door open: all its door shelves empty, no food, drinks or jars left",
       "sam_prompt": null,
       "min_count": null,
-      "critical": true
+      "critical": true,
+      "problem_area": "refrigerator door"
     },
     {
       "room": "kitchen",
@@ -274,7 +277,8 @@
       "requirement": "Freezer open: no food left, only the ice bin and scoop",
       "sam_prompt": null,
       "min_count": null,
-      "critical": true
+      "critical": true,
+      "problem_area": "freezer"
     },
     {
       "room": "kitchen",
@@ -301,7 +305,8 @@
       "requirement": "Dishwasher open: racks empty, no dishes left",
       "sam_prompt": null,
       "min_count": null,
-      "critical": true
+      "critical": true,
+      "problem_area": "dishwasher"
     },
     {
       "room": "kitchen",
@@ -391,7 +396,8 @@
       "requirement": "Washer lid open: drum empty, no clothes or towels left inside",
       "sam_prompt": null,
       "min_count": null,
-      "critical": true
+      "critical": true,
+      "problem_area": "washing machine"
     },
     {
       "room": "laundry",
@@ -400,7 +406,8 @@
       "requirement": "Dryer door open: drum empty, no clothes or towels left inside",
       "sam_prompt": null,
       "min_count": null,
-      "critical": true
+      "critical": true,
+      "problem_area": "clothes dryer"
     },
     {
       "room": "laundry",

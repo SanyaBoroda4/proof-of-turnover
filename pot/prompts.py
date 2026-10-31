@@ -41,6 +41,15 @@ def pick_boxes_instructions(problem_object, count):
     )
 
 
+def pick_area_instructions(problem_area, count, requirement):
+    return (
+        f"The attached photo shows {count} numbered boxes (1 to {count}). "
+        f"The numbered boxes are candidate outlines of \"{problem_area}\". "
+        f"Return the number(s) of the box(es) outlining the place this check is about "
+        f"- \"{requirement}\" - usually one; an empty list if none."
+    )
+
+
 def model_photo_path(photo, size):
     """Which saved copy of a photo to send to the model."""
     if size == "check":
@@ -233,6 +242,50 @@ Rules:
 - Write the translation and the title in English."""
 
 
+def setup_rule_instructions(text, language):
+    cleaner = _language_name((language or "en").lower())
+    return f"""Translate this host's spoken house rule from {cleaner} into plain English.
+
+Rule:
+{text}
+
+Rules:
+- Translation: plain English a cleaner can follow.
+- Keep numbers and meaning exactly; never drop or soften anything.
+- Write the translation in English."""
+
+
+def setup_draft_instructions(room_name, room_type, rules, standard_checks):
+    if rules.strip():
+        rules_block = f"Host's rules (English):\n{rules.strip()}"
+    else:
+        rules_block = "Host's rules: none given."
+    check_lines = "\n".join(
+        f"- {check['key']}: {check['label']} - {check['requirement']}"
+        for check in standard_checks
+    )
+    return f"""You write the cleaning checklist for one room of a vacation rental from the host's rules and the attached photos of the room, clean and ready for guests.
+
+Room: {room_name} ({room_type})
+
+{rules_block}
+
+Standard checks for a {room_type} (already covered, do not repeat):
+{check_lines if check_lines else "- none"}
+
+Rules:
+- description: at most 25 words of visible features that tell this room apart from the others (colors, furniture, fixtures). It is used to match the cleaner's photos to rooms. No people, no personal items.
+- beds (bedrooms only): one entry per bed as a guest would say it ("king bed", "twin bunk bed"); [] for other rooms. towels (full bathrooms only): the number of bath towels set out for guests in the photos; 0 if none seen; 0 for other rooms.
+- Every host rule becomes at least one item with source "rule", one item per separate thing to check. Keep the host's meaning and numbers exactly; never drop or soften a rule. A rule that cannot be checked from a photo goes to unclear_rules instead.
+- At most 3 items with source "photo": only things clearly set out for guests that the cleaner must put back every time (pillows arranged on a bed, paper towel roll on its holder, soap at the sink). Not general cleanliness: the standard checks already cover that.
+- Don't repeat a standard check. When a host rule changes one, reuse that standard key so the new item replaces it (example: "toilet lid open for the photo" -> key "toilet").
+- requirement: one sentence, at most 35 words, saying what the photo must show when it's done. If the check is inside something normally closed (fridge, freezer, dishwasher, washer, dryer, oven, microwave, cabinet), start with what to open for the photo ("Fridge doors open for the photo: ...").
+- sam_prompt: a 1-3 word noun for an object that must be visible when it's done ("paper towel roll", "pillow"); null for checks about something empty, clean or absent. min_count: the number the rule asks for (or the number set out in the photos); only with sam_prompt, else null.
+- problem_area: for "must be empty" rules, the whole place in 1-3 words ("refrigerator door", "washing machine"); else null.
+- critical: true unless the host calls it optional or nice to have.
+- Plain English. Never mention door codes, Wi-Fi passwords or people."""
+
+
 def tour_instructions(property, checklist, has_plan_image):
     room_lines = "\n".join(_room_line(room) for room in property["rooms"])
     item_lines = []
@@ -253,7 +306,8 @@ def tour_instructions(property, checklist, has_plan_image):
     plan_note = (
         "Use the attached floor plan to order the rooms into a sensible walking route. "
         if has_plan_image
-        else ""
+        else "There is no floor plan: go floor by floor, lowest first, "
+        "keeping the order the rooms are listed. "
     )
     return f"""You plan a cleaner's photo tour through a vacation rental. {plan_note}Group the checklist items below into shots: one photo per shot, room by room.
 

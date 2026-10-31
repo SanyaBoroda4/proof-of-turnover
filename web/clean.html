@@ -48,7 +48,7 @@ const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
 const DEMO = params.get("demo") === "1";
 let RUN = params.get("run") || "";
-let LANG = "es", langPicked = false, LANGS = null;
+let LANG = "es", langPicked = false, LANGS = null, modePicked = "";
 let tour = null, takenSet = new Set(), status = null, demoPhotos = null;
 let overrideShot = null, selectedDemo = "", photoError = "", lastKey = null;
 let pollTimer = null, pendingShot = null;
@@ -84,6 +84,9 @@ const I18N = {
     oldPhoto: "Foto antigua: esta foto es de antes de empezar. Toma una nueva.",
     authError: "Este enlace no tiene código. Pide el enlace completo.",
     noVoice: "Este teléfono no tiene voz en español; solo se muestra el texto.",
+    setupHouse: "Configurar una casa nueva",
+    startTurnover: "Empezar turno",
+    back: "Atrás",
     mic: "Grabar nota",
     stop: "Detener",
     transcribing: "Transcribiendo…",
@@ -118,6 +121,9 @@ const I18N = {
     oldPhoto: "Old photo: this photo is from before the start. Take a new one.",
     authError: "This link has no code. Ask for the full link.",
     noVoice: "This phone has no English voice; text only.",
+    setupHouse: "Set up a new house",
+    startTurnover: "Start turnover",
+    back: "Back",
     mic: "Record note",
     stop: "Stop",
     transcribing: "Transcribing…",
@@ -156,6 +162,9 @@ const I18N = {
     oldPhoto: "Старое фото: оно сделано до начала. Сделайте новое.",
     authError: "В этой ссылке нет кода. Попросите полную ссылку.",
     noVoice: "На этом телефоне нет русского голоса; только текст.",
+    setupHouse: "Настроить новый дом",
+    startTurnover: "Начать уборку",
+    back: "Назад",
     mic: "Записать заметку",
     stop: "Стоп",
     transcribing: "Распознаём…",
@@ -298,8 +307,8 @@ function currentShot() {
 
 function renderMaybe() {
   const key = JSON.stringify(
-    [LANG, langPicked, tour, status, overrideShot, selectedDemo, photoError,
-     !!recorder, transcribing, noteMsg]);
+    [LANG, langPicked, modePicked, tour, status, overrideShot, selectedDemo,
+     photoError, !!recorder, transcribing, noteMsg]);
   if (key === lastKey) return;
   lastKey = key;
   render();
@@ -319,6 +328,7 @@ function render() {
 
 async function renderStart(app) {
   if (!langPicked) return renderLanguage(app);
+  if (modePicked !== "turnover") return renderChoice(app);
   let props = [];
   try { props = (await api("/api/properties")).properties; } catch (e) { return fail(app, e); }
   const houses = props
@@ -332,8 +342,36 @@ async function renderStart(app) {
     <label class="small" for="prop">${esc(T().house)}</label>
     <select id="prop">${options}</select>
     <button class="btn" id="start">${esc(T().start)}</button>
+    <p><a href="#" id="toChoice" class="small">‹ ${esc(T().back)}</a></p>
     ${DEMO ? `<p class="small">${esc(T().demoNote)}</p>` : ""}`;
   document.getElementById("start").onclick = startTour;
+  document.getElementById("toChoice").onclick = ev => {
+    ev.preventDefault();
+    modePicked = "";
+    lastKey = null;
+    renderMaybe();
+  };
+}
+
+function renderChoice(app) {
+  app.innerHTML = `<h1>${esc(T().title)}</h1>
+    <button class="btn" id="goSetup">${esc(T().setupHouse)}</button>
+    <button class="btn secondary" id="goTurnover">${esc(T().startTurnover)}</button>
+    <p><a href="#" id="changeLang" class="small">Idioma · Language · Язык</a></p>`;
+  document.getElementById("goTurnover").onclick = () => {
+    modePicked = "turnover";
+    lastKey = null;
+    renderMaybe();
+  };
+  document.getElementById("goSetup").onclick = () => {
+    location.href = `/setup?code=${encodeURIComponent(CODE)}${DEMO ? "&demo=1" : ""}`;
+  };
+  document.getElementById("changeLang").onclick = ev => {
+    ev.preventDefault();
+    langPicked = false;
+    lastKey = null;
+    renderMaybe();
+  };
 }
 
 async function renderLanguage(app) {
@@ -431,11 +469,21 @@ function micHtml() {
   return `<p class="small">${esc(T().insecure)}</p>`;
 }
 
+function noteRoomName(note) {
+  for (const s of tour.shots) {
+    if (s.room_id === note.room_id) {
+      const name = tourText(s, "room_name");
+      if (name) return name;
+    }
+  }
+  return note.room_name;
+}
+
 function notesHtml() {
   const notes = (status.voice_notes || []).slice(0, 3);
   if (!notes.length) return "";
   return `<div>` + notes.map(n =>
-    `<div class="result ok">${esc(T().note)} · ${esc(n.room_name)}: ${esc(n.text)}</div>`
+    `<div class="result ok">${esc(T().note)} · ${esc(noteRoomName(n))}: ${esc(n.text)}</div>`
   ).join("") + `</div>`;
 }
 

@@ -121,8 +121,9 @@ function voiceNotesHtml() {
   const cards = notes.map(n => {
     const audio = n.audio_url
       ? `<div><audio controls preload="none" src="${esc(n.audio_url)}"></audio></div>` : "";
+    const hhmmss = (n.time || "").slice(11, 19);
     return `<div class="card"><div><span class="pill ${esc(n.category)}">${esc(n.category)}</span>
-      <span class="small">${esc(n.room_name)} · ${esc(n.time || "")}</span></div>
+      <span class="small">${esc(n.room_name)} · ${esc(hhmmss)}</span></div>
       <div><strong>${esc(n.title)}</strong></div>
       <div>${esc(n.english)}</div>
       <div class="small">Original (${esc(n.language)}): ${esc(n.text)}</div>${audio}</div>`;

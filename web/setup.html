@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up a house</title>
+<style>
+  :root { --green: #1a7f37; --red: #b42318; --orange: #b54708; --grey: #57606a; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
+         padding: 16px; max-width: 640px; margin-left: auto; margin-right: auto;
+         background: #fff; color: #1f2328; font-size: 18px; }
+  h1 { font-size: 24px; margin: 8px 0 16px; }
+  h2.room { font-size: 20px; margin: 16px 0 4px; color: var(--grey); font-weight: 600; }
+  .btn { display: block; width: 100%; padding: 16px; margin: 10px 0; font-size: 20px;
+         border: none; border-radius: 10px; background: var(--green); color: #fff;
+         cursor: pointer; text-align: center; }
+  .btn.secondary { background: #e5e5e5; color: #1f2328; }
+  .btn:disabled { opacity: 0.5; }
+  .rowbtns { display: flex; gap: 10px; }
+  .rowbtns .btn { margin: 10px 0; }
+  .result { border-radius: 10px; padding: 14px 16px; margin: 12px 0; font-size: 19px; }
+  .result.ok { background: #dafbe1; }
+  .result.bad { background: #ffebe9; }
+  .result.wait { background: #fff8c5; }
+  select, input[type=text], input[type=number], textarea {
+    font-size: 18px; padding: 10px; width: 100%; margin: 6px 0; }
+  textarea { min-height: 96px; font-family: inherit; }
+  .error { background: #ffebe9; border-radius: 10px; padding: 14px; margin: 12px 0; }
+  .small { font-size: 15px; color: var(--grey); }
+  .stepper { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .stepper span { flex: 1; }
+  .stepper button { font-size: 22px; width: 48px; height: 48px; border-radius: 10px;
+    border: 1px solid #ccc; background: #f6f8fa; cursor: pointer; }
+  .stepper b { min-width: 2ch; text-align: center; font-size: 20px; }
+  .toggle { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .toggle span { flex: 1; }
+  .toggle input { width: 24px; height: 24px; }
+  .thumbs { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+  .thumb { position: relative; width: 100px; height: 100px; }
+  .thumb img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; }
+  .thumb button { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px;
+    border-radius: 14px; border: none; background: var(--red); color: #fff;
+    font-size: 16px; cursor: pointer; }
+  .item { border: 1px solid #ddd; border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+  .item .head { display: flex; align-items: center; gap: 8px; }
+  .item .head strong { flex: 1; }
+  .tag { font-size: 13px; color: #fff; background: var(--grey); border-radius: 6px;
+    padding: 2px 8px; white-space: nowrap; }
+  .tag.rule { background: #0969da; }
+  .tag.photo { background: #8250df; }
+  .mini { font-size: 15px; padding: 6px 10px; border-radius: 8px; cursor: pointer;
+    border: 1px solid #ccc; background: #f6f8fa; white-space: nowrap; }
+  .mini.crit { background: #dafbe1; border-color: var(--green); }
+  .mini.opt { background: #f6f8fa; }
+  .mini.del { background: #ffebe9; border-color: var(--red); color: var(--red); }
+  .pill { display: inline-block; font-size: 14px; color: #fff; border-radius: 6px;
+    padding: 2px 8px; }
+  .pill.ready { background: var(--green); }
+  .pill.new { background: var(--orange); }
+  .pill.skipped { background: var(--grey); }
+  .roomrow { display: block; width: 100%; text-align: left; border: 1px solid #ddd;
+    border-radius: 10px; padding: 12px; margin: 10px 0; background: #fff;
+    font-size: 18px; cursor: pointer; }
+  a.small { color: var(--grey); }
+</style>
+</head>
+<body>
+<div id="app"><p>Loading…</p></div>
+<script>
+"use strict";
+const params = new URLSearchParams(location.search);
+const CODE = params.get("code") || "";
+const ROOM_TYPES = ["bedroom", "bathroom", "half_bathroom", "kitchen",
+  "living_room", "dining_room", "laundry", "office", "hallway", "outdoor", "other"];
+
+const I18N = {
+  es: {
+    title: "Configurar una casa",
+    loading: "Cargando…",
+    houseName: "Nombre de la casa",
+    floors: "Pisos", bedrooms: "Dormitorios", bathrooms: "Baños", halfBaths: "Medios baños",
+    backPorch: "Terraza trasera", frontPorch: "Porche delantero",
+    needName: "Ponle un nombre a la casa.",
+    next: "Siguiente", back: "Atrás", add: "Agrega", save: "Guardar", cancel: "Cancelar",
+    starting: "Empezando…",
+    roomOf: (i, n, name) => `Cuarto ${i} de ${n} · ${name}`,
+    roomName: "Nombre del cuarto", floor: "Piso",
+    photoHint: "Toma o elige 1–3 fotos de este cuarto, limpio y listo para huéspedes",
+    aiHint: "Las fotos van a la IA de Meta para escribir tu lista. No muestres personas, códigos de puerta, contraseñas de Wi-Fi ni documentos.",
+    rulesLabel: "Tus reglas",
+    sayRule: "Di una regla", stop: "Detener", transcribing: "Transcribiendo…",
+    noSpeech: "No se escuchó nada.", micDenied: "Sin acceso al micrófono.",
+    makeList: "Crear lista", writing: "Escribiendo la lista…",
+    yourRule: "tu regla", fromPhoto: "de la foto",
+    critical: "obligatorio", optional: "opcional",
+    recognizes: d => `Cómo reconoce la app este cuarto: ${d}`,
+    beds: "Camas (una por línea)", towels: "Toallas de baño a la vista",
+    unclear: list => `No se puede revisar en foto: ${list}`,
+    skip: "Omitir cuarto", unskip: "No omitir", nextRoom: "Siguiente cuarto",
+    review: "Revisa", ready: "lista", noList: "sin lista", skipped: "omitido",
+    addRoom: "+ Agrega un cuarto", roomType: "Tipo",
+    saveHouse: "Guardar casa", planning: "Planeando el tour de fotos…",
+    retryTour: "Reintentar tour",
+    done: (name, r, i, p) => `✓ ${name} está lista: ${r}, ${i}, ${p}`,
+    startTurnover: "Empezar turno", startOver: "Empezar de nuevo",
+    authError: "Este enlace no tiene código. Pide el enlace completo.",
+    rooms: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "cuarto" : "cuartos"}`,
+    checks: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "punto" : "puntos"}`,
+    photos: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "foto" : "fotos"}`,
+    types: {bedroom: "Dormitorio", bathroom: "Baño", half_bathroom: "Medio baño",
+      kitchen: "Cocina", living_room: "Sala", dining_room: "Comedor",
+      laundry: "Lavandería", office: "Oficina", hallway: "Pasillo",
+      outdoor: "Exterior", other: "Otro"},
+    examples: {
+      kitchen: "Refrigerador totalmente vacío, puertas también. Granos de café en la máquina.",
+      bathroom: "Tapa del inodoro abierta para la foto, taza limpia. 4 toallas en la repisa.",
+      half_bathroom: "Tapa del inodoro abierta para la foto. Toalla de manos en el aro.",
+      bedroom: "Cama tendida con las almohadas acomodadas. Nada debajo de la cama.",
+      living_room: "Cojines del sofá derechos. Manta doblada en el brazo.",
+      dining_room: "Mesa libre. 6 sillas alrededor.",
+      laundry: "Lavadora y secadora vacías con las puertas abiertas.",
+      outdoor: "Cojines en las sillas. Sin zapatos junto a la puerta.",
+      office: "Escritorio libre. Silla acomodada.",
+      hallway: "Escalera libre. Tapete derecho.",
+      other: "Terminado y ordenado, listo para huéspedes."},
+  },
+  en: {
+    title: "Set up a house",
+    loading: "Loading…",
+    houseName: "House name",
+    floors: "Floors", bedrooms: "Bedrooms", bathrooms: "Bathrooms", halfBaths: "Half bathrooms",
+    backPorch: "Back porch / patio", frontPorch: "Front porch",
+    needName: "Give the house a name.",
+    next: "Next", back: "Back", add: "Add", save: "Save", cancel: "Cancel",
+    starting: "Starting…",
+    roomOf: (i, n, name) => `Room ${i} of ${n} · ${name}`,
+    roomName: "Room name", floor: "Floor",
+    photoHint: "Take or choose 1–3 photos of this room, clean and ready for guests",
+    aiHint: "Photos go to Meta's AI to write your checklist. Keep people, door codes, Wi-Fi passwords and documents out of the photos.",
+    rulesLabel: "Your rules",
+    sayRule: "Say a rule", stop: "Stop", transcribing: "Transcribing…",
+    noSpeech: "No speech heard.", micDenied: "No microphone access.",
+    makeList: "Make checklist", writing: "Writing the checklist…",
+    yourRule: "your rule", fromPhoto: "from photo",
+    critical: "critical", optional: "optional",
+    recognizes: d => `How the app recognizes this room: ${d}`,
+    beds: "Beds (one per line)", towels: "Bath towels set out",
+    unclear: list => `Can't be checked from a photo: ${list}`,
+    skip: "Skip room", unskip: "Don't skip", nextRoom: "Next room",
+    review: "Review", ready: "ready", noList: "no checklist yet", skipped: "skipped",
+    addRoom: "+ Add a room", roomType: "Type",
+    saveHouse: "Save house", planning: "Planning the photo tour…",
+    retryTour: "Retry photo tour",
+    done: (name, r, i, p) => `✓ ${name} is ready: ${r}, ${i}, ${p}`,
+    startTurnover: "Start turnover", startOver: "Start over",
+    authError: "This link has no code. Ask for the full link.",
+    rooms: n => `${n} room${n === 1 ? "" : "s"}`,
+    checks: n => `${n} check${n === 1 ? "" : "s"}`,
+    photos: n => `${n} photo${n === 1 ? "" : "s"}`,
+    types: {bedroom: "Bedroom", bathroom: "Bathroom", half_bathroom: "Half bathroom",
+      kitchen: "Kitchen", living_room: "Living room", dining_room: "Dining room",
+      laundry: "Laundry", office: "Office", hallway: "Hallway",
+      outdoor: "Outdoor", other: "Other"},
+    examples: {
+      kitchen: "Fridge totally empty, doors too. Coffee beans in the machine.",
+      bathroom: "Toilet lid open for the photo, bowl clean. 4 towels on the shelf.",
+      half_bathroom: "Toilet lid open for the photo. Hand towel on the ring.",
+      bedroom: "Bed made with the pillows arranged. Nothing under the bed.",
+      living_room: "Couch cushions straight. Throw blanket folded on the arm.",
+      dining_room: "Table clear. 6 chairs around it.",
+      laundry: "Washer and dryer empty with doors open.",
+      outdoor: "Cushions on the chairs. No shoes by the door.",
+      office: "Desk clear. Chair pushed in.",
+      hallway: "Stairs clear. Runner straight.",
+      other: "Finished and tidy, ready for guests."},
+  },
+  ru: {
+    title: "Настройка дома",
+    loading: "Загрузка…",
+    houseName: "Название дома",
+    floors: "Этажи", bedrooms: "Спальни", bathrooms: "Ванные", halfBaths: "Гостевые туалеты",
+    backPorch: "Задний дворик", frontPorch: "Крыльцо",
+    needName: "Назовите дом.",
+    next: "Далее", back: "Назад", add: "Добавить", save: "Сохранить", cancel: "Отмена",
+    starting: "Начинаем…",
+    roomOf: (i, n, name) => `Комната ${i} из ${n} · ${name}`,
+    roomName: "Название комнаты", floor: "Этаж",
+    photoHint: "Сделайте или выберите 1–3 фото этой комнаты, чистой и готовой для гостей",
+    aiHint: "Фото отправляются ИИ Meta для составления списка. Не показывайте людей, коды дверей, пароли Wi-Fi и документы.",
+    rulesLabel: "Ваши правила",
+    sayRule: "Скажите правило", stop: "Стоп", transcribing: "Распознаём…",
+    noSpeech: "Речь не слышна.", micDenied: "Нет доступа к микрофону.",
+    makeList: "Составить список", writing: "Составляем список…",
+    yourRule: "ваше правило", fromPhoto: "с фото",
+    critical: "важно", optional: "необязательно",
+    recognizes: d => `Как приложение узнаёт комнату: ${d}`,
+    beds: "Кровати (по одной на строку)", towels: "Полотенца для гостей",
+    unclear: list => `Нельзя проверить по фото: ${list}`,
+    skip: "Пропустить", unskip: "Не пропускать", nextRoom: "Следующая комната",
+    review: "Проверьте", ready: "готов", noList: "без списка", skipped: "пропущен",
+    addRoom: "+ Добавить комнату", roomType: "Тип",
+    saveHouse: "Сохранить дом", planning: "Планируем фототур…",
+    retryTour: "Повторить тур",
+    done: (name, r, i, p) => `✓ ${name} готов: ${r}, ${i}, ${p}`,
+    startTurnover: "Начать уборку", startOver: "Начать заново",
+    authError: "В этой ссылке нет кода. Попросите полную ссылку.",
+    rooms: n => {
+      const f = new Intl.PluralRules("ru").select(n);
+      return `${n} ${f === "one" ? "комната" : f === "few" ? "комнаты" : "комнат"}`;
+    },
+    checks: n => {
+      const f = new Intl.PluralRules("ru").select(n);
+      return `${n} ${f === "one" ? "проверка" : f === "few" ? "проверки" : "проверок"}`;
+    },
+    photos: n => `${n} фото`,
+    types: {bedroom: "Спальня", bathroom: "Ванная", half_bathroom: "Гостевой туалет",
+      kitchen: "Кухня", living_room: "Гостиная", dining_room: "Столовая",
+      laundry: "Прачечная", office: "Кабинет", hallway: "Коридор",
+      outdoor: "Дворик", other: "Другое"},
+    examples: {
+      kitchen: "Холодильник полностью пустой, дверцы тоже. Зерна в кофемашине.",
+      bathroom: "Крышка унитаза открыта для фото, чаша чистая. 4 полотенца на полке.",
+      half_bathroom: "Крышка унитаза открыта для фото. Полотенце для рук на кольце.",
+      bedroom: "Кровать заправлена, подушки ровно. Ничего под кроватью.",
+      living_room: "Подушки дивана ровно. Плед сложен на подлокотнике.",
+      dining_room: "Стол пустой. 6 стульев вокруг.",
+      laundry: "Стиральная и сушильная машины пустые, дверцы открыты.",
+      outdoor: "Подушки на стульях. Обуви у двери нет.",
+      office: "Стол пустой. Стул придвинут.",
+      hallway: "Лестница свободна. Дорожка ровно.",
+      other: "Чисто и готово для гостей."},
+  },
+};
+function T() { return I18N[LANG] || I18N.en; }
+
+let LANG = storeGet("pot-lang"), LANGS = null;
+let SID = storeGet("pot-setup") || "";
+let setup = null, screen = "house", roomIdx = 0;
+let house = {name: "", floors: 1, bedrooms: 1, bathrooms: 1, halfBaths: 0,
+  kitchen: true, living: true, dining: false, laundry: false, back: false, front: false};
+let busy = "", err = "", editing = null, noteMsg = "";
+let recorder = null, recStream = null, recChunks = [], recStart = 0, recTimer = null;
+let addType = "bedroom", addName = "", addFloor = 1;
+
+function storeGet(key) {
+  try { return localStorage.getItem(key) || ""; } catch (e) { return ""; }
+}
+function storeSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) {}
+}
+function storeDel(key) {
+  try { localStorage.removeItem(key); } catch (e) {}
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts || {});
+  if (r.status === 401) throw new Error("auth");
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function fmtTime(seconds) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function micReady() {
+  return !!window.isSecureContext && "MediaRecorder" in window &&
+    !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+function saveAt() {
+  storeSet("pot-setup-at", JSON.stringify({screen: screen, idx: roomIdx}));
+}
+
+function render() {
+  document.documentElement.lang = LANG || "en";
+  document.title = T().title;
+  saveAt();
+  const app = document.getElementById("app");
+  if (!LANG) return renderLanguage(app);
+  if (!SID || !setup) return renderHouse(app);
+  if (setup.property_id) return renderDone(app);
+  if (screen === "review") return renderReview(app);
+  return renderRoom(app);
+}
+
+async function renderLanguage(app) {
+  if (LANGS === null) {
+    try { LANGS = (await api("/api/languages")).languages; }
+    catch (e) { return fail(app, e); }
+  }
+  const buttons = LANGS.map(l =>
+    `<button class="btn" data-lang="${esc(l.code)}">${esc(l.name)}</button>`).join("");
+  app.innerHTML = `<h1>Idioma · Language · Язык</h1>${buttons}`;
+  app.querySelectorAll("[data-lang]").forEach(b => {
+    b.onclick = () => {
+      LANG = b.getAttribute("data-lang");
+      storeSet("pot-lang", LANG);
+      render();
+    };
+  });
+}
+
+function stepperHtml(key, label, lo, hi) {
+  return `<div class="stepper"><span>${esc(label)}</span>
+    <button data-step="${key}|-1">−</button><b>${house[key]}</b><button data-step="${key}|1">+</button></div>`;
+}
+
+function toggleHtml(key, label) {
+  return `<label class="toggle"><span>${esc(label)}</span>
+    <input type="checkbox" data-toggle="${key}"${house[key] ? " checked" : ""}></label>`;
+}
+
+function renderHouse(app) {
+  const t = T();
+  app.innerHTML = `<h1>${esc(t.title)}</h1>
+    ${err ? `<div class="error">${esc(err)}</div>` : ""}
+    <label class="small" for="hname">${esc(t.houseName)}</label>
+    <input type="text" id="hname" value="${esc(house.name)}">
+    ${stepperHtml("floors", t.floors, 1, 4)}
+    ${stepperHtml("bedrooms", t.bedrooms, 0, 8)}
+    ${stepperHtml("bathrooms", t.bathrooms, 0, 6)}
+    ${stepperHtml("halfBaths", t.halfBaths, 0, 4)}
+    ${toggleHtml("kitchen", t.types.kitchen)}
+    ${toggleHtml("living", t.types.living_room)}
+    ${toggleHtml("dining", t.types.dining_room)}
+    ${toggleHtml("laundry", t.types.laundry)}
+    ${toggleHtml("back", t.backPorch)}
+    ${toggleHtml("front", t.frontPorch)}
+    <button class="btn" id="next" ${busy ? "disabled" : ""}>${esc(busy || t.next)}</button>
+    ${SID ? `<p><a href="#" id="startOver" class="small">${esc(t.startOver)}</a></p>` : ""}`;
+  document.getElementById("hname").oninput = ev => { house.name = ev.target.value; };
+  app.querySelectorAll("[data-step]").forEach(b => {
+    b.onclick = () => {
+      const [key, delta] = b.getAttribute("data-step").split("|");
+      const limits = {floors: [1, 4], bedrooms: [0, 8], bathrooms: [0, 6], halfBaths: [0, 4]};
+      const [lo, hi] = limits[key];
+      house[key] = Math.min(hi, Math.max(lo, house[key] + Number(delta)));
+      render();
+    };
+  });
+  app.querySelectorAll("[data-toggle]").forEach(c => {
+    c.onchange = () => { house[c.getAttribute("data-toggle")] = c.checked; };
+  });
+  document.getElementById("next").onclick = createSetup;
+  const over = document.getElementById("startOver");
+  if (over) over.onclick = ev => { ev.preventDefault(); startOver(); };
+}
+
+async function createSetup() {
+  err = "";
+  if (!house.name.trim()) { err = T().needName; return render(); }
+  busy = T().starting;
+  render();
+  try {
+    const created = await api("/api/setups", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        name: house.name.trim(), floors: house.floors, bedrooms: house.bedrooms,
+        full_baths: house.bathrooms, half_baths: house.halfBaths,
+        kitchen: house.kitchen, living_room: house.living, dining_room: house.dining,
+        laundry: house.laundry, back_porch: house.back, front_porch: house.front,
+        language: LANG,
+      }),
+    });
+    SID = created.setup_id;
+    storeSet("pot-setup", SID);
+    await reloadSetup();
+    screen = "room";
+    roomIdx = 0;
+  } catch (e) {
+    err = e.message === "auth" ? T().authError : e.message;
+  }
+  busy = "";
+  render();
+}
+
+async function reloadSetup() {
+  setup = await api(`/api/setups/${encodeURIComponent(SID)}`);
+}
+
+function startOver() {
+  storeDel("pot-setup");
+  storeDel("pot-setup-at");
+  SID = "";
+  setup = null;
+  screen = "house";
+  roomIdx = 0;
+  err = "";
+  editing = null;
+  render();
+}
+
+function roomUrl(room, extra) {
+  return `/api/setups/${encodeURIComponent(SID)}/rooms/${encodeURIComponent(room.id)}${extra || ""}`;
+}
+
+function renderRoom(app) {
+  const t = T();
+  const room = setup.rooms[roomIdx];
+  const n = setup.rooms.length;
+  const draft = room.draft;
+  let html = `<h1>${esc(t.roomOf(roomIdx + 1, n, room.name))}</h1>`;
+  html += `<p class="small">${esc(t.types[room.type] || room.type)} · ${esc(t.floor)} ${esc(room.floor)}</p>`;
+  if (err) html += `<div class="error">${esc(err)}</div>`;
+  html += `<label class="small" for="rname">${esc(t.roomName)}</label>
+    <input type="text" id="rname" value="${esc(room.name)}">
+    <label class="small" for="rfloor">${esc(t.floor)}</label>
+    <input type="number" id="rfloor" value="${esc(room.floor)}" min="0" max="9">`;
+  html += `<p>${esc(t.photoHint)}</p>`;
+  html += `<div class="thumbs">` + room.photos.map(p =>
+    `<div class="thumb"><img src="${roomUrl(room, `/photos/${p}`)}" alt="" loading="lazy">
+     <button data-delphoto="${p}">×</button></div>`).join("") + `</div>`;
+  if (room.photos.length < 3) {
+    html += `<input type="file" id="rphotos" accept="image/*" multiple>`;
+  }
+  html += `<p class="small">${esc(t.aiHint)}</p>`;
+  html += `<label class="small" for="rrules">${esc(t.rulesLabel)}</label>
+    <textarea id="rrules" placeholder="${esc(t.examples[room.type] || t.examples.other)}">${esc(room.rules)}</textarea>`;
+  if (recorder) {
+    html += `<button class="btn secondary" id="micStop">${esc(t.stop)} (<span id="micTime">0:00</span>)</button>`;
+  } else if (busy === "voice") {
+    html += `<div class="result wait">${esc(t.transcribing)}</div>`;
+  } else if (micReady()) {
+    html += `<button class="btn secondary" id="micStart">${esc(t.sayRule)}</button>`;
+  }
+  if (noteMsg) html += `<div class="result wait">${esc(noteMsg)}</div>`;
+  if (!draft) {
+    html += `<button class="btn" id="draft" ${busy || !room.photos.length ? "disabled" : ""}>${esc(busy === "draft" ? t.writing : t.makeList)}</button>`;
+  } else {
+    html += draftHtml(room, draft);
+  }
+  const canNext = room.status === "ready" || room.status === "skipped";
+  html += `<div class="rowbtns">
+    <button class="btn secondary" id="rback">${esc(t.back)}</button>
+    <button class="btn secondary" id="rskip">${esc(room.status === "skipped" ? t.unskip : t.skip)}</button>
+    <button class="btn" id="rnext" ${canNext ? "" : "disabled"}>${esc(roomIdx + 1 >= n ? t.review : t.nextRoom)}</button>
+  </div>`;
+  app.innerHTML = html;
+
+  document.getElementById("rname").onchange = async ev => {
+    await putRoom(room, {name: ev.target.value});
+  };
+  document.getElementById("rfloor").onchange = async ev => {
+    await putRoom(room, {floor: Number(ev.target.value)});
+  };
+  document.getElementById("rrules").onchange = async ev => {
+    await putRoom(room, {rules: ev.target.value});
+  };
+  const picker = document.getElementById("rphotos");
+  if (picker) picker.onchange = () => uploadPhotos(room, picker.files);
+  app.querySelectorAll("[data-delphoto]").forEach(b => {
+    b.onclick = async () => {
+      try {
+        const updated = await api(roomUrl(room, `/photos/${b.getAttribute("data-delphoto")}`),
+          {method: "DELETE"});
+        Object.assign(room, updated);
+        editing = null;
+      } catch (e) { err = e.message; }
+      render();
+    };
+  });
+  const micStart = document.getElementById("micStart");
+  if (micStart) micStart.onclick = () => startRec(room);
+  const micStop = document.getElementById("micStop");
+  if (micStop) micStop.onclick = stopRec;
+  const draftBtn = document.getElementById("draft");
+  if (draftBtn) draftBtn.onclick = () => makeDraft(room);
+  wireDraft(app, room, draft);
+  document.getElementById("rback").onclick = () => {
+    editing = null; err = "";
+    if (roomIdx > 0) { roomIdx--; }
+    else { screen = "review"; }
+    render();
+  };
+  document.getElementById("rskip").onclick = async () => {
+    await putRoom(room, {skipped: room.status !== "skipped"});
+    editing = null;
+    goNext();
+  };
+  document.getElementById("rnext").onclick = () => { editing = null; err = ""; goNext(); };
+}
+
+function goNext() {
+  if (roomIdx + 1 >= setup.rooms.length) { screen = "review"; }
+  else { roomIdx++; }
+  render();
+}
+
+function draftHtml(room, draft) {
+  const t = T();
+  let html = "";
+  draft.items.forEach((item, idx) => {
+    if (editing && editing.idx === idx) {
+      html += `<div class="item">
+        <input type="text" id="editLabel" value="${esc(editing.label)}">
+        <textarea id="editReq">${esc(editing.requirement)}</textarea>
+        <div class="rowbtns">
+          <button class="btn secondary" id="editCancel">${esc(t.cancel)}</button>
+          <button class="btn" id="editSave">${esc(t.save)}</button>
+        </div></div>`;
+      return;
+    }
+    const tag = item.source === "rule"
+      ? `<span class="tag rule">${esc(t.yourRule)}</span>`
+      : `<span class="tag photo">${esc(t.fromPhoto)}</span>`;
+    const crit = item.critical
+      ? `<button class="mini crit" data-crit="${idx}">${esc(t.critical)}</button>`
+      : `<button class="mini opt" data-crit="${idx}">${esc(t.optional)}</button>`;
+    html += `<div class="item" data-edit="${idx}">
+      <div class="head"><strong>${esc(item.label)}</strong>${tag}${crit}
+      <button class="mini del" data-delitem="${idx}">×</button></div>
+      <div class="small">${esc(item.requirement)}</div></div>`;
+  });
+  html += `<p class="small">${esc(t.recognizes(draft.description))}</p>`;
+  if (room.type === "bedroom") {
+    html += `<label class="small" for="beds">${esc(t.beds)}</label>
+      <textarea id="beds" style="min-height:64px">${esc((draft.beds || []).join("\n"))}</textarea>`;
+  }
+  if (room.type === "bathroom") {
+    html += `<label class="small" for="towels">${esc(t.towels)}</label>
+      <input type="number" id="towels" value="${esc(draft.towels)}" min="0" max="20">`;
+  }
+  if ((draft.unclear_rules || []).length) {
+    html += `<p class="small">${esc(t.unclear(draft.unclear_rules.join("; ")))}</p>`;
+  }
+  return html;
+}
+
+function wireDraft(app, room, draft) {
+  if (!draft) return;
+  app.querySelectorAll("[data-edit]").forEach(row => {
+    row.onclick = ev => {
+      if (ev.target.closest("button")) return;
+      const idx = Number(row.getAttribute("data-edit"));
+      editing = {idx: idx, label: draft.items[idx].label,
+                 requirement: draft.items[idx].requirement};
+      render();
+    };
+  });
+  app.querySelectorAll("[data-delitem]").forEach(b => {
+    b.onclick = async ev => {
+      ev.stopPropagation();
+      const idx = Number(b.getAttribute("data-delitem"));
+      await putRoom(room, {items: draft.items.filter((_, i) => i !== idx)});
+    };
+  });
+  app.querySelectorAll("[data-crit]").forEach(b => {
+    b.onclick = async ev => {
+      ev.stopPropagation();
+      const idx = Number(b.getAttribute("data-crit"));
+      const items = draft.items.map((item, i) =>
+        i === idx ? Object.assign({}, item, {critical: !item.critical}) : item);
+      await putRoom(room, {items: items});
+    };
+  });
+  const editSave = document.getElementById("editSave");
+  if (editSave) editSave.onclick = async () => {
+    const items = draft.items.map((item, i) => i === editing.idx
+      ? Object.assign({}, item, {
+        label: document.getElementById("editLabel").value,
+        requirement: document.getElementById("editReq").value,
+      }) : item);
+    editing = null;
+    await putRoom(room, {items: items});
+  };
+  const editCancel = document.getElementById("editCancel");
+  if (editCancel) editCancel.onclick = () => { editing = null; render(); };
+  const beds = document.getElementById("beds");
+  if (beds) beds.onchange = async ev => {
+    await putRoom(room, {beds: ev.target.value.split("\n")});
+  };
+  const towels = document.getElementById("towels");
+  if (towels) towels.onchange = async ev => {
+    await putRoom(room, {towels: Number(ev.target.value)});
+  };
+}
+
+async function putRoom(room, patch) {
+  err = "";
+  try {
+    const updated = await api(roomUrl(room), {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(patch),
+    });
+    Object.assign(room, updated);
+  } catch (e) {
+    err = e.message === "auth" ? T().authError : e.message;
+  }
+  render();
+}
+
+async function uploadPhotos(room, files) {
+  err = "";
+  busy = "photos";
+  render();
+  try {
+    for (const file of files) {
+      if (room.photos.length >= 3) break;
+      const form = new FormData();
+      form.append("image", file);
+      const res = await api(roomUrl(room, "/photos"), {method: "POST", body: form});
+      room.photos.push(res.n);
+    }
+    await reloadSetup();
+  } catch (e) {
+    err = e.message === "auth" ? T().authError : e.message;
+    try { await reloadSetup(); } catch (e2) {}
+  }
+  busy = "";
+  render();
+}
+
+function pickMime() {
+  const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+  if (window.MediaRecorder && MediaRecorder.isTypeSupported) {
+    for (const c of cands) {
+      try {
+        if (MediaRecorder.isTypeSupported(c)) return c;
+      } catch (e) {}
+    }
+  }
+  return "";
+}
+
+function tickRec() {
+  const seconds = Math.floor((Date.now() - recStart) / 1000);
+  const el = document.getElementById("micTime");
+  if (el) el.textContent = fmtTime(seconds);
+  if (seconds >= 60) stopRec();
+}
+
+async function startRec(room) {
+  noteMsg = "";
+  try {
+    recStream = await navigator.mediaDevices.getUserMedia({audio: true});
+  } catch (e) {
+    noteMsg = T().micDenied;
+    return render();
+  }
+  const mime = pickMime();
+  try {
+    recorder = mime ? new MediaRecorder(recStream, {mimeType: mime})
+      : new MediaRecorder(recStream);
+  } catch (e) {
+    recStream.getTracks().forEach(t => t.stop());
+    recStream = null;
+    noteMsg = T().micDenied;
+    return render();
+  }
+  recChunks = [];
+  recorder.ondataavailable = ev => { if (ev.data && ev.data.size) recChunks.push(ev.data); };
+  recorder.onstop = () => sendRec(room);
+  recStart = Date.now();
+  recorder.start();
+  if (recTimer) clearInterval(recTimer);
+  recTimer = setInterval(tickRec, 250);
+  render();
+}
+
+function stopRec() {
+  if (recTimer) { clearInterval(recTimer); recTimer = null; }
+  if (recorder && recorder.state !== "inactive") recorder.stop();
+}
+
+async function sendRec(room) {
+  const chunks = recChunks;
+  const mime = (recorder && recorder.mimeType) || "";
+  if (recStream) {
+    recStream.getTracks().forEach(t => t.stop());
+    recStream = null;
+  }
+  recorder = null;
+  recChunks = [];
+  busy = "voice";
+  render();
+  const ext = mime.indexOf("mp4") >= 0 ? "mp4" : "webm";
+  const form = new FormData();
+  form.append("audio", new Blob(chunks, {type: mime || "audio/webm"}), `rule.${ext}`);
+  try {
+    const res = await api(roomUrl(room, "/voice"), {method: "POST", body: form});
+    if (res.status === "no_speech") {
+      noteMsg = T().noSpeech;
+    } else {
+      noteMsg = "";
+      busy = "";
+      room.rules = room.rules ? room.rules + "\n" + res.english : res.english;
+      await putRoom(room, {rules: room.rules});
+      return;
+    }
+  } catch (e) {
+    noteMsg = e.message === "auth" ? T().authError : e.message;
+  }
+  busy = "";
+  render();
+}
+
+async function makeDraft(room) {
+  err = "";
+  busy = "draft";
+  render();
+  try {
+    await api(roomUrl(room, "/draft"), {method: "POST"});
+    await reloadSetup();
+  } catch (e) {
+    err = e.message === "auth" ? T().authError : e.message;
+  }
+  busy = "";
+  render();
+}
+
+function renderReview(app) {
+  const t = T();
+  let html = `<h1>${esc(t.review)}: ${esc(setup.name)}</h1>`;
+  if (err) html += `<div class="error">${esc(err)}</div>`;
+  setup.rooms.forEach((room, idx) => {
+    const checks = room.draft ? t.checks(room.draft.items.length) : "";
+    const status = room.status === "ready"
+      ? `<span class="pill ready">${esc(t.ready)}</span> ${esc(checks)}`
+      : room.status === "skipped"
+      ? `<span class="pill skipped">${esc(t.skipped)}</span>`
+      : `<span class="pill new">${esc(t.noList)}</span>`;
+    html += `<button class="roomrow" data-room="${idx}"><strong>${esc(room.name)}</strong><br>${status}</button>`;
+  });
+  html += `<h2 class="room">${esc(t.addRoom)}</h2>
+    <label class="small" for="addType">${esc(t.roomType)}</label>
+    <select id="addType">` + ROOM_TYPES.map(type =>
+      `<option value="${type}"${type === addType ? " selected" : ""}>${esc(t.types[type])}</option>`
+    ).join("") + `</select>
+    <label class="small" for="addName">${esc(t.roomName)}</label>
+    <input type="text" id="addName" value="${esc(addName)}">
+    <label class="small" for="addFloor">${esc(t.floor)}</label>
+    <input type="number" id="addFloor" value="${esc(addFloor)}" min="0" max="9">
+    <button class="btn secondary" id="addBtn">${esc(t.add)}</button>`;
+  const canSave = setup.rooms.length > 0 &&
+    setup.rooms.every(r => r.status === "ready" || r.status === "skipped") &&
+    setup.rooms.some(r => r.status === "ready");
+  html += `<button class="btn" id="saveBtn" ${canSave && !busy ? "" : "disabled"}>${esc(busy === "save" ? t.planning : t.saveHouse)}</button>`;
+  html += `<p><a href="#" id="startOver" class="small">${esc(t.startOver)}</a></p>`;
+  app.innerHTML = html;
+
+  app.querySelectorAll("[data-room]").forEach(b => {
+    b.onclick = () => {
+      roomIdx = Number(b.getAttribute("data-room"));
+      screen = "room";
+      editing = null;
+      err = "";
+      render();
+    };
+  });
+  document.getElementById("addType").onchange = ev => { addType = ev.target.value; };
+  document.getElementById("addName").oninput = ev => { addName = ev.target.value; };
+  document.getElementById("addFloor").onchange = ev => { addFloor = Number(ev.target.value); };
+  document.getElementById("addBtn").onclick = async () => {
+    err = "";
+    try {
+      const room = await api(`/api/setups/${encodeURIComponent(SID)}/rooms`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({type: addType, name: addName, floor: addFloor}),
+      });
+      await reloadSetup();
+      roomIdx = setup.rooms.findIndex(r => r.id === room.id);
+      screen = "room";
+      addName = "";
+      editing = null;
+    } catch (e) {
+      err = e.message === "auth" ? t.authError : e.message;
+    }
+    render();
+  };
+  const saveBtn = document.getElementById("saveBtn");
+  if (saveBtn) saveBtn.onclick = saveHouse;
+  document.getElementById("startOver").onclick = ev => { ev.preventDefault(); startOver(); };
+}
+
+async function saveHouse() {
+  err = "";
+  busy = "save";
+  render();
+  try {
+    const res = await api(`/api/setups/${encodeURIComponent(SID)}/save`, {method: "POST"});
+    await reloadSetup();
+    if (res.tour_error) {
+      err = res.tour_error;
+      screen = "review";
+    } else {
+      screen = "done";
+    }
+  } catch (e) {
+    err = e.message === "auth" ? T().authError : e.message;
+  }
+  busy = "";
+  render();
+}
+
+function renderDone(app) {
+  const t = T();
+  const res = setup.save_result || {};
+  const photoCount = setup.rooms.reduce((n, r) => n + (r.photos || []).length, 0);
+  const summary = t.done(setup.name, t.rooms(res.rooms || 0),
+    t.checks(res.items || 0), t.photos(photoCount));
+  let html = `<h1>${esc(t.title)}</h1>`;
+  if (err) html += `<div class="error">${esc(err)}</div>`;
+  html += `<div class="result ok">${esc(summary)}</div>`;
+  if (res.tour_error !== undefined && res.shots === undefined) {
+    html += `<div class="result bad">${esc(res.tour_error || "")}</div>
+      <button class="btn secondary" id="retryBtn">${esc(t.retryTour)}</button>`;
+  } else {
+    html += `<button class="btn" id="goTurnover">${esc(t.startTurnover)}</button>`;
+  }
+  html += `<p><a href="#" id="startOver" class="small">${esc(t.startOver)}</a></p>`;
+  app.innerHTML = html;
+  const go = document.getElementById("goTurnover");
+  if (go) go.onclick = () => {
+    storeSet("pot-house", setup.property_id);
+    location.href = `/clean?code=${encodeURIComponent(CODE)}`;
+  };
+  const retryBtn = document.getElementById("retryBtn");
+  if (retryBtn) retryBtn.onclick = async () => {
+    err = "";
+    busy = "save";
+    render();
+    try {
+      const res2 = await api(`/api/setups/${encodeURIComponent(SID)}/tour`, {method: "POST"});
+      await reloadSetup();
+      if (res2.tour_error) err = res2.tour_error;
+    } catch (e) {
+      err = e.message === "auth" ? T().authError : e.message;
+    }
+    busy = "";
+    render();
+  };
+  document.getElementById("startOver").onclick = ev => { ev.preventDefault(); startOver(); };
+}
+
+function fail(app, e) {
+  app.innerHTML = `<div class="error">${esc(e.message === "auth" ? T().authError : e.message)}</div>`;
+}
+
+async function boot() {
+  const app = document.getElementById("app");
+  if (!LANG) return render();
+  if (SID) {
+    try {
+      await reloadSetup();
+      if (setup.property_id) {
+        screen = "done";
+      } else {
+        try {
+          const at = JSON.parse(storeGet("pot-setup-at") || "null");
+          if (at && (at.screen === "room" || at.screen === "review")) {
+            screen = at.screen;
+            roomIdx = Math.min(Math.max(0, at.idx || 0), setup.rooms.length - 1);
+          } else {
+            screen = "room";
+            roomIdx = 0;
+          }
+        } catch (e) {
+          screen = "room";
+          roomIdx = 0;
+        }
+        if (!setup.rooms.length) screen = "review";
+      }
+    } catch (e) {
+      if (e.message === "auth") return fail(app, e);
+      startOver();
+      return;
+    }
+  }
+  render();
+}
+boot();
+</script>
+</body>
+</html>
