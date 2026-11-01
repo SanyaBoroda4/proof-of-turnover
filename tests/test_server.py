@@ -238,6 +238,27 @@ def test_evidence_served_for_proven_item():
     assert response.content[:2] == b"\xff\xd8"
 
 
+def test_evidence_card_param_serves_uncaptioned_copy():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    captioned = test.get(
+        f"/api/runs/{run_id}/evidence/master-bedroom.beds_made?code={code}"
+    )
+    card = test.get(
+        f"/api/runs/{run_id}/evidence/master-bedroom.beds_made?code={code}&card=1"
+    )
+    assert card.status_code == 200
+    assert card.headers["content-type"] == "image/jpeg"
+    assert card.headers["cache-control"] == "public, max-age=31536000"
+    assert card.content != captioned.content
+    with Image.open(io.BytesIO(card.content)) as card_img, \
+         Image.open(io.BytesIO(captioned.content)) as cap_img:
+        assert card_img.size[0] == cap_img.size[0]
+        assert card_img.size[1] < cap_img.size[1]
+
+
 def test_signoff_approve_marks_done():
     test, code = _client()
     run_id = _create_run(test, code)

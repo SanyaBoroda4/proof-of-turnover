@@ -288,6 +288,7 @@ class RunState:
             state.evidence = {
                 path.name[:-len(".jpg")] for path in evidence_dir.iterdir()
                 if path.is_file() and path.suffix.lower() == ".jpg"
+                and not path.name.endswith(".card.jpg")
             }
         timeline_path = run_dir / "timeline.jsonl"
         if timeline_path.is_file():
@@ -809,11 +810,12 @@ class RunState:
                 self.evidence.discard(item_id)
                 self._event_locked("status", item_id, NEEDS_PROOF, "",
                                    notes or "Host asked for a new photo")
-                stale = self.run_dir / "evidence" / f"{item_id}.jpg"
-                try:
-                    stale.unlink()
-                except OSError:
-                    pass
+                for suffix in (".jpg", ".card.jpg"):
+                    stale = self.run_dir / "evidence" / f"{item_id}{suffix}"
+                    try:
+                        stale.unlink()
+                    except OSError:
+                        pass
             host_verdict = verdict(self.checklist, self.proofs)
             self.signoff = {
                 "decision": "sendback",
@@ -1014,9 +1016,17 @@ class RunState:
         with self.lock:
             return sorted(self._taken_shots_locked())
 
-    def read_evidence(self, item_id):
-        """Evidence JPEG bytes, read under the lock (never mid-replace)."""
+    def read_evidence(self, item_id, card=False):
+        """Evidence JPEG bytes, read under the lock (never mid-replace).
+
+        With card, the caption-free copy for the phone cards; falls back
+        to the captioned photo when no card copy was saved.
+        """
         with self.lock:
+            if card:
+                card_path = self.run_dir / "evidence" / f"{item_id}.card.jpg"
+                if card_path.is_file():
+                    return card_path.read_bytes()
             path = self.run_dir / "evidence" / f"{item_id}.jpg"
             if not path.is_file():
                 return None

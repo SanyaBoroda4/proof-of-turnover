@@ -454,9 +454,9 @@ def create_app(client=None):
         return {"calls": need_state(run_id).call_log()}
 
     @app.get("/api/runs/{run_id}/evidence/{item_id}")
-    def _get_evidence(run_id: str, item_id: str):
+    def _get_evidence(run_id: str, item_id: str, card: bool = False):
         _checked_id(item_id, "item")
-        blob = need_state(run_id).read_evidence(item_id)
+        blob = need_state(run_id).read_evidence(item_id, card=card)
         if blob is None:
             raise HTTPException(404, f"No evidence for '{item_id}'")
         # Pages add ?v=<photo id>: cache long, retakes change the URL.

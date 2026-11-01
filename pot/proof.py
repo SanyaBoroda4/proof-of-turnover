@@ -224,7 +224,9 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
 
     Proven items get their muted-blue SAM boxes; problem items get the red
     problem-object boxes instead. The caption shows label + status on
-    line 1 and the reason on line 2. With item_ids, only those are saved.
+    line 1 and the reason on line 2. A second copy without the caption
+    bar (<item_id>.card.jpg) is saved for the phone cards. With item_ids,
+    only those are saved.
     """
     problem_sams = problem_sams or {}
     evidence_dir = run_dir / "evidence"
@@ -248,6 +250,8 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
             bar_height = pad + line_height * 2 + pad
             canvas = Image.new("RGB", (source.width, source.height + bar_height), "white")
             canvas.paste(source, (0, bar_height))
+            card = Image.new("RGB", (source.width, source.height), "white")
+            card.paste(source, (0, 0))
         draw = ImageDraw.Draw(canvas)
         label = items_by_id[item_id].label if item_id in items_by_id else item_id
         draw.text(
@@ -276,30 +280,37 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
                 "right": source.width - 1, "bottom": source.height - 1,
             }]
             box_width = max(3 * BOX_WIDTH, min(source.width, source.height) // 60)
+        card_draw = ImageDraw.Draw(card)
         for box in boxes:
+            left, top = int(box["left"]), int(box["top"])
+            right, bottom = int(box["right"]), int(box["bottom"])
             draw.rectangle(
-                [
-                    int(box["left"]),
-                    int(box["top"]) + bar_height,
-                    int(box["right"]),
-                    int(box["bottom"]) + bar_height,
-                ],
+                [left, top + bar_height, right, bottom + bar_height],
                 outline=color,
                 width=box_width,
             )
+            card_draw.rectangle(
+                [left, top, right, bottom], outline=color, width=box_width
+            )
         path = evidence_dir / f"{item_id}.jpg"
-        fd, tmp_name = tempfile.mkstemp(
-            dir=str(evidence_dir), prefix=path.name + ".", suffix=".tmp"
-        )
-        try:
-            os.close(fd)
-            canvas.save(tmp_name, "JPEG", quality=90)
-            os.replace(tmp_name, path)
-        except BaseException:
-            try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-            raise
+        _save_jpeg_atomic(canvas, path)
+        _save_jpeg_atomic(card, evidence_dir / f"{item_id}.card.jpg")
         paths[item_id] = path
     return paths
+
+
+def _save_jpeg_atomic(canvas, path):
+    """Write one JPEG atomically (temp file + replace)."""
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+    )
+    try:
+        os.close(fd)
+        canvas.save(tmp_name, "JPEG", quality=90)
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise

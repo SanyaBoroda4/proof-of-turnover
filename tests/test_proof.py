@@ -380,6 +380,29 @@ def test_evidence_images_drawn_with_caption(tmp_path):
     assert not (Path(tmp_path) / "evidence" / "bed.skip.jpg").exists()
 
 
+def test_evidence_card_copy_has_no_caption_bar(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    photo = photos[0]
+    from pot.proof import ProofItem
+    proofs = {
+        "bed.beds_made": ProofItem("bed.beds_made", PROVEN, "ok", "P01"),
+        "bed.other": ProofItem("bed.other", PROBLEM, "bad", "P01"),
+    }
+    items = {"bed.beds_made": _item(), "bed.other": _item(id="bed.other", key="other")}
+    sams = {
+        "bed.beds_made": SamCheck("bed.beds_made", "P01", "bed", 1, [_box()]),
+        "bed.other": SamCheck("bed.other", "P01", "bed", 1, [_box(left=20)]),
+    }
+    problem_sams = {"bed.other": SamCheck("bed.other", "P01", "stain", 1, [_box()])}
+    save_evidence(tmp_path, proofs, items, {"P01": photo}, sams, problem_sams)
+    with Image.open(tmp_path / "evidence" / "bed.beds_made.card.jpg") as img:
+        assert img.size == (32, 24)
+        assert _has_color(img, _is_muted_blue)
+    with Image.open(tmp_path / "evidence" / "bed.other.card.jpg") as img:
+        assert img.size == (32, 24)
+        assert _has_color(img, _is_red)
+
+
 def test_proven_count_caption_reads_seen_needed():
     proof = _prove(sam=_sam(count=2))
     assert proof.status == PROVEN
