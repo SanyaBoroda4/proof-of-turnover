@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
-from pot import config, prompts
+from pot import config, examples as examples_mod, prompts
 from pot.checklist import (
     PropertyError,
     build_checklist,
@@ -768,12 +768,35 @@ def _save_now(client, setup_id):
             _save_locked(setup)
         return dict(result, tour_error=str(exc))
     result["shots"] = len(shots)
+    _save_setup_examples(setup_id, property_id, shots)
     with _lock_for(setup_id):
         setup = load_setup(setup_id)
         setup["property_id"] = property_id
         setup["save_result"] = dict(result)
         _save_locked(setup)
     return result
+
+
+def _save_setup_examples(setup_id, property_id, shots):
+    """Every shot gets its room's first setup photo as its example."""
+    try:
+        setup = load_setup(setup_id)
+    except SetupNotFound:
+        return
+    rooms_by_id = {room["id"]: room for room in setup["rooms"]}
+    for shot in shots:
+        room = rooms_by_id.get(shot["room_id"])
+        if not room or not room.get("photos"):
+            continue
+        if examples_mod.has_example(property_id, shot["shot_id"]):
+            continue
+        number = min(room["photos"])
+        path = (
+            _setup_dir(setup_id) / "photos" / room["id"]
+            / f"{number}_overview.jpg"
+        )
+        if path.is_file():
+            examples_mod.save_example(property_id, shot["shot_id"], path)
 
 
 def retry_tour(client, setup_id):

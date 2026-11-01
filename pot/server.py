@@ -27,7 +27,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFi
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from pot import config, prompts
+from pot import config, examples as examples_mod, prompts
 from pot.checklist import PropertyError, build_checklist, load_property
 from pot.meta_client import MetaClient, MetaClientError, call_context
 from pot import setup as setup_mod
@@ -138,6 +138,10 @@ class ResolveBody(BaseModel):
     action: str
     reason: str | None = None
     note_id: str | None = None
+
+
+class SkipShotBody(BaseModel):
+    shot_id: str
 
 
 RESOLVE_ACTIONS = ("cant_fix", "its_fine")
@@ -379,11 +383,31 @@ def create_app(client=None):
     def _get_tour(run_id: str):
         state = need_state(run_id)
         status = state.status()
+        shots = []
+        for shot in state.tour["shots"]:
+            entry = dict(shot)
+            if examples_mod.has_example(
+                state.property["id"], shot["shot_id"]
+            ):
+                entry["example_url"] = (
+                    f"/api/properties/{state.property['id']}"
+                    f"/examples/{shot['shot_id']}"
+                )
+            shots.append(entry)
         return {
-            "shots": state.tour["shots"],
+            "shots": shots,
             "taken": state.taken_shots(),
             "current_shot": status["current_shot"],
         }
+
+    @app.get("/api/properties/{property_id}/examples/{shot_id}")
+    def _example_file(property_id: str, shot_id: str):
+        _checked_id(property_id, "property")
+        _checked_id(shot_id, "shot")
+        blob = examples_mod.read_example(property_id, shot_id)
+        if blob is None:
+            raise HTTPException(404, f"No example for shot '{shot_id}'")
+        return Response(blob, media_type="image/jpeg", headers=dict(LONG_CACHE))
 
     @app.post("/api/tour")
     def _generate_tour(body: TourRequest):
@@ -483,6 +507,17 @@ def create_app(client=None):
         state = need_state(run_id)
         if body.decision == "approve":
             signoff = state.approve()
+            for shot in state.tour["shots"]:
+                if examples_mod.has_example(
+                    state.property["id"], shot["shot_id"]
+                ):
+                    continue
+                photo = examples_mod.proving_photo_for_shot(state, shot)
+                if photo is not None:
+                    examples_mod.save_example(
+                        state.property["id"], shot["shot_id"],
+                        photo.overview_path,
+                    )
         elif body.decision == "sendback":
             if not body.item_ids:
                 raise HTTPException(400, "Tick at least one item to send back")
@@ -540,6 +575,16 @@ def create_app(client=None):
         state = need_state(run_id)
         skipped = state.end_round()
         return {"round_ended": True, "skipped": skipped}
+
+    @app.post("/api/runs/{run_id}/skip-shot")
+    def _skip_shot(run_id: str, body: SkipShotBody):
+        state = need_state(run_id)
+        _checked_id(body.shot_id, "shot")
+        try:
+            skipped = state.skip_shot(body.shot_id)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        return {"skipped": body.shot_id, "skipped_shots": skipped}
 
     @app.post("/api/runs/{run_id}/finish")
     def _finish_run(run_id: str):

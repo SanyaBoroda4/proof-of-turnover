@@ -51,6 +51,7 @@
     .card.slide { animation: none; }
   }
   .card img.photo { width: 100%; border-radius: 8px; cursor: zoom-in; }
+  img.example { max-width: 200px; border-radius: 8px; margin: 8px 0; }
   .card .head { color: var(--grey); font-size: 16px; margin-bottom: 6px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
   .chip { border: 1px solid #999; border-radius: 20px; background: #fff;
@@ -147,6 +148,7 @@ const I18N = {
     exitConfirm: "¿Salir de este turno? Tus fotos están guardadas.",
     finishEarly: "Terminar fotos ahora (prueba)",
     finishEarlyConfirm: "¿Terminar las fotos ahora? Las fotos no tomadas se omitirán.",
+    skipTest: "Omitir (prueba)",
   },
   en: {
     title: "Cleaning turnover",
@@ -202,6 +204,7 @@ const I18N = {
     exitConfirm: "Leave this turnover? Your photos are saved.",
     finishEarly: "Finish photos now (test)",
     finishEarlyConfirm: "Finish photos now? Shots not taken will be skipped.",
+    skipTest: "Skip (test)",
   },
   ru: {
     title: "Уборка",
@@ -257,6 +260,7 @@ const I18N = {
     exitConfirm: "Покинуть эту уборку? Ваши фото сохранены.",
     finishEarly: "Закончить фото сейчас (тест)",
     finishEarlyConfirm: "Закончить фото сейчас? Неснятые кадры будут пропущены.",
+    skipTest: "Пропустить (тест)",
   },
 };
 function T() { return I18N[LANG] || I18N.en; }
@@ -438,21 +442,27 @@ function shortName(shot) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function skippedSet() {
+  return new Set(((status || {}).skipped_shots || []));
+}
+
 function roundCurrent() {
   if (overrideShot) {
     const s = tour.shots.find(x => x.shot_id === overrideShot);
     if (s) return s;
     overrideShot = null;
   }
+  const skip = skippedSet();
   return tour.shots.find(s =>
-    !takenSet.has(s.shot_id) &&
+    !takenSet.has(s.shot_id) && !skip.has(s.shot_id) &&
     (!optimistic.has(s.shot_id) || optimistic.get(s.shot_id).state !== "sending")
   ) || null;
 }
 
 function allTaken() {
+  const skip = skippedSet();
   return tour.shots.length > 0 &&
-    tour.shots.every(s => takenSet.has(s.shot_id));
+    tour.shots.every(s => takenSet.has(s.shot_id) || skip.has(s.shot_id));
 }
 
 function shotForCard(itemId) {
@@ -585,6 +595,7 @@ function renderKey() {
       selectedDemo, (demoPhotos || []).length,
       voiceKey(),
       (status.unchecked || []).length,
+      (status.skipped_shots || []).join(","),
     ]));
   }
   const byId = itemsById();
@@ -844,6 +855,10 @@ function renderRound(app) {
   if (shot) {
     html += `<h2 class="room">${esc(roomHeading(shot))}</h2>
       <div class="instruction">${esc(instruction(shot))}</div>`;
+    if (shot.example_url) {
+      html += `<img class="example" src="${esc(shot.example_url)}?code=${encodeURIComponent(CODE)}" alt="">`;
+    }
+    if (TEST || DEMO) html += `<button class="link" id="skipShot">${esc(T().skipTest)}</button>`;
     if (voiceMissing()) html += `<p class="small">${esc(T().noVoice)}</p>`;
     html += `<button class="btn secondary" id="repeat">${esc(T().repeat)}</button>`;
     html += cameraHtml(T().take, "demoPick", "snapCam");
@@ -877,6 +892,8 @@ function renderRound(app) {
     if (micStart) micStart.onclick = () => startRec(shot.room_id, null, null);
     const micStop = document.getElementById("micStop");
     if (micStop) micStop.onclick = stopRec;
+    const skipBtn = document.getElementById("skipShot");
+    if (skipBtn) skipBtn.onclick = () => skipShot(shot.shot_id);
   }
   const retryLast = document.getElementById("retakeLast");
   if (retryLast) retryLast.onclick = () => { overrideShot = last.shot_id; renderMaybe(); };
@@ -1321,6 +1338,22 @@ async function endRound() {
   } catch (e) {
     photoError = e.message;
   }
+  renderMaybe();
+}
+
+async function skipShot(shotId) {
+  try {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/skip-shot`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({shot_id: shotId}),
+    });
+    photoError = "";
+    await refresh();
+  } catch (e) {
+    photoError = e.message;
+  }
+  lastKey = null;
   renderMaybe();
 }
 

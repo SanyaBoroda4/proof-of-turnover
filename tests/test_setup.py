@@ -378,6 +378,26 @@ def test_save_writes_property_and_tour(dirs):
     assert "setup draft" in calls_path.read_text(encoding="utf-8")
 
 
+def test_save_writes_room_photo_as_shot_examples(dirs):
+    from pot import config
+
+    test = TestClient(create_app(_drafting_client()))
+    code = test.app.state.server.code
+    setup_id = _ready_setup(test, code)
+    saved = test.post(f"/api/setups/{setup_id}/save?code={code}")
+    assert saved.status_code == 200, saved.text
+    property_id = saved.json()["property_id"]
+    shots = json.loads(
+        (config.PROPERTIES_DIR / property_id / "tour.json")
+        .read_text(encoding="utf-8")
+    )["shots"]
+    assert shots
+    for shot in shots:
+        path = (config.EXAMPLES_DIR / property_id
+                / f"{shot['shot_id']}.jpg")
+        assert path.is_file(), shot["shot_id"]
+
+
 def test_save_needs_ready_rooms_and_unique_id(dirs):
     test = TestClient(create_app(_drafting_client()))
     code = test.app.state.server.code

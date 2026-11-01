@@ -32,6 +32,8 @@ from pot.verifier import (
     MAX_WORKERS,
     check_sam,
     check_second_look,
+    combine_problem_boxes,
+    problem_nouns,
     refine_problem_area,
     refine_problem_boxes,
     segment_problem_objects,
@@ -113,6 +115,7 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
                 )] = ("sam", item)
         claims_known = False
         chained = set()
+        chain_nouns = {}
 
         def maybe_chain(item_id):
             if item_id in chained or not claims_known:
@@ -120,21 +123,25 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
             claim = claims.get(item_id)
             second = seconds.get(item_id)
             area = by_id[item_id].problem_area if item_id in by_id else None
+            nouns = problem_nouns(second)
             if (
                 claim is not None and claim.status == "problem"
                 and second is not None and second.verdict == "not_done"
-                and (second.problem_object or area)
+                and (nouns or area)
             ):
                 chained.add(item_id)
                 if area:
-                    prompt = area
-                    purpose = f"sam problem area {item_id} {photo.id} ({area})"
+                    pending[submit_with_context(
+                        pool, check_sam, client, item_id, photo, area,
+                        f"sam problem area {item_id} {photo.id} ({area})",
+                    )] = ("problem", item_id)
                 else:
-                    prompt = second.problem_object
-                    purpose = f"sam problem {item_id} {photo.id} ({prompt})"
-                pending[submit_with_context(
-                    pool, check_sam, client, item_id, photo, prompt, purpose,
-                )] = ("problem", item_id)
+                    for index, noun in enumerate(nouns):
+                        chain_nouns[(item_id, index)] = noun
+                        pending[submit_with_context(
+                            pool, check_sam, client, item_id, photo, noun,
+                            f"sam problem {item_id} {photo.id} ({noun})",
+                        )] = ("problem", (item_id, index))
 
         while pending:
             done, _ = wait(set(pending), return_when=FIRST_COMPLETED)
@@ -161,20 +168,37 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
                     sam, job_notes = future.result()
                     problem_sams[ref] = sam
                     notes.extend(job_notes)
-    for item_id, sam in list(problem_sams.items()):
+    grouped = {}
+    for ref, sam in problem_sams.items():
+        if isinstance(ref, tuple):
+            item_id, index = ref
+        else:
+            item_id, index = ref, 0
+        grouped.setdefault(item_id, []).append((index, sam))
+    combined = {}
+    for item_id in sorted(grouped):
         item = by_id.get(item_id)
         if item is not None and item.problem_area:
+            sam = grouped[item_id][0][1]
             picked, job_notes = refine_problem_area(
                 client, item, photo, sam, seconds[item_id].problem_object, effort
             )
             notes.extend(job_notes)
-            problem_sams[item_id] = picked
-        elif sam.count > 1:
-            picked, job_notes = refine_problem_boxes(
-                client, item_id, photo, sam, seconds[item_id].problem_object, effort
-            )
-            notes.extend(job_notes)
-            problem_sams[item_id] = picked
+            combined[item_id] = picked
+            continue
+        refined = []
+        for index, sam in sorted(grouped[item_id]):
+            noun = chain_nouns[(item_id, index)]
+            if sam.count > 1:
+                sam, job_notes = refine_problem_boxes(
+                    client, item_id, photo, sam, noun, effort
+                )
+                notes.extend(job_notes)
+            refined.append((noun, sam))
+        merged, merge_notes = combine_problem_boxes(item_id, photo.id, refined)
+        notes.extend(merge_notes)
+        combined[item_id] = merged
+    problem_sams = combined
     return {
         "claims": claims,
         "seconds": seconds,

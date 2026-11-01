@@ -20,7 +20,7 @@ def _by_id(items):
 def test_rental_1_v6_checklist():
     prop = load_property("rental-1")
     items = _by_id(build_checklist(prop))
-    assert len(items) == 80
+    assert len(items) == 82
     assert items["kitchen.coffee_beans"].critical is True
     assert items["kitchen.coffee_machine_clean"].critical is False
     assert items["kitchen.paper_towels"].min_count == 1
@@ -41,8 +41,14 @@ def test_rental_1_v6_checklist():
         assert spare.min_count == 2
         paper = items[f"{room_id}.toilet_paper"]
         assert paper.requirement.endswith("(a folded end is fine)")
-    assert "throw blanket" in items["patio.area_tidy"].requirement
-    assert "throw blanket" in items["porch.area_tidy"].requirement
+    assert "packages" in items["patio.area_tidy"].requirement
+    assert "packages" in items["porch.area_tidy"].requirement
+    for room_id in ("porch", "patio"):
+        seats = items[f"{room_id}.seats_only_pillows"]
+        assert seats.critical is True
+        assert seats.sam_prompt is None
+        assert seats.problem_area is None
+        assert "throw blanket" in seats.requirement
     assert "judge the inside" in items["kitchen.fridge"].requirement
     assert "a few specks are fine" in items["laundry.lint_filter"].requirement
 

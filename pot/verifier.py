@@ -34,7 +34,8 @@ class SecondLook:
     verdict: str  # done / not_done / unclear
     count_seen: int  # int, or None
     reason: str
-    problem_object: str = ""  # 1-3 words for what is wrong, or ""
+    problem_object: str = ""  # first wrong-thing noun, or ""
+    problem_objects: list = field(default_factory=list)  # up to 3 nouns
 
 
 @dataclass
@@ -63,8 +64,10 @@ def second_look_schema():
             "count_seen": {"type": ["integer", "null"]},
             "reason": {"type": "string"},
             "problem_object": {"type": "string"},
+            "problem_objects": {"type": "array", "items": {"type": "string"}},
         },
-        "required": ["this_room", "verdict", "count_seen", "reason", "problem_object"],
+        "required": ["this_room", "verdict", "count_seen", "reason",
+                     "problem_object", "problem_objects"],
         "additionalProperties": False,
     }
 
@@ -102,9 +105,18 @@ def _check_second_answer(answer, item, photo_id, notes):
     elif isinstance(count, bool) or not isinstance(count, int) or count < 0:
         notes.append(f"Second look {item.id}: invalid count_seen {count!r}, set to null")
         count = None
-    problem_object = answer.get("problem_object")
-    if not isinstance(problem_object, str):
-        problem_object = ""
+    raw_objects = answer.get("problem_objects")
+    if isinstance(raw_objects, list):
+        objects = [
+            word.strip() for word in raw_objects
+            if isinstance(word, str) and word.strip()
+        ][:3]
+        problem_object = objects[0] if objects else ""
+    else:
+        problem_object = answer.get("problem_object")
+        if not isinstance(problem_object, str):
+            problem_object = ""
+        objects = [problem_object] if problem_object else []
     return SecondLook(
         item_id=item.id,
         photo_id=photo_id,
@@ -113,6 +125,7 @@ def _check_second_answer(answer, item, photo_id, notes):
         count_seen=count,
         reason=answer.get("reason") or "",
         problem_object=problem_object,
+        problem_objects=objects,
     )
 
 
@@ -401,14 +414,50 @@ def refine_problem_area(client, item, photo, sam, problem_object, effort=None):
     return refined, notes + refine_notes
 
 
+#: A problem card draws every kept box, but never more than this many.
+PROBLEM_BOX_CAP = 10
+
+
+def problem_nouns(second):
+    """The wrong-thing nouns to segment for one second look (up to 3)."""
+    if second is None:
+        return []
+    nouns = list(getattr(second, "problem_objects", None) or [])
+    if nouns:
+        return nouns[:3]
+    if second.problem_object:
+        return [second.problem_object]
+    return []
+
+
+def combine_problem_boxes(item_id, photo_id, refined):
+    """Merge one refined SamCheck per noun into a single SamCheck + notes.
+
+    `refined` is [(noun, SamCheck)] in noun order; boxes concatenate in
+    that order and stop at PROBLEM_BOX_CAP.
+    """
+    boxes = []
+    for _noun, sam in refined:
+        boxes.extend(sam.boxes)
+    notes = []
+    if len(boxes) > PROBLEM_BOX_CAP:
+        notes.append(
+            f"Problem boxes for {item_id}: kept {PROBLEM_BOX_CAP} of {len(boxes)}"
+        )
+        boxes = boxes[:PROBLEM_BOX_CAP]
+    prompt = ", ".join(noun for noun, _sam in refined)
+    return SamCheck(item_id, photo_id, prompt, len(boxes), boxes), notes
+
+
 def segment_problem_objects(client, proofs, seconds, photos_by_id, effort=None,
                             items_by_id=None):
-    """SAM-segment each final problem's problem_object; returns {item_id: SamCheck}.
+    """SAM-segment each final problem's wrong things; returns {item_id: SamCheck}.
 
     Items with a problem_area are segmented on the area instead (even
     when the second look named no object) and refined with the shared
-    area helper. Multi-box results go through one Muse Spark pick call
-    per item.
+    area helper. Other items run one SAM call per noun in parallel,
+    refine each with today's rules, and draw all kept boxes (at most
+    PROBLEM_BOX_CAP in total).
     """
     effort = prompts.verify_effort() if effort is None else effort
     items_by_id = items_by_id or {}
@@ -422,47 +471,63 @@ def segment_problem_objects(client, proofs, seconds, photos_by_id, effort=None,
         area = item.problem_area if item is not None else None
         if second is None or photo is None:
             continue
-        if not second.problem_object and not area:
-            continue
         if area:
-            prompt = area
-            purpose = f"sam problem area {item_id} {photo.id} ({area})"
-        else:
-            prompt = second.problem_object
-            purpose = f"sam problem {item_id} {photo.id} ({prompt})"
-        jobs.append((item_id, item, photo, prompt, purpose))
+            jobs.append((item_id, 0, item, photo, area,
+                         f"sam problem area {item_id} {photo.id} ({area})"))
+            continue
+        for index, noun in enumerate(problem_nouns(second)):
+            jobs.append((item_id, index, item, photo, noun,
+                         f"sam problem {item_id} {photo.id} ({noun})"))
     found = {}
     notes = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = [
-            (item_id, submit_with_context(
+            ((item_id, index), submit_with_context(
                 pool, check_sam, client, item_id, photo, prompt, purpose,
             ))
-            for item_id, item, photo, prompt, purpose in jobs
+            for item_id, index, item, photo, prompt, purpose in jobs
         ]
         sams = {}
-        for item_id, future in sorted(futures):
+        for key, future in sorted(futures):
             result, job_notes = future.result()
             notes.extend(job_notes)
-            sams[item_id] = result
+            sams[key] = result
+        prompts_by_key = {
+            (item_id, index): prompt
+            for item_id, index, item, photo, prompt, purpose in jobs
+        }
         picks = []
-        for item_id in sorted(sams):
+        for key in sorted(sams):
+            item_id, _index = key
             item = items_by_id.get(item_id)
             photo = photos_by_id[proofs[item_id].photo_id]
             if item is not None and item.problem_area:
                 func = refine_problem_area
-                args = (client, item, photo, sams[item_id],
+                args = (client, item, photo, sams[key],
                         seconds[item_id].problem_object, effort)
-            elif sams[item_id].count > 1:
+            elif sams[key].count > 1:
                 func = refine_problem_boxes
-                args = (client, item_id, photo, sams[item_id],
-                        seconds[item_id].problem_object, effort)
+                args = (client, item_id, photo, sams[key],
+                        prompts_by_key[key], effort)
             else:
                 continue
-            picks.append((item_id, submit_with_context(pool, func, *args)))
-        for item_id, future in picks:
+            picks.append((key, submit_with_context(pool, func, *args)))
+        for key, future in picks:
             result, job_notes = future.result()
             notes.extend(job_notes)
-            sams[item_id] = result
-        found.update(sams)
+            sams[key] = result
+        for item_id in sorted({key[0] for key in sams}):
+            item = items_by_id.get(item_id)
+            photo = photos_by_id[proofs[item_id].photo_id]
+            if item is not None and item.problem_area:
+                found[item_id] = sams[(item_id, 0)]
+                continue
+            refined = [
+                (prompts_by_key[key], sams[key])
+                for key in sorted(sams) if key[0] == item_id
+            ]
+            combined, combine_notes = combine_problem_boxes(
+                item_id, photo.id, refined)
+            notes.extend(combine_notes)
+            found[item_id] = combined
     return found, notes

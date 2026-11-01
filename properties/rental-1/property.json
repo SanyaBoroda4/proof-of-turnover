@@ -199,7 +199,16 @@
       "room": "patio",
       "key": "area_tidy",
       "label": "Back porch clean",
-      "requirement": "Back porch clean: no stains or trash, no shoes, toys, bags or clothes left out (a throw blanket on the seats is fine)",
+      "requirement": "Back porch floor, steps, walkway and tables clean: no shoes, toys, bags, packages, trash or stains.",
+      "sam_prompt": null,
+      "min_count": null,
+      "critical": true
+    },
+    {
+      "room": "patio",
+      "key": "seats_only_pillows",
+      "label": "Seats hold only pillows",
+      "requirement": "Seats hold only the outdoor pillows (a throw blanket is fine): nothing else on the loveseat or chairs — no bags, clothes, towels, toys, boxes or packages.",
       "sam_prompt": null,
       "min_count": null,
       "critical": true
@@ -217,7 +226,16 @@
       "room": "porch",
       "key": "area_tidy",
       "label": "Front porch clean",
-      "requirement": "Front porch and the walkway in front of it clean: no stains or trash, no shoes, toys, bags or clothes left out (a throw blanket on the seats is fine)",
+      "requirement": "Porch floor, steps, walkway and tables clean: no shoes, toys, bags, packages, trash or stains.",
+      "sam_prompt": null,
+      "min_count": null,
+      "critical": true
+    },
+    {
+      "room": "porch",
+      "key": "seats_only_pillows",
+      "label": "Seats hold only pillows",
+      "requirement": "Seats hold only the outdoor pillows (a throw blanket is fine): nothing else on the loveseat or chairs — no bags, clothes, towels, toys, boxes or packages.",
       "sam_prompt": null,
       "min_count": null,
       "critical": true

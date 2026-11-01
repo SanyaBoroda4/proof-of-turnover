@@ -534,6 +534,9 @@ class RunState:
             shot["room_id"] for shot in self.tour["shots"]
             if shot["shot_id"] in taken
         }
+        room_shots = {}
+        for shot in self.tour["shots"]:
+            room_shots.setdefault(shot["room_id"], []).append(shot["shot_id"])
         item_shots = {}
         for shot in self.tour["shots"]:
             for item_id in shot.get("item_ids", []):
@@ -543,7 +546,10 @@ class RunState:
             if not item.critical:
                 continue
             if item.key == "coverage":
-                if self.round_ended and item.room_id not in rooms_taken:
+                shots = room_shots.get(item.room_id, [])
+                if shots and all(s in skipped for s in shots):
+                    found.add(item.id)
+                elif self.round_ended and item.room_id not in rooms_taken:
                     found.add(item.id)
                 continue
             shots = item_shots.get(item.id, [])
@@ -561,6 +567,20 @@ class RunState:
             ]
             self.round_ended = True
             self._timeline_locked("round_ended", skipped=len(self.skipped_shots))
+            self._save_locked()
+            return list(self.skipped_shots)
+
+    def skip_shot(self, shot_id):
+        """Test/demo skip: one shot counts as skipped without a photo."""
+        with self.lock:
+            known = {shot["shot_id"] for shot in self.tour["shots"]}
+            if shot_id not in known:
+                raise ValueError(f"Unknown shot '{shot_id}'")
+            if shot_id in self._taken_shots_locked():
+                raise ValueError(f"Shot '{shot_id}' already has a photo")
+            if shot_id not in self.skipped_shots:
+                self.skipped_shots.append(shot_id)
+            self._timeline_locked("shot_skipped", shot_id=shot_id)
             self._save_locked()
             return list(self.skipped_shots)
 

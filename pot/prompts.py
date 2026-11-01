@@ -159,7 +159,8 @@ Rules:
 - Never guess. Judge only what is actually visible in this photo.
 - count_seen: how many relevant objects are visible in this photo (an integer, or null when the requirement has no minimum number or you cannot count).
 - reason: why, in English, at most 25 words.
-- problem_object: one simple singular noun the photo search can find for the main wrong thing ("shoe", "toy", "toothbrush", "stain", "towel"); "holder" for an empty holder, "shelf" for an empty shelf; "" when nothing is wrong."""
+- problem_objects: up to 3 different simple singular nouns the photo search can find for the different wrong things ("shoe", "bag", "towel"); "holder" for an empty holder, "shelf" for an empty shelf; [] when nothing is wrong.
+- problem_object: the first noun of problem_objects, or "" when it is empty."""
 
 
 def room_decision_instructions(rooms):
@@ -333,4 +334,5 @@ Rules:
 - Russian uses the polite imperative ("Сфотографируйте…", "Откройте…", "Покажите…").
 - short_xx is 2-4 words naming the spot the photo shows (for example "lavadora", "puerta izquierda"), so two shots in one room can be told apart.
 - When an item's requirement says a door or lid must be open, that item gets its own shot.
-- When a requirement says something is opened only for the photo, that shot comes before the room's overview shot."""
+- When a requirement says something is opened only for the photo, that shot comes before the room's overview shot.
+- Each shot is ONE photo taken from ONE spot that clearly shows every item in it. Never combine in one shot things that need a different angle, distance, or something opened: for example the toilet with the lid open and the sink/vanity are two shots; the inside of the fridge and each fridge door are separate shots. Small things get their own close-up (coffee bean hopper, lint filter, toilet paper). Prefer more shots over crowded shots."""

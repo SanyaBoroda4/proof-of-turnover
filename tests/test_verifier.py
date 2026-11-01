@@ -6,7 +6,13 @@ from pot.checklist import build_checklist
 from pot.inspector import Claim
 from pot.meta_client import MetaClientError
 from pot.proof import PROBLEM, PROVEN, ProofItem
-from pot.verifier import SamCheck, SecondLook, segment_problem_objects, verify
+from pot.verifier import (
+    SamCheck,
+    SecondLook,
+    combine_problem_boxes,
+    segment_problem_objects,
+    verify,
+)
 from tests.fakes import (
     SAM_FIXTURE,
     FakeSpark,
@@ -175,6 +181,68 @@ def test_segment_problem_objects_uses_problem_object(tmp_path):
     picks = [c for c in client.calls if c["purpose"].startswith("pick problem boxes")]
     assert len(picks) == 1  # the 3-box result goes through one pick call
     assert notes == ["Box pick for bed.beds_made: kept 3 of 3"]
+
+
+def test_problem_objects_list_sets_first_as_object(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+
+    def scripted(call):
+        return {"this_room": "yes", "verdict": "not_done", "count_seen": None,
+                "reason": "mess", "problem_object": "shoe",
+                "problem_objects": ["shoe", "bag", "  ", 7]}
+
+    claims = {"bed.beds_made": Claim("bed.beds_made", "problem", "P01", "x", None)}
+    result = verify(FakeSpark(verifier=scripted), _checklist(), claims, photos)
+    second = result.second_looks["bed.beds_made"]
+    assert second.problem_objects == ["shoe", "bag"]
+    assert second.problem_object == "shoe"
+
+
+def test_problem_object_without_list_becomes_singleton(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+
+    def scripted(call):
+        return {"this_room": "yes", "verdict": "not_done", "count_seen": None,
+                "reason": "mess", "problem_object": "towel"}
+
+    claims = {"bed.beds_made": Claim("bed.beds_made", "problem", "P01", "x", None)}
+    result = verify(FakeSpark(verifier=scripted), _checklist(), claims, photos)
+    second = result.second_looks["bed.beds_made"]
+    assert second.problem_objects == ["towel"]
+    assert second.problem_object == "towel"
+
+
+def test_segment_problem_objects_combines_noun_boxes(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    proofs = {"bed.beds_made": ProofItem("bed.beds_made", PROBLEM, "mess", "P01")}
+    seconds = {
+        "bed.beds_made": SecondLook("bed.beds_made", "P01", "yes", "not_done",
+                                    None, "mess", "shoe", ["shoe", "bag"]),
+    }
+    client = FakeSpark()
+    found, _notes = segment_problem_objects(
+        client, proofs, seconds, {"P01": photos[0]})
+    assert set(found) == {"bed.beds_made"}
+    assert found["bed.beds_made"].prompt == "shoe, bag"
+    assert found["bed.beds_made"].count == 6
+    assert len(client.sam_calls) == 2
+    assert {call["prompt"] for call in client.sam_calls} == {"shoe", "bag"}
+    picks = [c for c in client.calls if c["purpose"].startswith("pick problem boxes")]
+    assert len(picks) == 2  # one pick call per noun
+
+
+def test_combine_problem_boxes_caps_at_ten():
+    def sam(count):
+        boxes = [{"left": i, "top": 0, "right": i + 1, "bottom": 1,
+                  "confidence": 0.9} for i in range(count)]
+        return SamCheck("x", "P01", "n", count, boxes)
+
+    combined, notes = combine_problem_boxes(
+        "x", "P01", [("shoe", sam(5)), ("bag", sam(7))])
+    assert combined.count == 10
+    assert len(combined.boxes) == 10
+    assert combined.prompt == "shoe, bag"
+    assert notes == ["Problem boxes for x: kept 10 of 12"]
 
 
 def test_verify_effort_env_override(tmp_path, monkeypatch):

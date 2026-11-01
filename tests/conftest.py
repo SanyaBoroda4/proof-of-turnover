@@ -13,3 +13,4 @@ def _isolate_data_dirs(tmp_path, monkeypatch):
     """Every test gets its own runs/cache dirs; the real data/ stays clean."""
     monkeypatch.setattr(config, "RUNS_DIR", tmp_path / "data" / "runs")
     monkeypatch.setattr(config, "MODEL_CACHE_DIR", tmp_path / "data" / "model_cache")
+    monkeypatch.setattr(config, "EXAMPLES_DIR", tmp_path / "data" / "examples")

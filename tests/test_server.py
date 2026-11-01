@@ -821,3 +821,90 @@ def test_api_startup_line_messages():
     )
     assert api_startup_line(_Down()) == "Meta API: check failed (list models: request failed: boom)"
     assert api_startup_line(_Broken()) == "Meta API: check failed (boom)"
+
+
+def _example_jpeg(color="blue"):
+    buffer = io.BytesIO()
+    Image.new("RGB", (64, 48), color).save(buffer, "JPEG")
+    return buffer.getvalue()
+
+
+def test_tour_includes_example_url_only_for_shots_with_one():
+    from pot import examples as examples_mod
+
+    test, code = _client()
+    run_id = _create_run(test, code)
+    tour = test.get(f"/api/runs/{run_id}/tour?code={code}").json()
+    assert all("example_url" not in shot for shot in tour["shots"])
+    examples_mod.save_example(
+        "demo-house", "master-bedroom-1", _example_jpeg())
+    tour = test.get(f"/api/runs/{run_id}/tour?code={code}").json()
+    by_id = {shot["shot_id"]: shot for shot in tour["shots"]}
+    assert by_id["master-bedroom-1"]["example_url"] == (
+        "/api/properties/demo-house/examples/master-bedroom-1"
+    )
+    assert "example_url" not in by_id["guest-bedroom-1"]
+    image = test.get(
+        by_id["master-bedroom-1"]["example_url"] + f"?code={code}")
+    assert image.status_code == 200
+    assert image.headers["content-type"] == "image/jpeg"
+    assert image.content[:2] == b"\xff\xd8"
+    missing = test.get(
+        "/api/properties/demo-house/examples/guest-bedroom-1"
+        f"?code={code}")
+    assert missing.status_code == 404
+
+
+def test_approve_learns_missing_examples_from_proving_photos():
+    from pot import config, examples as examples_mod
+
+    test, code = _client()
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    approved = test.post(
+        f"/api/runs/{run_id}/signoff?code={code}",
+        json={"decision": "approve", "notes": "", "item_ids": []},
+    )
+    assert approved.status_code == 200, approved.text
+    learned = config.EXAMPLES_DIR / "demo-house" / "master-bedroom-1.jpg"
+    assert learned.is_file()
+    assert not examples_mod.has_example("demo-house", "guest-bedroom-1")
+    tour = test.get(f"/api/runs/{run_id}/tour?code={code}").json()
+    by_id = {shot["shot_id"]: shot for shot in tour["shots"]}
+    assert "example_url" in by_id["master-bedroom-1"]
+
+
+def test_skip_shot_skips_cards_and_finish_allows_them():
+    test, code = _client(inspector=_problem, verifier=_not_done)
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id)
+    assert len(status["cards"]) == 3
+    assert test.post(
+        f"/api/runs/{run_id}/skip-shot?code={code}",
+        json={"shot_id": "nope-nothing"},
+    ).status_code == 400
+    assert test.post(
+        f"/api/runs/{run_id}/skip-shot?code={code}",
+        json={"shot_id": "master-bedroom-1"},
+    ).status_code == 400
+    tour = test.get(f"/api/runs/{run_id}/tour?code={code}").json()
+    others = [shot["shot_id"] for shot in tour["shots"]
+              if shot["shot_id"] != "master-bedroom-1"]
+    assert len(others) == 10
+    for shot_id in others:
+        skipped = test.post(
+            f"/api/runs/{run_id}/skip-shot?code={code}",
+            json={"shot_id": shot_id},
+        )
+        assert skipped.status_code == 200, (shot_id, skipped.text)
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert len(status["skipped_shots"]) == 10
+    assert len(status["cards"]) == 3
+    for item_id in list(status["cards"]):
+        assert _resolve(test, code, run_id, item_id).status_code == 200
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["agent_state"] == "awaiting_signoff"
+    done = test.post(f"/api/runs/{run_id}/finish?code={code}")
+    assert done.status_code == 200, done.text

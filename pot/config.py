@@ -43,6 +43,7 @@ MODEL_CACHE_DIR = _project_dir("POT_MODEL_CACHE_DIR", "data/model_cache")
 DEMO_DIR = _project_dir("POT_DEMO_DIR", "data/demo-build")
 PROPERTIES_DIR = _project_dir("POT_PROPERTIES_DIR", "properties")
 SETUPS_DIR = _project_dir("POT_SETUPS_DIR", "data/setups")
+EXAMPLES_DIR = _project_dir("POT_EXAMPLES_DIR", "data/examples")
 
 #: Supported cleaner languages: (code, native name). Everything reads
 #: from this list, so a new language is one entry + one tour regeneration.
