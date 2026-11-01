@@ -86,6 +86,26 @@ def access_code():
     return os.environ.get("POT_ACCESS_CODE", "") or secrets.token_urlsafe(9)
 
 
+def api_startup_line(client):
+    """One line about the Meta API key: OK, or rejected/unreachable.
+
+    Never includes the key itself.
+    """
+    try:
+        client.list_models()
+    except MetaClientError as exc:
+        status = getattr(exc, "status", None)
+        if status in (401, 403):
+            return (
+                f"Meta API: key rejected ({status}) — "
+                "put a valid MODEL_API_KEY in .env"
+            )
+        return f"Meta API: check failed ({exc})"
+    except Exception as exc:  # noqa: BLE001 - startup must report, not crash
+        return f"Meta API: check failed ({exc})"
+    return "Meta API: OK"
+
+
 def local_ip():
     """This PC's LAN address (for the cleaner link); 127.0.0.1 as fallback."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -262,11 +282,18 @@ def _check_worker(server, state, photo_id):
                 and state.proofs[item_id].status != "proven"
             ]
         state.timeline("checks_started", photo_id=photo_id)
+        calls_before = state.call_count()
         fresh = run_photo_checks(
             server.client, state, photo_id, items,
             parallel=True, effort=prompts.RECHECK_EFFORT,
         )
         state.timeline("checks_done", photo_id=photo_id)
+        if state.photo_had_api_failure(photo_id, calls_before):
+            state.mark_unchecked(
+                photo_id,
+                f"Photo {photo_id}: AI check failed, saved for retry",
+            )
+            return
         fresh["elapsed_seconds"] = round(time.monotonic() - started, 1)
         merged = state.merge_result(photo_id, fresh)
         count = 0
@@ -498,21 +525,44 @@ def create_app(client=None):
         )
         return {"resolution": resolution, "agent_state": state.agent_state()}
 
+    @app.post("/api/runs/{run_id}/recheck-unchecked")
+    def _recheck_unchecked(run_id: str):
+        state = need_state(run_id)
+        todo = state.claim_rechecks()
+        for photo_id in todo:
+            server.executor.submit(_check_worker, server, state, photo_id)
+        with state.lock:
+            checking = sorted(state.checking)
+        return {"rechecking": todo, "checking": checking}
+
+    @app.post("/api/runs/{run_id}/end-round")
+    def _end_round(run_id: str):
+        state = need_state(run_id)
+        skipped = state.end_round()
+        return {"round_ended": True, "skipped": skipped}
+
     @app.post("/api/runs/{run_id}/finish")
     def _finish_run(run_id: str):
         state = need_state(run_id)
         with state.lock:
             checking = sorted(state.checking)
+            unchecked = sorted(state.unchecked)
+            skipped_only = state._skipped_only_locked()
             open_items = [
                 item.id for item in state.checklist
                 if item.critical
                 and state.proofs[item.id].status != PROVEN
                 and item.id not in state.resolutions
+                and item.id not in skipped_only
             ]
         if checking:
             raise HTTPException(
                 400, f"{len(checking)} photos still checking: "
                 + ", ".join(checking))
+        if unchecked:
+            raise HTTPException(
+                400, f"{len(unchecked)} photos could not be checked, "
+                "try again: " + ", ".join(unchecked))
         if open_items:
             raise HTTPException(
                 400, f"{len(open_items)} items still open: "
@@ -789,6 +839,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     app = create_app()
     code = app.state.server.code
+    if not config.REPLAY:
+        print(api_startup_line(app.state.server.client), flush=True)
     for line in startup_lines(args.port, code):
         print(line, flush=True)
     import uvicorn

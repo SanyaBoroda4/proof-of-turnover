@@ -72,8 +72,17 @@
 "use strict";
 const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
+const DEMO = params.get("demo") === "1";
+const TEST = params.get("test") === "1";
 const ROOM_TYPES = ["bedroom", "bathroom", "half_bathroom", "kitchen",
   "living_room", "dining_room", "laundry", "office", "hallway", "outdoor", "other"];
+
+function cleanHref() {
+  let url = `/clean?code=${encodeURIComponent(CODE)}`;
+  if (DEMO) url += "&demo=1";
+  if (TEST) url += "&test=1";
+  return url;
+}
 
 const I18N = {
   es: {
@@ -109,6 +118,7 @@ const I18N = {
     done: (name, r, i, p) => `✓ ${name} está lista: ${r}, ${i}, ${p}`,
     startTurnover: "Empezar turno", startOver: "Empezar de nuevo",
     authError: "Este enlace no tiene código. Pide el enlace completo.",
+    home: "‹ Inicio",
     rooms: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "cuarto" : "cuartos"}`,
     checks: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "punto" : "puntos"}`,
     photosPerTurnover: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "foto por turno" : "fotos por turno"}`,
@@ -162,6 +172,7 @@ const I18N = {
     done: (name, r, i, p) => `✓ ${name} is ready: ${r}, ${i}, ${p}`,
     startTurnover: "Start turnover", startOver: "Start over",
     authError: "This link has no code. Ask for the full link.",
+    home: "‹ Home",
     rooms: n => `${n} room${n === 1 ? "" : "s"}`,
     checks: n => `${n} check${n === 1 ? "" : "s"}`,
     photosPerTurnover: n => `${n} photo${n === 1 ? "" : "s"} per turnover`,
@@ -215,6 +226,7 @@ const I18N = {
     done: (name, r, i, p) => `✓ ${name} готов: ${r}, ${i}, ${p}`,
     startTurnover: "Начать уборку", startOver: "Начать заново",
     authError: "В этой ссылке нет кода. Попросите полную ссылку.",
+    home: "‹ Главная",
     rooms: n => {
       const f = new Intl.PluralRules("ru").select(n);
       return `${n} ${f === "one" ? "комната" : f === "few" ? "комнаты" : "комнат"}`;
@@ -261,6 +273,57 @@ function storeSet(key, value) {
 }
 function storeDel(key) {
   try { localStorage.removeItem(key); } catch (e) {}
+}
+
+let navDepth = 0;
+function currentNav() {
+  if (!LANG) return {screen: "language", idx: 0};
+  if (!SID || !setup) return {screen: "house", idx: 0};
+  if (setup.property_id) return {screen: "done", idx: 0};
+  return {screen: screen, idx: roomIdx};
+}
+function navPush() {
+  navDepth++;
+  const at = currentNav();
+  history.pushState({pot: "setup", screen: at.screen, idx: at.idx}, "");
+}
+function navReplace() {
+  const at = currentNav();
+  history.replaceState({pot: "setup", screen: at.screen, idx: at.idx}, "");
+}
+function goBack(fallback) {
+  if (navDepth > 0) {
+    navDepth--;
+    history.back();
+  } else {
+    fallback();
+  }
+}
+function applyNavState(state) {
+  if (!state || state.pot !== "setup") return;
+  editing = null;
+  err = "";
+  if (state.screen === "language") {
+    LANG = "";
+  } else if (!SID || !setup) {
+    screen = "house";
+    roomIdx = 0;
+  } else if (setup.property_id) {
+    screen = "done";
+  } else if (state.screen === "house") {
+    screen = "room";
+    roomIdx = 0;
+  } else if (state.screen === "review") {
+    screen = "review";
+  } else {
+    screen = "room";
+    roomIdx = Math.min(Math.max(0, state.idx || 0), setup.rooms.length - 1);
+  }
+  render();
+}
+
+function homeHtml() {
+  return `<p><a href="${esc(cleanHref())}" class="small">${esc(T().home)}</a></p>`;
 }
 
 async function api(path, opts) {
@@ -311,11 +374,12 @@ async function renderLanguage(app) {
   }
   const buttons = LANGS.map(l =>
     `<button class="btn" data-lang="${esc(l.code)}">${esc(l.name)}</button>`).join("");
-  app.innerHTML = `<h1>Idioma · Language · Язык</h1>${buttons}`;
+  app.innerHTML = homeHtml() + `<h1>Idioma · Language · Язык</h1>${buttons}`;
   app.querySelectorAll("[data-lang]").forEach(b => {
     b.onclick = () => {
       LANG = b.getAttribute("data-lang");
       storeSet("pot-lang", LANG);
+      navPush();
       render();
     };
   });
@@ -333,7 +397,7 @@ function toggleHtml(key, label) {
 
 function renderHouse(app) {
   const t = T();
-  app.innerHTML = `<h1>${esc(t.title)}</h1>
+  app.innerHTML = homeHtml() + `<h1>${esc(t.title)}</h1>
     ${err ? `<div class="error">${esc(err)}</div>` : ""}
     <label class="small" for="hname">${esc(t.houseName)}</label>
     <input type="text" id="hname" value="${esc(house.name)}">
@@ -388,6 +452,7 @@ async function createSetup() {
     await reloadSetup();
     screen = "room";
     roomIdx = 0;
+    navPush();
   } catch (e) {
     err = e.message === "auth" ? T().authError : e.message;
   }
@@ -408,6 +473,8 @@ function startOver() {
   roomIdx = 0;
   err = "";
   editing = null;
+  navDepth = 0;
+  navReplace();
   render();
 }
 
@@ -420,7 +487,7 @@ function renderRoom(app) {
   const room = setup.rooms[roomIdx];
   const n = setup.rooms.length;
   const draft = room.draft;
-  let html = `<h1>${esc(t.roomOf(roomIdx + 1, n, room.name))}</h1>`;
+  let html = homeHtml() + `<h1>${esc(t.roomOf(roomIdx + 1, n, room.name))}</h1>`;
   html += `<p class="small">${esc(t.types[room.type] || room.type)} · ${esc(t.floor)} ${esc(room.floor)}</p>`;
   if (err) html += `<div class="error">${esc(err)}</div>`;
   html += `<label class="small" for="rname">${esc(t.roomName)}</label>
@@ -492,10 +559,12 @@ function renderRoom(app) {
   if (draftBtn) draftBtn.onclick = () => makeDraft(room);
   wireDraft(app, room, draft);
   document.getElementById("rback").onclick = () => {
-    editing = null; err = "";
-    if (roomIdx > 0) { roomIdx--; }
-    else { screen = "review"; }
-    render();
+    goBack(() => {
+      editing = null; err = "";
+      if (roomIdx > 0) { roomIdx--; }
+      else { screen = "review"; }
+      render();
+    });
   };
   document.getElementById("rskip").onclick = async () => {
     await putRoom(room, {skipped: room.status !== "skipped"});
@@ -508,6 +577,7 @@ function renderRoom(app) {
 function goNext() {
   if (roomIdx + 1 >= setup.rooms.length) { screen = "review"; }
   else { roomIdx++; }
+  navPush();
   render();
 }
 
@@ -746,7 +816,7 @@ async function makeDraft(room) {
 
 function renderReview(app) {
   const t = T();
-  let html = `<h1>${esc(t.review)}: ${esc(setup.name)}</h1>`;
+  let html = homeHtml() + `<h1>${esc(t.review)}: ${esc(setup.name)}</h1>`;
   if (err) html += `<div class="error">${esc(err)}</div>`;
   setup.rooms.forEach((room, idx) => {
     const checks = room.draft ? t.checks(room.draft.items.length) : "";
@@ -782,6 +852,7 @@ function renderReview(app) {
       screen = "room";
       editing = null;
       err = "";
+      navPush();
       render();
     };
   });
@@ -800,6 +871,7 @@ function renderReview(app) {
       screen = "room";
       addName = "";
       editing = null;
+      navPush();
     } catch (e) {
       err = e.message === "auth" ? t.authError : e.message;
     }
@@ -821,6 +893,7 @@ async function saveHouse() {
       err = res.tour_error;
     }
     screen = "done";
+    navPush();
   } catch (e) {
     err = e.message === "auth" ? T().authError : e.message;
   }
@@ -833,7 +906,7 @@ function renderDone(app) {
   const res = setup.save_result || {};
   const summary = t.done(setup.name, t.rooms(res.rooms || 0),
     t.checks(res.items || 0), t.photosPerTurnover(res.shots || 0));
-  let html = `<h1>${esc(t.title)}</h1>`;
+  let html = homeHtml() + `<h1>${esc(t.title)}</h1>`;
   if (err) html += `<div class="error">${esc(err)}</div>`;
   html += `<div class="result ok">${esc(summary)}</div>`;
   if (res.tour_error !== undefined && res.shots === undefined) {
@@ -847,7 +920,7 @@ function renderDone(app) {
   const go = document.getElementById("goTurnover");
   if (go) go.onclick = () => {
     storeSet("pot-house", setup.property_id);
-    location.href = `/clean?code=${encodeURIComponent(CODE)}`;
+    location.href = cleanHref();
   };
   const retryBtn = document.getElementById("retryBtn");
   if (retryBtn) retryBtn.onclick = async () => {
@@ -873,7 +946,14 @@ function fail(app, e) {
 
 async function boot() {
   const app = document.getElementById("app");
-  if (!LANG) return render();
+  window.addEventListener("popstate", ev => {
+    navDepth = Math.max(0, navDepth - 1);
+    applyNavState(ev.state);
+  });
+  if (!LANG) {
+    navReplace();
+    return render();
+  }
   if (SID) {
     try {
       await reloadSetup();
@@ -901,6 +981,7 @@ async function boot() {
       return;
     }
   }
+  navReplace();
   render();
 }
 boot();

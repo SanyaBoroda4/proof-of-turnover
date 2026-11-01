@@ -46,6 +46,33 @@ class OldPhotoError(ValueError):
     """The photo's camera time is before the run started (foto antigua)."""
 
 
+def api_failure(record):
+    """True when a call-log record is an AI-service failure (not a judgment).
+
+    API reasons: 401/403 (key), 5xx, and failures with no HTTP status
+    (timeouts and connection errors after the retry). Anything the model
+    actually answered — even "unclear" — is a judgment, not a failure.
+    """
+    if record.get("source") != "failed":
+        return False
+    status = record.get("status")
+    if status is None:
+        return True
+    if not isinstance(status, int):
+        return False
+    return status in (401, 403) or status >= 500
+
+
+def api_failure_reason(record):
+    """Short human reason for an api_failure() record."""
+    status = record.get("status")
+    if status in (401, 403):
+        return f"key rejected ({status})"
+    if isinstance(status, int) and status >= 500:
+        return f"Meta API error ({status})"
+    return "Meta API unreachable (timeout)"
+
+
 def _write_json_atomically(path, data):
     fd, tmp_name = tempfile.mkstemp(
         dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
@@ -100,6 +127,10 @@ class RunState:
         self.note_seq = 0
         self.calls = []
         self.checking = set()
+        self.unchecked = set()
+        self.api_down = None
+        self.round_ended = False
+        self.skipped_shots = []
         self.photo_seconds = {}
         self.events = []
         self.evidence = set()
@@ -187,6 +218,15 @@ class RunState:
             if item_id in state.proofs
         }
         state.finished_at = first_data.get("finished_at")
+        state.unchecked = {
+            entry for entry in first_data.get("unchecked", [])
+            if isinstance(entry, str)
+        }
+        state.round_ended = bool(first_data.get("round_ended", False))
+        state.skipped_shots = [
+            entry for entry in first_data.get("skipped_shots", [])
+            if isinstance(entry, str)
+        ]
         state.voice_notes = [dict(note) for note in first_data.get("voice_notes", [])]
         for note in state.voice_notes:
             try:
@@ -237,6 +277,12 @@ class RunState:
                     state.calls.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
+        for record in reversed(state.calls):
+            if api_failure(record):
+                state.api_down = api_failure_reason(record)
+                break
+            if record.get("source") in ("live", "recorded"):
+                break
         evidence_dir = run_dir / "evidence"
         if evidence_dir.is_dir():
             state.evidence = {
@@ -471,14 +517,68 @@ class RunState:
             and self.proofs[item_id].status != PROVEN
         ]
 
+    def _skipped_only_locked(self):
+        """Critical item ids excused by skipped shots (callers hold the lock).
+
+        A shot item is excused when every shot showing it was skipped; a
+        room-coverage item is excused when the round ended early and its
+        room was never photographed.
+        """
+        taken = self._taken_shots_locked()
+        skipped = {
+            shot_id for shot_id in self.skipped_shots if shot_id not in taken
+        }
+        if not skipped and not self.round_ended:
+            return set()
+        rooms_taken = {
+            shot["room_id"] for shot in self.tour["shots"]
+            if shot["shot_id"] in taken
+        }
+        item_shots = {}
+        for shot in self.tour["shots"]:
+            for item_id in shot.get("item_ids", []):
+                item_shots.setdefault(item_id, []).append(shot["shot_id"])
+        found = set()
+        for item in self.checklist:
+            if not item.critical:
+                continue
+            if item.key == "coverage":
+                if self.round_ended and item.room_id not in rooms_taken:
+                    found.add(item.id)
+                continue
+            shots = item_shots.get(item.id, [])
+            if shots and all(shot_id in skipped for shot_id in shots):
+                found.add(item.id)
+        return found
+
+    def end_round(self):
+        """Test/demo early finish: skip every shot with no photo yet."""
+        with self.lock:
+            taken = self._taken_shots_locked()
+            self.skipped_shots = [
+                shot["shot_id"] for shot in self.tour["shots"]
+                if shot["shot_id"] not in taken
+            ]
+            self.round_ended = True
+            self._timeline_locked("round_ended", skipped=len(self.skipped_shots))
+            self._save_locked()
+            return list(self.skipped_shots)
+
     def _cards_locked(self):
         """Open problem-card item ids in tour order (callers hold the lock).
 
         One card per critical item that is not proven, not resolved, and
-        whose shots are all taken with every photo checked.
+        whose shots are all taken with every photo checked. Items of a
+        photo that could not be checked, and items shown only in skipped
+        shots, make no cards.
         """
         taken = self._taken_shots_locked()
         busy_shots = {self.photo_shot.get(photo_id, "") for photo_id in self.checking}
+        blind_shots = {self.photo_shot.get(photo_id, "") for photo_id in self.unchecked}
+        skipped = {
+            shot_id for shot_id in self.skipped_shots if shot_id not in taken
+        }
+        skipped_only = self._skipped_only_locked()
         item_shots = {}
         for shot in self.tour["shots"]:
             for item_id in shot.get("item_ids", []):
@@ -496,8 +596,15 @@ class RunState:
                     continue
                 if item_id in self.resolutions:
                     continue
-                shots = item_shots.get(item_id, [])
-                if shots and all(
+                if item_id in skipped_only:
+                    continue
+                shots = [
+                    shot_id for shot_id in item_shots.get(item_id, [])
+                    if shot_id not in skipped
+                ]
+                if not shots or any(shot_id in blind_shots for shot_id in shots):
+                    continue
+                if all(
                     shot_id in taken and shot_id not in busy_shots for shot_id in shots
                 ):
                     cards.append(item_id)
@@ -513,10 +620,30 @@ class RunState:
                     cards.append(item.id)
         return cards
 
+    def claim_rechecks(self):
+        """Unchecked photos to retry: back to checking, with a timeline event."""
+        with self.lock:
+            todo = sorted(self.unchecked - self.checking)
+            for photo_id in todo:
+                self.checking.add(photo_id)
+                self._timeline_locked("photo_recheck", photo_id=photo_id)
+            return todo
+
+    def mark_unchecked(self, photo_id, note):
+        """The photo's AI check failed: saved, not judged, retryable later."""
+        with self.lock:
+            self.checking.discard(photo_id)
+            self.unchecked.add(photo_id)
+            self.notes.append(note)
+            self._timeline_locked("photo_finished", photo_id=photo_id, outcome="unchecked")
+            self._maybe_all_checked_locked()
+            self._save_locked()
+
     def finish_photo(self, photo_id):
         """The photo's check, including its requests, is fully stored."""
         with self.lock:
             self.checking.discard(photo_id)
+            self.unchecked.discard(photo_id)
             self._timeline_locked("photo_finished", photo_id=photo_id, outcome="ok")
             for item_id in self._cards_locked():
                 if item_id not in self.card_ready_items:
@@ -529,6 +656,7 @@ class RunState:
         """Drop a photo from checking after a worker error."""
         with self.lock:
             self.checking.discard(photo_id)
+            self.unchecked.discard(photo_id)
             self.notes.append(note)
             self._timeline_locked("photo_finished", photo_id=photo_id, outcome="failed")
             self._maybe_all_checked_locked()
@@ -555,6 +683,23 @@ class RunState:
         """Append one model-call log entry (memory side of calls.jsonl)."""
         with self.lock:
             self.calls.append(entry)
+            if api_failure(entry):
+                self.api_down = api_failure_reason(entry)
+            elif entry.get("source") in ("live", "recorded"):
+                self.api_down = None
+
+    def call_count(self):
+        """How many call-log entries exist (a scan start mark for workers)."""
+        with self.lock:
+            return len(self.calls)
+
+    def photo_had_api_failure(self, photo_id, before):
+        """True when the photo's calls since `before` hit an API failure."""
+        with self.lock:
+            return any(
+                record.get("photo_id") == photo_id and api_failure(record)
+                for record in self.calls[before:]
+            )
 
     def timeline(self, event, **fields):
         """Append one ms-timestamped event to timeline.jsonl."""
@@ -705,11 +850,13 @@ class RunState:
             return self._agent_state_locked()
 
     def _agent_state_locked(self):
+        skipped_only = self._skipped_only_locked()
         for item in self.checklist:
             if (
                 item.critical
                 and self.proofs[item.id].status != PROVEN
                 and item.id not in self.resolutions
+                and item.id not in skipped_only
             ):
                 return NEEDS_INPUT
         return AWAITING_SIGNOFF
@@ -787,6 +934,16 @@ class RunState:
                 "cards": self._cards_locked(),
                 "finished_at": self.finished_at,
                 "checking": sorted(self.checking),
+                "unchecked": sorted(self.unchecked),
+                "api_status": {
+                    "ok": self.api_down is None,
+                    "message": self.api_down or "",
+                },
+                "round_ended": self.round_ended,
+                "skipped_shots": [
+                    shot_id for shot_id in self.skipped_shots
+                    if shot_id not in taken
+                ],
                 "photo_seconds": dict(self.photo_seconds),
                 "recent": recent,
                 "news": list(reversed(self.events[-8:])),
@@ -902,6 +1059,9 @@ class RunState:
             "resolutions": {item_id: dict(entry) for item_id, entry in self.resolutions.items()},
             "finished_at": self.finished_at,
             "voice_notes": [dict(note) for note in self.voice_notes],
+            "unchecked": sorted(self.unchecked),
+            "round_ended": self.round_ended,
+            "skipped_shots": list(self.skipped_shots),
         }
         _write_json_atomically(self.run_dir / "first_look.json", first_data)
         host_verdict = verdict(self.checklist, self.proofs)

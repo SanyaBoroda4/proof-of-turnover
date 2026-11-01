@@ -581,3 +581,33 @@ def test_send_back_clears_resolution_and_reopens_run(tmp_path):
     assert state.finished_at is None
     assert state.status()["finished_at"] is None
     assert state.agent_state() == "needs_input"
+
+
+def test_unchecked_and_skipped_survive_reload(tmp_path):
+    from pot.checklist import load_property
+    from pot.tour import load_tour
+
+    property = load_property("demo-house")
+    checklist = build_checklist(property)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    state = RunState(run_dir, property, checklist,
+                     tour={"shots": load_tour("demo-house")})
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u", "a.jpg")), "master-bedroom-1")
+    failed = {"purpose": "first look", "model": "m", "photo_id": photo.id,
+              "seconds": 0.4, "attempts": 1, "source": "failed", "status": 401}
+    state.record_call(dict(failed))
+    state.mark_unchecked(photo.id, "AI check failed, saved for retry")
+    assert len(state.end_round()) == 10
+    assert state.status()["cards"] == []
+    (state.run_dir / "calls.jsonl").write_text(
+        json.dumps(failed) + "\n", encoding="utf-8"
+    )
+    loaded = RunState.load(state.run_dir)
+    assert loaded.unchecked == {photo.id}
+    assert loaded.round_ended is True
+    assert len(loaded.skipped_shots) == 10
+    assert loaded.api_down == "key rejected (401)"
+    assert loaded.status()["cards"] == []
+    assert loaded.status()["unchecked"] == [photo.id]

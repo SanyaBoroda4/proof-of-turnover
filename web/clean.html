@@ -73,6 +73,7 @@
 const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
 const DEMO = params.get("demo") === "1";
+const TEST = params.get("test") === "1";
 let RUN = params.get("run") || "";
 let LANG = "es", langPicked = false, LANGS = null, modePicked = "";
 let tour = null, tourRun = "", takenSet = new Set(), status = null, demoPhotos = null;
@@ -87,6 +88,7 @@ let cardOrder = [], retakePhotos = {}, spokenCard = null, lastShownCard = null;
 let photosDoneSaid = false, saidFinal = false;
 let cardPanel = null, cardNoteId = null, cardNoteText = "";
 let toast = null, toastTimer = null;
+let retrying = false, navDepth = 0;
 
 const REASONS = ["broken", "before", "supplies", "wont_clean", "other"];
 
@@ -137,6 +139,14 @@ const I18N = {
     insecure: "Las notas de voz necesitan el enlace seguro (https).",
     micDenied: "Sin acceso al micrófono.",
     note: "Nota",
+    uncheckedLine: "⚠ Algunas fotos no se pudieron revisar — están guardadas",
+    uncheckedCard: n => `${n} fotos no se pudieron revisar`,
+    retry: "Reintentar",
+    retrying: "Reintentando…",
+    exit: "Salir",
+    exitConfirm: "¿Salir de este turno? Tus fotos están guardadas.",
+    finishEarly: "Terminar fotos ahora (prueba)",
+    finishEarlyConfirm: "¿Terminar las fotos ahora? Las fotos no tomadas se omitirán.",
   },
   en: {
     title: "Cleaning turnover",
@@ -184,6 +194,14 @@ const I18N = {
     insecure: "Voice notes need the secure link (https).",
     micDenied: "No microphone access.",
     note: "Note",
+    uncheckedLine: "⚠ Some photos couldn't be checked — they are saved",
+    uncheckedCard: n => `${n} photos couldn't be checked`,
+    retry: "Try again",
+    retrying: "Retrying…",
+    exit: "Exit",
+    exitConfirm: "Leave this turnover? Your photos are saved.",
+    finishEarly: "Finish photos now (test)",
+    finishEarlyConfirm: "Finish photos now? Shots not taken will be skipped.",
   },
   ru: {
     title: "Уборка",
@@ -231,6 +249,14 @@ const I18N = {
     insecure: "Для голосовых заметок нужна безопасная ссылка (https).",
     micDenied: "Нет доступа к микрофону.",
     note: "Заметка",
+    uncheckedLine: "⚠ Некоторые фото не удалось проверить — они сохранены",
+    uncheckedCard: n => `Фото не проверены: ${n}`,
+    retry: "Повторить",
+    retrying: "Повторяем…",
+    exit: "Выйти",
+    exitConfirm: "Покинуть эту уборку? Ваши фото сохранены.",
+    finishEarly: "Закончить фото сейчас (тест)",
+    finishEarlyConfirm: "Закончить фото сейчас? Неснятые кадры будут пропущены.",
   },
 };
 function T() { return I18N[LANG] || I18N.en; }
@@ -459,11 +485,61 @@ function shownCard() {
   return null;
 }
 
+function navPush(name, url) {
+  navDepth++;
+  if (url === undefined) history.pushState({pot: name}, "");
+  else history.pushState({pot: name}, "", url);
+}
+function navReplace(name, url) {
+  if (url === undefined) history.replaceState({pot: name}, "");
+  else history.replaceState({pot: name}, "", url);
+}
+function goBack(fallback) {
+  if (navDepth > 0) {
+    navDepth--;
+    history.back();
+  } else {
+    fallback();
+  }
+}
+function applyNavState(name) {
+  if (name !== "language" && name !== "choice" && name !== "houses") return;
+  if (RUN) {
+    if (status && status.finished_at) {
+      newTurnover();
+      return;
+    }
+    if (!confirm(T().exitConfirm)) {
+      navPush("run");
+      return;
+    }
+    RUN = "";
+    modePicked = "turnover";
+    resetRunState();
+    const url = new URL(location.href);
+    url.searchParams.delete("run");
+    navReplace("houses", url);
+    renderMaybe();
+    return;
+  }
+  if (name === "language") {
+    langPicked = false;
+  } else if (name === "choice") {
+    langPicked = true;
+    modePicked = "";
+  } else {
+    langPicked = true;
+    modePicked = "turnover";
+  }
+  lastKey = null;
+  renderMaybe();
+}
+
 function screenOf() {
   if (!RUN) return "start";
   if (!tour || !status) return "loading";
   if (status.finished_at) return "final";
-  return allTaken() ? "cards" : "round";
+  return (allTaken() || status.round_ended) ? "cards" : "round";
 }
 
 function voiceKey() {
@@ -508,6 +584,7 @@ function renderKey() {
       photoError, !!recorder, transcribing, noteMsg,
       selectedDemo, (demoPhotos || []).length,
       voiceKey(),
+      (status.unchecked || []).length,
     ]));
   }
   const byId = itemsById();
@@ -524,6 +601,8 @@ function renderKey() {
     !shown && !left,
     photoError, !!recorder, transcribing, noteMsg,
     selectedDemo, (demoPhotos || []).length,
+    (status.unchecked || []).join(","),
+    retrying,
   ]));
 }
 
@@ -566,9 +645,11 @@ async function renderStart(app) {
   document.getElementById("start").onclick = startTour;
   document.getElementById("toChoice").onclick = ev => {
     ev.preventDefault();
-    modePicked = "";
-    lastKey = null;
-    renderMaybe();
+    goBack(() => {
+      modePicked = "";
+      lastKey = null;
+      renderMaybe();
+    });
   };
 }
 
@@ -579,18 +660,28 @@ function renderChoice(app) {
     <p><a href="#" id="changeLang" class="small">Idioma · Language · Язык</a></p>`;
   document.getElementById("goTurnover").onclick = () => {
     modePicked = "turnover";
+    navPush("houses");
     lastKey = null;
     renderMaybe();
   };
   document.getElementById("goSetup").onclick = () => {
-    location.href = `/setup?code=${encodeURIComponent(CODE)}${DEMO ? "&demo=1" : ""}`;
+    location.href = setupHref();
   };
   document.getElementById("changeLang").onclick = ev => {
     ev.preventDefault();
-    langPicked = false;
-    lastKey = null;
-    renderMaybe();
+    goBack(() => {
+      langPicked = false;
+      lastKey = null;
+      renderMaybe();
+    });
   };
+}
+
+function setupHref() {
+  let url = `/setup?code=${encodeURIComponent(CODE)}`;
+  if (DEMO) url += "&demo=1";
+  if (TEST) url += "&test=1";
+  return url;
 }
 
 async function renderLanguage(app) {
@@ -610,6 +701,7 @@ async function renderLanguage(app) {
       pickVoice();
       say(T().greeting);
       langPicked = true;
+      navPush("choice");
       lastKey = null;
       renderMaybe();
     };
@@ -641,6 +733,7 @@ function resetRunState() {
   cardNoteId = null;
   cardNoteText = "";
   toast = null;
+  retrying = false;
   lastKey = null;
 }
 
@@ -659,7 +752,7 @@ async function startTour() {
     resetRunState();
     const url = new URL(location.href);
     url.searchParams.set("run", RUN);
-    history.replaceState(null, "", url);
+    navPush("run", url);
     await refresh();
     startPoll();
     lockScreen();
@@ -717,6 +810,15 @@ function cameraHtml(label, pickId, snapId) {
   return `<button class="camera" id="${snapId}">${esc(label)}</button>`;
 }
 
+function uncheckedCount() {
+  return (status.unchecked || []).length;
+}
+
+function uncheckedLineHtml() {
+  if (!uncheckedCount()) return "";
+  return `<div class="small">${esc(T().uncheckedLine)}</div>`;
+}
+
 function sendingHtml() {
   if (!optimistic.size) return "";
   const rows = Array.from(optimistic, ([shotId, entry]) => {
@@ -736,7 +838,9 @@ function lastTakenShot() {
 
 function renderRound(app) {
   const shot = roundCurrent();
-  let html = `<h1>${esc(T().title)}</h1>` + progressHtml() + sendingHtml();
+  let html = `<button class="link" id="exitLink">${esc(T().exit)}</button>`
+    + `<h1>${esc(T().title)}</h1>` + uncheckedLineHtml()
+    + progressHtml() + sendingHtml();
   if (shot) {
     html += `<h2 class="room">${esc(roomHeading(shot))}</h2>
       <div class="instruction">${esc(instruction(shot))}</div>`;
@@ -750,8 +854,17 @@ function renderRound(app) {
   }
   const last = lastTakenShot();
   if (last) html += `<button class="link" id="retakeLast">${esc(T().retakeLast)}</button>`;
+  if (TEST || DEMO) html += `<p><a href="#" id="finishEarly" class="small">${esc(T().finishEarly)}</a></p>`;
   if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
   app.innerHTML = html;
+  document.getElementById("exitLink").onclick = () => {
+    if (confirm(T().exitConfirm)) newTurnover();
+  };
+  const early = document.getElementById("finishEarly");
+  if (early) early.onclick = ev => {
+    ev.preventDefault();
+    if (confirm(T().finishEarlyConfirm)) endRound();
+  };
   if (shot) {
     document.getElementById("repeat").onclick = () =>
       repeatSay(roomHeading(shot) + ". " + instruction(shot));
@@ -836,12 +949,19 @@ function cardHtml(item, animate) {
 
 function renderCards(app) {
   const byId = itemsById();
-  let html = `<h1>${esc(T().title)}</h1>` + progressHtml();
+  let html = `<h1>${esc(T().title)}</h1>` + uncheckedLineHtml() + progressHtml();
   html += `<div class="result ok">${esc(T().photosDone)}</div>`;
   const total = status.progress.photos;
   const left = status.checking.length;
   if (left) {
     html += `<div class="result wait">${esc(T().checkingPhotos(total - left, total))}</div>`;
+  }
+  const blind = uncheckedCount();
+  if (blind) {
+    html += `<div class="card">
+      <div class="instruction">${esc(T().uncheckedCard(blind))}</div>
+      <button class="btn" id="retryUnchecked"${retrying ? " disabled" : ""}>${esc(retrying ? T().retrying : T().retry)}</button>
+    </div>`;
   }
   const shown = shownCard();
   if (shown && byId[shown]) {
@@ -860,6 +980,8 @@ function renderCards(app) {
   if (toast) html += `<div class="toast">${esc(toast)}</div>`;
   app.innerHTML = html;
   if (shown && byId[shown]) wireCard(byId[shown]);
+  const retryBtn = document.getElementById("retryUnchecked");
+  if (retryBtn) retryBtn.onclick = retryUnchecked;
   const finish = document.getElementById("finish");
   if (finish) finish.onclick = finishRun;
   app.querySelectorAll("[data-full]").forEach(img => {
@@ -932,7 +1054,7 @@ function newTurnover() {
   resetRunState();
   const url = new URL(location.href);
   url.searchParams.delete("run");
-  history.replaceState(null, "", url);
+  navReplace("choice", url);
   renderMaybe();
 }
 
@@ -1184,9 +1306,35 @@ async function finishRun() {
     await api(`/api/runs/${encodeURIComponent(RUN)}/finish`, {method: "POST"});
     photoError = "";
     await refresh();
+    if (status.finished_at) navReplace("final");
   } catch (e) {
     photoError = e.message;
   }
+  renderMaybe();
+}
+
+async function endRound() {
+  try {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/end-round`, {method: "POST"});
+    photoError = "";
+    await refresh();
+  } catch (e) {
+    photoError = e.message;
+  }
+  renderMaybe();
+}
+
+async function retryUnchecked() {
+  retrying = true;
+  renderMaybe();
+  try {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/recheck-unchecked`, {method: "POST"});
+    photoError = "";
+    await refresh();
+  } catch (e) {
+    photoError = e.message;
+  }
+  retrying = false;
   renderMaybe();
 }
 
@@ -1225,7 +1373,7 @@ function reconcileCards() {
 
 function announce() {
   if (!status || !tour) return;
-  if (!allTaken()) {
+  if (!allTaken() && !status.round_ended) {
     const cur = roundCurrent();
     const curId = cur ? cur.shot_id : null;
     if (prevShotId !== null && curId && curId !== prevShotId) {
@@ -1316,13 +1464,31 @@ async function boot() {
       try { await refresh(); renderMaybe(); } catch (e) {}
     }
   });
+  window.addEventListener("popstate", ev => {
+    navDepth = Math.max(0, navDepth - 1);
+    applyNavState(ev.state && ev.state.pot);
+  });
+  const saved = loadSavedLang();
+  if (saved && I18N[saved]) {
+    LANG = saved;
+    langPicked = true;
+    pickVoice();
+  }
   const app = document.getElementById("app");
   try {
     if (RUN) {
       resetRunState();
       await refresh();
       startPoll();
-      if (!status.finished_at) lockScreen();
+      if (status.finished_at) navReplace("final");
+      else {
+        navReplace("run");
+        lockScreen();
+      }
+    } else if (!langPicked) {
+      navReplace("language");
+    } else {
+      navReplace("choice");
     }
     renderMaybe();
   } catch (e) { fail(app, e); }

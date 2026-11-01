@@ -240,6 +240,18 @@ def main(argv):
             status = wait_until_checked(args.base, args.code, run_id,
                                         args.wait_timeout, "round")
             print(f"All checked at {datetime.now():%H:%M:%S.%f}"[:-3])
+            for attempt in range(1, 4):
+                if not status.get("unchecked"):
+                    break
+                print(f"Rechecking {status['unchecked']} (try {attempt}/3)...")
+                _post_json(args.base, args.code,
+                           f"/api/runs/{run_id}/recheck-unchecked", {})
+                status = wait_until_checked(args.base, args.code, run_id,
+                                            args.wait_timeout, "recheck")
+            if status.get("unchecked"):
+                raise SystemExit(
+                    f"photos still unchecked after 3 retries: "
+                    f"{status['unchecked']}")
             print(f"agent_state={status.get('agent_state')}")
             cards = print_cards(status)
 
@@ -254,6 +266,13 @@ def main(argv):
                 print(f"  retake -> {result.get('photo_id')}", flush=True)
                 status = wait_until_checked(args.base, args.code, run_id,
                                             args.wait_timeout, "retake")
+                if status.get("unchecked"):
+                    print(f"Rechecking {status['unchecked']} after retake...")
+                    _post_json(args.base, args.code,
+                               f"/api/runs/{run_id}/recheck-unchecked", {})
+                    status = wait_until_checked(
+                        args.base, args.code, run_id, args.wait_timeout,
+                        "retake-recheck")
                 by_id = items_by_id(status)
                 fridge = by_id.get(FRIDGE_ITEM, {})
                 if fridge.get("status") == "proven":
@@ -294,6 +313,9 @@ def main(argv):
             if status.get("checking"):
                 raise SystemExit(f"cannot finish, still checking: "
                                  f"{status['checking']}")
+            if status.get("unchecked"):
+                raise SystemExit(f"cannot finish, unchecked: "
+                                 f"{status['unchecked']}")
             # NB: status["open"] is the host verdict and ignores resolutions;
             # cards (like the phone) lists exactly what is still actionable.
             if status.get("cards"):

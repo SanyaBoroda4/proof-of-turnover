@@ -42,6 +42,9 @@ DEFAULT_MAX_CALLS = 10
 LIVE_TIMEOUT = 25.0
 LIVE_MAX_RETRIES = 1
 
+#: The server-startup key check is one plain GET with a short timeout.
+LIST_MODELS_TIMEOUT = 15.0
+
 #: Where the current call belongs: {"run_dir": str, "photo_id": str|None}.
 #: Workers set this so the per-run call log can route each Meta call.
 #: Live photo-check workers also set "live_checks": True for the fast
@@ -251,6 +254,33 @@ class MetaClient:
                         )
                     self._http_client = httpx.Client(timeout=self._timeout)
         return self._http_client
+
+    def list_models(self):
+        """GET /v1/models once: the quick server-startup key check.
+
+        Returns the decoded answer. Raises MetaClientError (with a .status
+        attribute when the server answered with HTTP) without retries.
+        """
+        if not self._api_key:
+            raise MetaClientError(
+                "list models: MODEL_API_KEY is not set "
+                "(copy .env.example to .env and add your key)"
+            )
+        try:
+            response = httpx.get(
+                f"{self.base_url}/models",
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                timeout=LIST_MODELS_TIMEOUT,
+            )
+        except Exception as exc:
+            raise MetaClientError(f"list models: request failed: {exc}") from exc
+        if response.status_code != 200:
+            error = MetaClientError(
+                f"list models: request failed with HTTP {response.status_code}"
+            )
+            error.status = response.status_code
+            raise error
+        return response.json()
 
     def _append_trace(self, purpose, model, started, attempts, cache, ok, usage,
                       error=None, status=None):

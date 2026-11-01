@@ -15,6 +15,7 @@
   .banner.needs_input { background: #fff8c5; }
   .banner.awaiting_signoff { background: #ddf4ff; }
   .banner.done { background: #dafbe1; }
+  .banner.api-down { background: #ffebe9; }
   .news { display: flex; gap: 10px; overflow-x: auto; padding: 4px 0 12px; }
   .news .card { flex: 0 0 200px; border: 1px solid #ddd; border-radius: 8px;
                 padding: 8px 10px; font-size: 13px; }
@@ -256,8 +257,10 @@ function renderStatus(app) {
   app.innerHTML = `
     <h1>Turnover ${esc(status.run_id)}</h1>
     <div class="banner ${esc(status.agent_state)}">${esc(STATE_TEXT[status.agent_state] || status.agent_state)}</div>
+    ${status.api_status && !status.api_status.ok ? `<div class="banner api-down">AI checks are failing: ${esc(status.api_status.message)}</div>` : ""}
     ${status.language ? `<div class="small">Cleaner language: ${esc(langNames[status.language] || status.language)}</div>` : ""}
     ${status.finished_at ? `<div class="small">Cleaner finished at ${esc(status.finished_at.slice(11, 19))}</div>` : ""}
+    ${status.round_ended ? `<div class="small">Ended early: ${status.skipped_shots.length} shots skipped (test)</div>` : ""}
     ${needsDecisionHtml()}
     ${fixedByCleanerHtml()}
     ${newsHtml()}

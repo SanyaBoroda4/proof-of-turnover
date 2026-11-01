@@ -10,8 +10,49 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from PIL.Image import Exif
 
-from pot.server import create_app
+from pot.meta_client import MetaClientError
+from pot.server import api_startup_line, create_app
 from tests.fakes import FakeSpark, photo_ids_in
+
+
+class _ApiDownSpark(FakeSpark):
+    """Every model call fails like a rejected key, then optionally recovers.
+
+    Each failure fires a failed hook entry (like the real client's trace)
+    and raises MetaClientError. Flip `down` to False to answer normally.
+    """
+
+    def __init__(self, status=401, **kwargs):
+        super().__init__(**kwargs)
+        self.fail_status = status
+        self.down = True
+
+    def _fail(self, purpose, model):
+        self._fire(purpose, model, ok=False, status=self.fail_status)
+        raise MetaClientError(
+            f"{purpose}: request failed with HTTP {self.fail_status}"
+        )
+
+    def respond(self, purpose, content, instructions=None, schema=None,
+                max_output_tokens=16000, effort="medium"):
+        if not self.down:
+            return super().respond(
+                purpose, content, instructions, schema,
+                max_output_tokens, effort,
+            )
+        self.calls.append({
+            "purpose": purpose, "content": content,
+            "instructions": instructions, "schema": schema, "effort": effort,
+        })
+        self._fail(purpose, "test-spark")
+
+    def segment_image(self, purpose, jpeg_bytes, prompt):
+        if not self.down:
+            return super().segment_image(purpose, jpeg_bytes, prompt)
+        self.sam_calls.append(
+            {"purpose": purpose, "jpeg_bytes": jpeg_bytes, "prompt": prompt}
+        )
+        self._fail(purpose, "test-sam")
 
 
 def _jpeg(color="blue", taken=None):
@@ -688,3 +729,95 @@ def test_notes_endpoint_links_item_id(tmp_path):
     status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
     item = _status_item(status, "master-bedroom.beds_made")
     assert item["resolution"]["note_id"] == note["id"]
+
+
+def test_api_failure_leaves_photo_unchecked_without_cards():
+    test = TestClient(create_app(_ApiDownSpark()))
+    code = test.app.state.server.code
+    run_id = _create_run(test, code)
+    assert _upload(test, code, run_id, "master-bedroom-1").status_code == 200
+    status = _wait_idle(test, code, run_id)
+    assert status["checking"] == []
+    assert status["unchecked"] == ["P01"]
+    assert status["cards"] == []
+    assert status["api_status"] == {"ok": False, "message": "key rejected (401)"}
+    item = _status_item(status, "master-bedroom.beds_made")
+    assert item["status"] == "needs photo"
+    assert item["request"] is None
+    refused = test.post(f"/api/runs/{run_id}/finish?code={code}")
+    assert refused.status_code == 400
+    assert "could not be checked" in refused.json()["detail"]
+
+
+def test_recheck_unchecked_retries_and_clears():
+    fake = _ApiDownSpark(inspector=_done)
+    test = TestClient(create_app(fake))
+    code = test.app.state.server.code
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    assert _wait_idle(test, code, run_id)["unchecked"] == ["P01"]
+    fake.down = False
+    retry = test.post(f"/api/runs/{run_id}/recheck-unchecked?code={code}")
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["rechecking"] == ["P01"]
+    status = _wait_idle(test, code, run_id)
+    assert status["unchecked"] == []
+    assert status["api_status"] == {"ok": True, "message": ""}
+    assert _status_item(status, "master-bedroom.beds_made")["status"] == "proven"
+    again = test.post(f"/api/runs/{run_id}/recheck-unchecked?code={code}")
+    assert again.json()["rechecking"] == []
+
+
+def test_end_round_skips_untaken_shots_and_finish_allows_them():
+    test, code = _client(inspector=_problem, verifier=_not_done)
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id)
+    taken_cards = [
+        "master-bedroom.beds_made",
+        "master-bedroom.no_belongings",
+        "master-bedroom.floor_clear",
+    ]
+    assert status["cards"] == taken_cards
+    ended = test.post(f"/api/runs/{run_id}/end-round?code={code}")
+    assert ended.status_code == 200, ended.text
+    assert len(ended.json()["skipped"]) == 10
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["round_ended"] is True
+    assert len(status["skipped_shots"]) == 10
+    assert status["cards"] == taken_cards
+    refused = test.post(f"/api/runs/{run_id}/finish?code={code}")
+    assert refused.status_code == 400
+    for item_id in taken_cards:
+        assert _resolve(test, code, run_id, item_id).status_code == 200
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["agent_state"] == "awaiting_signoff"
+    done = test.post(f"/api/runs/{run_id}/finish?code={code}")
+    assert done.status_code == 200, done.text
+
+
+def test_api_startup_line_messages():
+    class _Ok:
+        def list_models(self):
+            return {"data": []}
+
+    class _Denied:
+        def list_models(self):
+            error = MetaClientError("list models: request failed with HTTP 401")
+            error.status = 401
+            raise error
+
+    class _Down:
+        def list_models(self):
+            raise MetaClientError("list models: request failed: boom")
+
+    class _Broken:
+        def list_models(self):
+            raise RuntimeError("boom")
+
+    assert api_startup_line(_Ok()) == "Meta API: OK"
+    assert api_startup_line(_Denied()) == (
+        "Meta API: key rejected (401) — put a valid MODEL_API_KEY in .env"
+    )
+    assert api_startup_line(_Down()) == "Meta API: check failed (list models: request failed: boom)"
+    assert api_startup_line(_Broken()) == "Meta API: check failed (boom)"

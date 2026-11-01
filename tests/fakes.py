@@ -226,7 +226,7 @@ class FakeSpark:
         """Mirror MetaClient.add_hook for the per-run call log."""
         self._hooks.append(func)
 
-    def _fire(self, purpose, model):
+    def _fire(self, purpose, model, ok=True, status=None):
         context = call_context.get() or {}
         entry = {
             "purpose": purpose,
@@ -234,10 +234,12 @@ class FakeSpark:
             "seconds": 0.0,
             "attempts": 1,
             "cache": "miss",
-            "ok": True,
+            "ok": ok,
             "usage": None,
             "photo_id": context.get("photo_id"),
         }
+        if status is not None:
+            entry["status"] = status
         for func in self._hooks:
             func(dict(entry))
 
