@@ -55,7 +55,7 @@
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
   .chip { border: 1px solid #999; border-radius: 20px; background: #fff;
           font-size: 16px; padding: 10px 16px; min-height: 48px; cursor: pointer; }
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  .toast { position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
            background: var(--green); color: #fff; font-size: 20px; font-weight: 600;
            border-radius: 10px; padding: 14px 22px; z-index: 20; }
   #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
@@ -113,7 +113,8 @@ const I18N = {
     doneAll: "✓ Todo listo",
     proven: n => `Verificados: ${n}`,
     fixedByYou: n => `Arreglados por ti: ${n}`,
-    reported: n => `Reportados: ${n}`,
+    cantFixCount: n => `No se pudo: ${n}`,
+    markedFineCount: n => `Marcados como bien: ${n}`,
     fixed: "Listo – nueva foto",
     cantFix: "No se puede",
     itsFine: "Está bien así",
@@ -158,7 +159,8 @@ const I18N = {
     doneAll: "✓ All done",
     proven: n => `Proven: ${n}`,
     fixedByYou: n => `Fixed by you: ${n}`,
-    reported: n => `Reported: ${n}`,
+    cantFixCount: n => `Can't fix: ${n}`,
+    markedFineCount: n => `Marked fine: ${n}`,
     fixed: "Fixed – new photo",
     cantFix: "Can't fix",
     itsFine: "It's fine",
@@ -203,7 +205,8 @@ const I18N = {
     doneAll: "✓ Всё готово",
     proven: n => `Подтверждено: ${n}`,
     fixedByYou: n => `Исправлено вами: ${n}`,
-    reported: n => `Сообщено: ${n}`,
+    cantFixCount: n => `Не получилось: ${n}`,
+    markedFineCount: n => `Отмечено как норма: ${n}`,
     fixed: "Исправлено – новое фото",
     cantFix: "Не получается",
     itsFine: "Всё в порядке",
@@ -425,12 +428,76 @@ function shownCard() {
   return null;
 }
 
+function screenOf() {
+  if (!RUN) return "start";
+  if (!tour || !status) return "loading";
+  if (status.finished_at) return "final";
+  return allTaken() ? "cards" : "round";
+}
+
+function voiceKey() {
+  if (!("speechSynthesis" in window)) return "none";
+  return speechSynthesis.getVoices().length;
+}
+
+function finalCounts() {
+  let proven = 0, fixed = 0, cantFix = 0, fine = 0;
+  for (const room of status.rooms) for (const item of room.items) {
+    if (!item.critical) continue;
+    if (item.status === "proven") proven++;
+    if (item.has_before) fixed++;
+    if (item.resolution) {
+      if (item.resolution.action === "cant_fix") cantFix++;
+      else fine++;
+    }
+  }
+  return {proven: proven, fixed: fixed, cantFix: cantFix, fine: fine};
+}
+
+function renderKey() {
+  const screen = screenOf();
+  const base = [LANG, langPicked, modePicked, screen];
+  if (screen === "start") return JSON.stringify(base.concat([(LANGS || []).length]));
+  if (screen === "loading") return JSON.stringify(base.concat([!!tour, !!status]));
+  if (screen === "final") {
+    const c = finalCounts();
+    return JSON.stringify(base.concat([c.proven, c.fixed, c.cantFix, c.fine]));
+  }
+  // Only what the screen shows: polling every 0.5 s must not rebuild it
+  // for news, photo_seconds or checking-list churn underneath.
+  if (screen === "round") {
+    const shot = roundCurrent();
+    const p = status.progress;
+    const last = lastTakenShot();
+    return JSON.stringify(base.concat([
+      shot ? shot.shot_id : null,
+      p.shots_taken, p.shots_total, p.rooms_done, p.rooms_total,
+      Array.from(optimistic, ([k, v]) => [k, v.state]),
+      last ? last.shot_id : null,
+      photoError, !!recorder, transcribing, noteMsg,
+      selectedDemo, (demoPhotos || []).length,
+      voiceKey(),
+    ]));
+  }
+  const byId = itemsById();
+  const shown = shownCard();
+  const item = shown ? byId[shown] : null;
+  const total = status.progress.photos, left = status.checking.length;
+  return JSON.stringify(base.concat([
+    shown,
+    item ? cardText(item) : null,
+    item ? cardPhotoUrl(item) : null,
+    cardPanel, cardNoteId, cardNoteText,
+    total - left, total,
+    toast,
+    !shown && !left,
+    photoError, !!recorder, transcribing, noteMsg,
+    selectedDemo, (demoPhotos || []).length,
+  ]));
+}
+
 function renderMaybe() {
-  const key = JSON.stringify(
-    [LANG, langPicked, modePicked, tour, status, overrideShot, selectedDemo,
-     photoError, !!recorder, transcribing, noteMsg,
-     Array.from(optimistic, ([k, v]) => [k, v.state]),
-     cardOrder, retakePhotos, cardPanel, cardNoteId, cardNoteText, toast]);
+  const key = renderKey();
   if (key === lastKey) return;
   lastKey = key;
   render();
@@ -657,8 +724,10 @@ function renderRound(app) {
     document.getElementById("repeat").onclick = () =>
       repeatSay(roomHeading(shot) + ". " + instruction(shot));
     wireDemo("demoPick", "snapCam", file => snapShot(shot, file));
-    const cam = document.getElementById("snapCam");
-    if (cam) cam.onclick = () => openCamera(shot.shot_id);
+    if (!DEMO) {
+      const cam = document.getElementById("snapCam");
+      if (cam) cam.onclick = () => openCamera(shot.shot_id);
+    }
     const micStart = document.getElementById("micStart");
     if (micStart) micStart.onclick = () => startRec(shot.room_id, null, null);
     const micStop = document.getElementById("micStop");
@@ -810,19 +879,14 @@ function app_query(sel) {
 }
 
 function renderFinal(app) {
-  let proven = 0, fixed = 0, reported = 0;
-  for (const room of status.rooms) for (const item of room.items) {
-    if (!item.critical) continue;
-    if (item.status === "proven") proven++;
-    if (item.has_before) fixed++;
-    if (item.resolution) reported++;
-  }
+  const c = finalCounts();
   app.innerHTML = `<h1>${esc(T().title)}</h1>
     <div class="result ok">${esc(T().doneAll)}</div>
     <ul class="counts">
-      <li>${esc(T().proven(proven))}</li>
-      <li>${esc(T().fixedByYou(fixed))}</li>
-      <li>${esc(T().reported(reported))}</li>
+      <li>${esc(T().proven(c.proven))}</li>
+      <li>${esc(T().fixedByYou(c.fixed))}</li>
+      <li>${esc(T().cantFixCount(c.cantFix))}</li>
+      <li>${esc(T().markedFineCount(c.fine))}</li>
     </ul>
     ${toast ? `<div class="toast">${esc(toast)}</div>` : ""}`;
 }

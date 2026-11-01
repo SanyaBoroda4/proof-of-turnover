@@ -540,6 +540,34 @@ def test_resolutions_and_finish_survive_reload(tmp_path):
     assert loaded.agent_state() == "needs_input"
 
 
+def test_resolution_news_carries_action_reason_and_labels(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item, "mess"))
+    state.finish_photo(photo.id)
+    state.resolve_item(item, "cant_fix", "supplies", None)
+    other = _bath_item(state)
+    state.resolve_item(other, "its_fine", None, None)
+    status = state.status()
+    news = {
+        event["item_id"]: event for event in status["news"]
+        if event["kind"] == "resolution"
+    }
+    assert news[item]["status"] == "cant_fix"
+    assert news[item]["reason"] == "supplies"
+    assert news[item]["item_label"] == state.items_by_id[item].label
+    assert news[item]["text"] == f"Cleaner reported {item} (supplies)"
+    assert news[other]["status"] == "its_fine"
+    assert news[other]["reason"] is None
+    assert all(
+        "reason" not in event for event in status["news"]
+        if event["kind"] != "resolution"
+    )
+    resolution = _status_item(status, item)["resolution"]
+    assert (resolution["action"], resolution["reason"]) == ("cant_fix", "supplies")
+
+
 def test_send_back_clears_resolution_and_reopens_run(tmp_path):
     state = _state(tmp_path)
     item = _bed_item(state)

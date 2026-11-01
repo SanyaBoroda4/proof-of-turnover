@@ -134,7 +134,9 @@ function needsDecisionHtml() {
   const cards = rows.map(({room, item}) => {
     const res = item.resolution;
     const kind = res.action === "cant_fix" ? "reported" : "disputed";
-    const reason = res.reason ? (REASON_TEXT[res.reason] || res.reason) : "No reason given";
+    const decision = res.action === "cant_fix"
+      ? `Can't fix: ${res.reason ? (REASON_TEXT[res.reason] || res.reason) : "no reason given"}`
+      : "Cleaner says it's fine";
     const url = evidenceUrl(item);
     const img = url ? `<img src="${url}" data-full="${url}" class="thumb" alt="evidence" loading="lazy">` : "";
     const note = res.note_id ? noteById(res.note_id) : null;
@@ -146,7 +148,7 @@ function needsDecisionHtml() {
     return `<div class="card"><div><span class="pill ${kind === "reported" ? "missing" : "other"}">${kind}</span>
       <span class="small">${esc(room.name)}</span></div>
       <div><strong>${esc(item.label)}</strong></div>
-      <div class="small">${esc(reason)}</div>${img}${noteHtml}</div>`;
+      <div class="small">${esc(decision)}</div>${img}${noteHtml}</div>`;
   }).join("");
   return `<h2>Needs your decision</h2><div class="news">${cards}</div>`;
 }
@@ -172,12 +174,23 @@ function newsHtml() {
   const cards = news.map(ev => {
     const img = ev.photo_id ? `<img src="${overviewUrl(ev.photo_id)}" alt="" loading="lazy">` : "";
     const what = ev.kind === "note" ? `${esc(ev.room_name)} — note: ${esc(ev.text)}`
+      : ev.kind === "resolution" ? resolutionNews(ev)
       : ev.kind === "request" || !ev.item_label ? esc(ev.text)
       : `${esc(ev.room_name)} — ${esc(ev.item_label)}: ${esc(ev.status)}`;
     return `<div class="card"><div class="time">${esc(ev.time || "")}</div>
       <div>${what}</div>${img}</div>`;
   }).join("");
   return `<h2>Latest news</h2><div class="news">${cards}</div>`;
+}
+
+function resolutionNews(ev) {
+  const head = ev.item_label ? `${esc(ev.room_name)} — ${esc(ev.item_label)}: ` : "";
+  if (ev.status === "cant_fix") {
+    const reason = ev.reason ? (REASON_TEXT[ev.reason] || ev.reason) : "no reason given";
+    const lower = reason.charAt(0).toLowerCase() + reason.slice(1);
+    return `${head}can't fix (${lower})`;
+  }
+  return `${head}cleaner says it's fine`;
 }
 
 function voiceNotesHtml() {

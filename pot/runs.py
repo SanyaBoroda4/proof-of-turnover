@@ -592,12 +592,12 @@ class RunState:
             self._save_locked()
 
     def _event_locked(self, kind, item_id=None, status=None, photo_id=None, text="",
-                      room_id=None, room_name=None):
+                      room_id=None, room_name=None, extra=None):
         """Append a news event (callers hold the lock); keeps the last 50."""
         item = self.items_by_id.get(item_id) if item_id else None
-        self.events.append({
+        event = {
             "time": datetime.now().strftime("%H:%M:%S"),
-            "kind": kind,  # status | request | signoff | note
+            "kind": kind,  # status | request | signoff | note | resolution | finish
             "room_id": item.room_id if item else (room_id or ""),
             "room_name": item.room_name if item else (room_name or ""),
             "item_id": item_id or "",
@@ -605,7 +605,10 @@ class RunState:
             "status": status or "",
             "photo_id": photo_id or "",
             "text": text or "",
-        })
+        }
+        if extra:
+            event.update(extra)
+        self.events.append(event)
         del self.events[:-50]
 
     # -- sign-off ---------------------------------------------------------
@@ -677,7 +680,8 @@ class RunState:
                 text = f"Cleaner says {item_id} is fine"
             self.notes.append(text)
             self._event_locked("resolution", item_id, action,
-                               self.proofs[item_id].photo_id, text)
+                               self.proofs[item_id].photo_id, text,
+                               extra={"reason": reason})
             self._timeline_locked("card_resolved", item_id=item_id, action=action)
             self._save_locked()
             return dict(self.resolutions[item_id])
