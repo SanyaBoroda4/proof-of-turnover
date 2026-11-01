@@ -17,7 +17,12 @@ when a newer photo shows it is now not done.
 import argparse
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from pathlib import Path
 
 from pot import prompts
@@ -175,27 +180,48 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
         else:
             item_id, index = ref, 0
         grouped.setdefault(item_id, []).append((index, sam))
-    combined = {}
+    refine_jobs = []
     for item_id in sorted(grouped):
         item = by_id.get(item_id)
         if item is not None and item.problem_area:
             sam = grouped[item_id][0][1]
-            picked, job_notes = refine_problem_area(
-                client, item, photo, sam, seconds[item_id].problem_object, effort
-            )
-            notes.extend(job_notes)
-            combined[item_id] = picked
+            refine_jobs.append((
+                (item_id, 0), refine_problem_area,
+                (client, item, photo, sam,
+                 seconds[item_id].problem_object, effort),
+            ))
             continue
-        refined = []
+        for index, sam in sorted(grouped[item_id]):
+            if sam.count > 1:
+                refine_jobs.append((
+                    (item_id, index), refine_problem_boxes,
+                    (client, item_id, photo, sam,
+                     chain_nouns[(item_id, index)], effort),
+                ))
+    refined = {}
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {
+            submit_with_context(pool, func, *args): key
+            for key, func, args in refine_jobs
+        }
+        finished = {}
+        for future in as_completed(futures):
+            finished[futures[future]] = future.result()
+        for key in sorted(finished):
+            result, job_notes = finished[key]
+            notes.extend(job_notes)
+            refined[key] = result
+    combined = {}
+    for item_id in sorted(grouped):
+        item = by_id.get(item_id)
+        if item is not None and item.problem_area:
+            combined[item_id] = refined[(item_id, 0)]
+            continue
+        boxes = []
         for index, sam in sorted(grouped[item_id]):
             noun = chain_nouns[(item_id, index)]
-            if sam.count > 1:
-                sam, job_notes = refine_problem_boxes(
-                    client, item_id, photo, sam, noun, effort
-                )
-                notes.extend(job_notes)
-            refined.append((noun, sam))
-        merged, merge_notes = combine_problem_boxes(item_id, photo.id, refined)
+            boxes.append((noun, refined.get((item_id, index), sam)))
+        merged, merge_notes = combine_problem_boxes(item_id, photo.id, boxes)
         notes.extend(merge_notes)
         combined[item_id] = merged
     problem_sams = combined

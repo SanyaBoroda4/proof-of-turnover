@@ -875,6 +875,45 @@ def test_approve_learns_missing_examples_from_proving_photos():
     assert "example_url" in by_id["master-bedroom-1"]
 
 
+def test_approve_overwrites_existing_examples_with_proving_photos():
+    from pot import config, examples as examples_mod
+
+    test, code = _client()
+    run_id = _create_run(test, code)
+    examples_mod.save_example(
+        "demo-house", "master-bedroom-1", _example_jpeg("red"))
+    before = (
+        config.EXAMPLES_DIR / "demo-house" / "master-bedroom-1.jpg"
+    ).read_bytes()
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    approved = test.post(
+        f"/api/runs/{run_id}/signoff?code={code}",
+        json={"decision": "approve", "notes": "", "item_ids": []},
+    )
+    assert approved.status_code == 200, approved.text
+    after = (
+        config.EXAMPLES_DIR / "demo-house" / "master-bedroom-1.jpg"
+    ).read_bytes()
+    assert after != before
+
+
+def test_progress_counts_skipped_shots_as_done():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id)
+    assert status["progress"]["shots_taken"] == 1
+    skipped = test.post(
+        f"/api/runs/{run_id}/skip-shot?code={code}",
+        json={"shot_id": "guest-bedroom-1"},
+    )
+    assert skipped.status_code == 200, skipped.text
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["progress"]["shots_taken"] == 2
+    assert status["progress"]["shots_total"] == 11
+
+
 def test_skip_shot_skips_cards_and_finish_allows_them():
     test, code = _client(inspector=_problem, verifier=_not_done)
     run_id = _create_run(test, code)

@@ -155,3 +155,44 @@ def test_parallel_problem_area_starts_without_object(tmp_path):
     assert any(p.startswith(f"sam problem area {area.id}") for p in purposes)
     picks = [c["purpose"] for c in client.calls]
     assert any(p.startswith(f"pick problem area {area.id}") for p in picks)
+
+
+def test_parallel_problem_noun_picks_run_together(tmp_path):
+    import threading
+    import time
+
+    first, _second_state, photo_a, _photo_b = _photos(tmp_path)
+    (beds_made,) = [i for i in first.checklist if i.id == "bed.beds_made"]
+
+    def inspector(call):
+        return {
+            "claims": [
+                {"item_id": beds_made.id, "status": "problem", "photo_id": "P01",
+                 "seen": "a mess", "count_seen": None}
+            ],
+            "other_issues": [],
+        }
+
+    def verifier(call):
+        return {"this_room": "yes", "verdict": "not_done", "count_seen": None,
+                "reason": "a mess", "problem_object": "shoe",
+                "problem_objects": ["shoe", "bag"]}
+
+    state = {"current": 0, "peak": 0}
+    lock = threading.Lock()
+
+    def picker(call):
+        with lock:
+            state["current"] += 1
+            state["peak"] = max(state["peak"], state["current"])
+        try:
+            time.sleep(0.5)
+        finally:
+            with lock:
+                state["current"] -= 1
+        return {"boxes": [1, 2, 3]}
+
+    client = FakeSpark(inspector=inspector, verifier=verifier, picker=picker)
+    fresh = check_photo_parallel(client, photo_a, "bed", first.rooms, [beds_made])
+    assert state["peak"] == 2
+    assert fresh["problem_sams"][beds_made.id].count == 6

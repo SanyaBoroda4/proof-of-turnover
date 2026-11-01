@@ -2,60 +2,79 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F6F5">
 <title>Turnover review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --linen: #F3F6F5; --ink: #1B2A2C; --haint: #A8D5CF; --marsh: #1F5E59;
+    --marsh-dark: #174844; --brick: #B5432F; --dune: #C9962E; --dune-bg: #FBF3DF;
+    --white: #FFFFFF; --muted: #5C7375; --line: #D8E2E0;
+    --float-shadow: 0 8px 28px rgba(27, 42, 44, 0.18);
+  }
   * { box-sizing: border-box; }
-  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
-         padding: 16px 24px; max-width: 1100px; margin-left: auto; margin-right: auto;
-         background: #fff; color: #1f2328; }
-  h1 { font-size: 24px; }
-  h2 { font-size: 19px; margin: 28px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
-  .banner { border-radius: 10px; padding: 14px 18px; font-size: 20px; margin: 12px 0; }
-  .banner.needs_input { background: #fff8c5; }
-  .banner.awaiting_signoff { background: #ddf4ff; }
-  .banner.done { background: #dafbe1; }
-  .banner.api-down { background: #ffebe9; }
+  body { font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+         margin: 0; padding: 16px 24px 32px; max-width: 1100px;
+         margin-left: auto; margin-right: auto;
+         background: var(--linen); color: var(--ink); font-size: 17px; line-height: 24px; }
+  h1 { font-size: 22px; line-height: 28px; }
+  h2 { font-size: 19px; margin: 28px 0 8px; border-bottom: 1px solid var(--line);
+       padding-bottom: 4px; }
+  :focus-visible { outline: 3px solid var(--marsh); outline-offset: 2px; }
+  .banner { border-radius: 20px; padding: 14px 18px; font-size: 20px; margin: 12px 0; }
+  .banner.needs_input { background: var(--dune-bg); }
+  .banner.awaiting_signoff { background: var(--haint); }
+  .banner.done { background: var(--marsh); color: var(--white); }
+  .banner.api-down { background: var(--brick); color: var(--white); }
   .news { display: flex; gap: 10px; overflow-x: auto; padding: 4px 0 12px; }
-  .news .card { flex: 0 0 200px; border: 1px solid #ddd; border-radius: 8px;
-                padding: 8px 10px; font-size: 13px; }
-  .news .card img { width: 100%; border-radius: 4px; margin-top: 6px; }
-  .news .time { color: #57606a; font-size: 12px; }
+  .news .card { flex: 0 0 200px; background: var(--white); border-radius: 20px;
+                padding: 10px 12px; font-size: 13px; }
+  .news .card img { width: 100%; border-radius: 12px; margin-top: 6px; }
+  .news .time { color: var(--muted); font-size: 12px; }
   table.items { width: 100%; border-collapse: collapse; font-size: 15px; }
-  table.items td, table.items th { border-bottom: 1px solid #eee; padding: 8px 10px;
+  table.items td, table.items th { border-bottom: 1px solid var(--line); padding: 8px 10px;
          text-align: left; vertical-align: top; }
-  .pill { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 13px;
-          color: #fff; white-space: nowrap; }
-  .pill.proven { background: #1a7f37; }
-  .pill.problem { background: #b42318; }
-  .pill.needs-photo { background: #b54708; }
-  .pill.not-yet { background: #57606a; }
-  .pill.damage { background: #b42318; }
-  .pill.missing { background: #b54708; }
-  .pill.supplies { background: #0969da; }
-  .pill.other { background: #57606a; }
+  .pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 13px;
+          font-weight: 700; white-space: nowrap; color: var(--ink); }
+  .pill.proven { background: var(--haint); }
+  .pill.problem { background: var(--brick); color: var(--white); }
+  .pill.needs-photo { background: var(--dune-bg); border: 2px solid var(--dune); }
+  .pill.not-yet { background: var(--line); }
+  .pill.damage { background: var(--brick); color: var(--white); }
+  .pill.missing { background: var(--dune-bg); border: 2px solid var(--dune); }
+  .pill.supplies { background: var(--marsh); color: var(--white); }
+  .pill.other { background: var(--line); }
   .news .card audio { width: 100%; margin-top: 6px; }
   .duo { display: flex; gap: 8px; }
   .duo figure { margin: 6px 0 0; flex: 1 1 0; }
-  .duo img { width: 100%; border-radius: 4px; }
-  .thumb { width: 120px; cursor: zoom-in; border-radius: 6px; }
-  #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+  .duo img { width: 100%; border-radius: 12px; }
+  .thumb { width: 120px; cursor: zoom-in; border-radius: 12px; }
+  #overlay { display: none; position: fixed; inset: 0; background: rgba(12, 20, 21, 0.9);
              cursor: zoom-out; z-index: 10; text-align: center; padding: 24px; }
-  #overlay img { max-width: 95%; max-height: 95%; }
+  #overlay img { max-width: 95%; max-height: 95%; border-radius: 20px; }
   table.calls { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.calls td, table.calls th { border-bottom: 1px solid #eee; padding: 5px 8px; text-align: left; }
+  table.calls td, table.calls th { border-bottom: 1px solid var(--line); padding: 5px 8px;
+         text-align: left; }
   table.calls td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .row { display: flex; gap: 24px; flex-wrap: wrap; }
   .row > div { flex: 1 1 300px; }
-  button { font-size: 16px; padding: 10px 18px; margin: 6px 8px 6px 0; cursor: pointer; }
-  #approve { background: #1a7f37; color: #fff; border: none; border-radius: 8px; }
-  #sendback { background: #fff; border: 1px solid #999; border-radius: 8px; }
-  input[type=text] { font-size: 15px; padding: 8px; width: 100%; }
-  .sendback-list { max-height: 220px; overflow-y: auto; border: 1px solid #ddd;
-                   border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+  button { font-size: 16px; font-family: inherit; font-weight: 700; padding: 12px 20px;
+           margin: 6px 8px 6px 0; cursor: pointer; min-height: 48px; }
+  #approve { background: var(--marsh); color: var(--white); border: none; border-radius: 20px; }
+  #sendback { background: var(--white); color: var(--ink); border: 2px solid var(--line);
+              border-radius: 20px; }
+  input[type=text] { font-size: 15px; font-family: inherit; padding: 10px 12px; width: 100%;
+         border-radius: 20px; border: 2px solid var(--line); background: var(--white);
+         color: var(--ink); }
+  .sendback-list { max-height: 220px; overflow-y: auto; background: var(--white);
+                   border: 2px solid var(--line); border-radius: 20px; padding: 8px 12px;
+                   margin: 8px 0; }
   .sendback-list label { display: block; padding: 3px 0; font-size: 15px; }
-  .error { background: #ffebe9; border-radius: 10px; padding: 14px; margin: 12px 0; }
-  .small { font-size: 13px; color: #57606a; }
+  .error { background: #F7D9D2; border-radius: 20px; padding: 14px 16px; margin: 12px 0; }
+  .small { font-size: 14px; color: var(--muted); }
   ul.runs li { margin: 8px 0; font-size: 15px; }
 </style>
 </head>

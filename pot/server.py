@@ -508,10 +508,6 @@ def create_app(client=None):
         if body.decision == "approve":
             signoff = state.approve()
             for shot in state.tour["shots"]:
-                if examples_mod.has_example(
-                    state.property["id"], shot["shot_id"]
-                ):
-                    continue
                 photo = examples_mod.proving_photo_for_shot(state, shot)
                 if photo is not None:
                     examples_mod.save_example(

@@ -912,6 +912,10 @@ class RunState:
             if house_out:
                 rooms_out.append({"id": "house", "name": "Whole house", "floor": None, "items": house_out})
             host_verdict = verdict(self.checklist, self.proofs)
+            skipped = [
+                shot_id for shot_id in self.skipped_shots
+                if shot_id not in taken
+            ]
             current = next(
                 (shot for shot in self.tour["shots"] if shot["shot_id"] not in taken),
                 None,
@@ -936,7 +940,7 @@ class RunState:
                 if self.signoff.get("decision") != "approve" else DONE,
                 "started_at": self.started_at.isoformat(timespec="seconds"),
                 "progress": {
-                    "shots_taken": len(taken),
+                    "shots_taken": len(taken) + len(skipped),
                     "shots_total": len(self.tour["shots"]),
                     "rooms_done": rooms_done,
                     "rooms_total": len(self.property["rooms"]),
@@ -960,10 +964,7 @@ class RunState:
                     "message": self.api_down or "",
                 },
                 "round_ended": self.round_ended,
-                "skipped_shots": [
-                    shot_id for shot_id in self.skipped_shots
-                    if shot_id not in taken
-                ],
+                "skipped_shots": list(skipped),
                 "photo_seconds": dict(self.photo_seconds),
                 "recent": recent,
                 "news": list(reversed(self.events[-8:])),

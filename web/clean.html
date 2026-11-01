@@ -2,72 +2,208 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F6F5">
 <title>Turno de limpieza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  :root { --green: #1a7f37; --red: #b42318; --orange: #b54708; --grey: #57606a; }
+  :root {
+    --linen: #F3F6F5; --ink: #1B2A2C; --haint: #A8D5CF; --marsh: #1F5E59;
+    --marsh-dark: #174844; --brick: #B5432F; --dune: #C9962E; --dune-bg: #FBF3DF;
+    --white: #FFFFFF; --muted: #5C7375; --line: #D8E2E0;
+    --float-shadow: 0 8px 28px rgba(27, 42, 44, 0.18);
+  }
   * { box-sizing: border-box; }
-  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
-         padding: 16px; max-width: 640px; margin-left: auto; margin-right: auto;
-         background: #fff; color: #1f2328; font-size: 18px; }
-  h1 { font-size: 24px; margin: 8px 0 16px; }
-  h2.room { font-size: 20px; margin: 16px 0 4px; color: var(--grey); font-weight: 600; }
-  .bar { height: 10px; background: #e5e5e5; border-radius: 5px; overflow: hidden; margin: 8px 0; }
-  .bar > div { height: 100%; background: var(--green); }
-  .progress { color: var(--grey); font-size: 15px; }
-  .instruction { font-size: 26px; line-height: 1.35; margin: 4px 0 20px; font-weight: 600; }
-  .btn { display: block; width: 100%; padding: 16px; margin: 10px 0; font-size: 20px;
-         min-height: 48px; border: none; border-radius: 10px; background: var(--green);
-         color: #fff; cursor: pointer; text-align: center; }
-  .btn.secondary { background: #e5e5e5; color: #1f2328; }
-  .btn.saved { outline: 3px solid #0969da; outline-offset: 2px; }
+  body { font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+         margin: 0; background: var(--linen); color: var(--ink);
+         font-size: 17px; line-height: 24px; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 16px 16px 32px; }
+  h1 { font-size: 22px; line-height: 28px; margin: 8px 0 16px; }
+  :focus-visible { outline: 3px solid var(--marsh); outline-offset: 2px; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px;
+         overflow: hidden; margin: 8px 0 0; }
+  .bar > div { height: 100%; background: var(--haint); border-radius: 3px; }
+  .instruction { font-size: 26px; line-height: 31px; margin: 4px 0 12px; font-weight: 700; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 10px;
+         width: 100%; padding: 16px; margin: 10px 0; font-size: 18px; font-weight: 700;
+         font-family: inherit; min-height: 56px; border: none; border-radius: 20px;
+         background: var(--marsh); color: var(--white); cursor: pointer; text-align: center; }
+  .btn.secondary { background: var(--white); color: var(--ink);
+                   border: 2px solid var(--line); }
+  .btn.saved { outline: 3px solid var(--marsh); outline-offset: 2px; }
   .btn:disabled { opacity: 0.5; }
-  .camera { display: block; width: 100%; padding: 20px; margin: 10px 0; font-size: 22px;
-         border: none; border-radius: 10px; background: #0969da; color: #fff;
-         cursor: pointer; text-align: center; }
-  .result { border-radius: 10px; padding: 14px 16px; margin: 12px 0; font-size: 19px; }
-  .result.ok { background: #dafbe1; }
-  .result.bad { background: #ffebe9; }
-  .result.wait { background: #fff8c5; }
-  select, input[type=text] { font-size: 18px; padding: 10px; width: 100%; margin: 6px 0; }
-  .error { background: #ffebe9; border-radius: 10px; padding: 14px; margin: 12px 0; }
-  .small { font-size: 15px; color: var(--grey); }
-  .link { background: none; border: none; color: #0969da; font-size: 16px;
-          cursor: pointer; padding: 10px 0; }
-  .thumbs { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
-  .thumb { position: relative; width: 76px; }
-  .thumb img { width: 76px; height: 76px; object-fit: cover; border-radius: 8px; }
-  .thumb .sent { position: absolute; right: -4px; bottom: -4px; background: var(--green);
-                 color: #fff; border-radius: 50%; width: 26px; height: 26px;
-                 font-size: 17px; line-height: 26px; text-align: center; }
-  .thumb button { font-size: 13px; padding: 6px 8px; margin-top: 4px; width: 100%; }
-  .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin: 14px 0; }
+  .btn svg, .iconbtn svg, .link svg { flex: none; }
+  .result { border-radius: 20px; padding: 14px 16px; margin: 12px 0; font-size: 17px; }
+  .result.ok { background: var(--haint); color: var(--ink); }
+  .result.bad { background: #F7D9D2; }
+  .result.wait { background: var(--dune-bg); }
+  select, input[type=text] { font-size: 17px; padding: 12px; width: 100%; margin: 6px 0;
+         border-radius: 20px; border: 2px solid var(--line); background: var(--white);
+         color: var(--ink); font-family: inherit; min-height: 56px; }
+  .error { background: #F7D9D2; border-radius: 20px; padding: 14px 16px; margin: 12px 0; }
+  .small { font-size: 14px; line-height: 19px; color: var(--muted); }
+  .link { display: inline-flex; align-items: center; gap: 6px; background: none;
+          border: none; color: var(--marsh); font-size: 16px; font-weight: 700;
+          font-family: inherit; cursor: pointer; padding: 12px 4px; min-height: 48px; }
+  .brand { text-align: center; margin: 32px 0 24px; }
+  .brand svg { color: var(--marsh); }
+  .brand .wordmark { font-size: 22px; line-height: 28px; font-weight: 700; margin-top: 8px; }
+  .tile { min-height: 88px; font-size: 20px; }
+  .langline { text-align: center; margin-top: 24px; }
+  /* Round: full-bleed camera */
+  .round { position: fixed; inset: 0; background: #0c1415; overflow: hidden; }
+  .round video { position: absolute; inset: 0; width: 100%; height: 100%;
+                 object-fit: cover; }
+  .round .novid { position: absolute; inset: 0; display: flex; align-items: center;
+                  justify-content: center; color: var(--white); font-size: 17px;
+                  padding: 24px; text-align: center; }
+  .topcard { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px;
+             background: rgba(255, 255, 255, 0.78);
+             -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+             border-radius: 20px; box-shadow: var(--float-shadow); padding: 12px 16px; }
+  .topcard .row1 { display: flex; align-items: center; gap: 12px; }
+  .topcard .room { font-size: 17px; font-weight: 700; flex: 1; }
+  .topcard .count { font-size: 14px; color: var(--muted); white-space: nowrap; }
+  .topcard .instruction { font-size: 26px; line-height: 31px; margin: 6px 0 2px;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; }
+  .iconbtn { display: inline-flex; align-items: center; justify-content: center;
+             width: 52px; height: 52px; border-radius: 50%; border: none;
+             background: var(--white); color: var(--ink); cursor: pointer;
+             box-shadow: var(--float-shadow); font-family: inherit; }
+  .iconbtn.small { width: 44px; height: 44px; box-shadow: none;
+                   border: 2px solid var(--line); }
+  .iconbtn.rec { background: var(--brick); color: var(--white); }
+  .iconbtn .t { font-size: 12px; font-weight: 700; margin-left: 2px; }
+  .bottombar { position: absolute; left: 0; right: 0;
+               bottom: max(12px, env(safe-area-inset-bottom));
+               display: flex; align-items: flex-end; justify-content: space-around;
+               padding: 0 16px; }
+  .shutter { width: 78px; height: 78px; border-radius: 50%; cursor: pointer;
+             background: var(--white); border: none; padding: 7px;
+             box-shadow: var(--float-shadow); }
+  .shutter span { display: block; width: 100%; height: 100%; border-radius: 50%;
+                  background: var(--marsh); }
+  .shutter:active span { background: var(--marsh-dark); }
+  .exthumb, .lastshot { position: relative; width: 72px; height: 72px; border-radius: 18px;
+             overflow: hidden; border: 3px solid var(--white); padding: 0; cursor: pointer;
+             background: var(--muted); box-shadow: var(--float-shadow); }
+  .exthumb img, .lastshot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lastshot .check { position: absolute; right: 2px; bottom: 2px; background: var(--marsh);
+             color: var(--white); border-radius: 50%; width: 26px; height: 26px;
+             font-size: 16px; line-height: 26px; text-align: center; }
+  .sidecol { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .roundmsg { position: absolute; left: 12px; right: 12px; bottom: 116px; display: flex;
+              flex-direction: column; gap: 8px; align-items: center;
+              pointer-events: none; }
+  .roundmsg > * { pointer-events: auto; }
+  .pill { background: rgba(255, 255, 255, 0.92); border-radius: 20px;
+          padding: 10px 16px; font-size: 14px; max-width: 100%; }
+  .pill.warn { background: var(--dune-bg); }
+  .pill button { font: inherit; color: inherit; background: none; border: none;
+                 padding: 0; cursor: pointer; text-align: left; }
+  .testlinks { position: absolute; left: 0; right: 0;
+               bottom: max(0px, env(safe-area-inset-bottom)); text-align: center; }
+  .testlinks .link, .testlinks a { color: var(--white); font-size: 14px;
+                text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0;
+           pointer-events: none; z-index: 40; }
+  #flash.on { opacity: 1; transition: none; }
+  #flash.off { opacity: 0; transition: opacity 180ms ease-out; }
+  /* Cards */
+  .cardshead { margin: 8px 0 4px; }
+  .cardshead h1 { margin: 0; }
+  .cardshead .left { font-size: 17px; color: var(--muted); margin: 2px 0 12px; }
+  .stack { position: relative; margin: 0 0 32px; }
+  .peek { position: absolute; left: 0; right: 0; bottom: -12px; height: 60px;
+          background: var(--white); border-radius: 20px; }
+  .peek.p1 { transform: scale(0.96); bottom: -12px; opacity: 0.8; }
+  .peek.p2 { transform: scale(0.92); bottom: -22px; opacity: 0.5; }
+  .card { position: relative; background: var(--white); border-radius: 20px;
+          padding: 16px; }
   .card.slide { animation: slidein 250ms ease-out; }
+  .card.out { animation: flyout 220ms ease-in forwards; }
   @keyframes slidein {
-    from { transform: translateX(40px); opacity: 0; }
+    from { transform: translateX(60px); opacity: 0; }
     to { transform: none; opacity: 1; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .card.slide { animation: none; }
+  @keyframes flyout {
+    to { transform: translateX(-60px) scale(0.94); opacity: 0; }
   }
-  .card img.photo { width: 100%; border-radius: 8px; cursor: zoom-in; }
-  img.example { max-width: 200px; border-radius: 8px; margin: 8px 0; }
-  .card .head { color: var(--grey); font-size: 16px; margin-bottom: 6px; }
+  @media (prefers-reduced-motion: reduce) {
+    .card.slide, .card.out { animation: none; }
+    #flash.on, #flash.off { transition: none; }
+    .stamp { animation: none; }
+  }
+  .tagrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .tag { display: inline-block; border-radius: 999px; padding: 6px 14px;
+         font-size: 14px; font-weight: 700; }
+  .tag.fix { background: var(--brick); color: var(--white); }
+  .tag.missing { background: var(--dune-bg); color: var(--ink);
+                 border: 2px solid var(--dune); }
+  .tagrow .of { margin-left: auto; font-size: 14px; color: var(--muted); }
+  .photowrap { position: relative; margin: 0 0 12px; }
+  .photowrap img.photo { width: 100%; border-radius: 20px; cursor: zoom-in; display: block; }
+  .inset { position: absolute; right: 8px; bottom: 8px; width: 96px; cursor: zoom-in;
+           background: var(--white); border-radius: 12px; padding: 4px;
+           box-shadow: var(--float-shadow); border: none; }
+  .inset img { width: 100%; border-radius: 8px; display: block; }
+  .inset span { display: block; font-size: 11px; line-height: 14px; padding: 2px 4px;
+                color: var(--muted); }
+  .card .instruction { font-size: 22px; line-height: 28px; }
+  .btnrow { display: flex; gap: 10px; }
+  .btnrow .btn { margin: 10px 0; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-  .chip { border: 1px solid #999; border-radius: 20px; background: #fff;
-          font-size: 16px; padding: 10px 16px; min-height: 48px; cursor: pointer; }
+  .chip { border: 2px solid var(--line); border-radius: 999px; background: var(--white);
+          color: var(--ink); font-size: 16px; font-family: inherit;
+          padding: 10px 16px; min-height: 48px; cursor: pointer; }
   .toast { position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
-           background: var(--green); color: #fff; font-size: 20px; font-weight: 600;
-           border-radius: 10px; padding: 14px 22px; z-index: 20; }
-  #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
-             cursor: zoom-out; z-index: 10; text-align: center; padding: 24px; }
-  #overlay img { max-width: 95%; max-height: 95%; }
-  .counts li { margin: 8px 0; font-size: 19px; }
+           background: var(--marsh); color: var(--white); font-size: 17px; font-weight: 700;
+           border-radius: 999px; padding: 12px 22px; z-index: 50;
+           box-shadow: var(--float-shadow); white-space: nowrap; }
+  #overlay { display: none; position: fixed; inset: 0; background: rgba(12, 20, 21, 0.9);
+             cursor: zoom-out; z-index: 60; text-align: center; padding: 48px 24px 24px; }
+  #overlay img { max-width: 95%; max-height: 85%; border-radius: 20px; }
+  #bigcap { color: var(--white); font-size: 17px; margin-top: 12px; }
+  /* Retake sheet */
+  #sheet[hidden] { display: none; }
+  #sheet { position: fixed; inset: 0; z-index: 30; background: #0c1415; }
+  #sheet video { position: absolute; inset: 0; width: 100%; height: 100%;
+                 object-fit: cover; }
+  #sheet .sheettop { position: absolute; top: max(12px, env(safe-area-inset-top));
+             left: 12px; right: 12px; background: rgba(255, 255, 255, 0.78);
+             -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+             border-radius: 20px; box-shadow: var(--float-shadow); padding: 12px 16px; }
+  #sheet .sheetrow { display: flex; gap: 12px; align-items: center; }
+  #sheet .instruction { font-size: 22px; line-height: 28px; margin: 8px 0 0; flex: 1; }
+  #sheet .exthumb { flex: none; }
+  #sheet .sheetbar { position: absolute; left: 0; right: 0;
+             bottom: max(24px, env(safe-area-inset-bottom));
+             display: flex; justify-content: center; }
+  /* Final */
+  .stampwrap { text-align: center; margin: 40px 0 24px; }
+  .stamp { display: inline-flex; flex-direction: column; align-items: center;
+           justify-content: center; gap: 4px; width: 208px; height: 208px;
+           border-radius: 50%; background: var(--white);
+           border: 10px solid var(--haint); color: var(--marsh);
+           font-size: 20px; font-weight: 700; line-height: 24px;
+           animation: stampin 300ms ease-out; }
+  @keyframes stampin {
+    from { transform: scale(1.15); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .stats { list-style: none; margin: 0 0 16px; padding: 0; }
+  .stats li { background: var(--white); border-radius: 20px; padding: 14px 16px;
+              margin: 8px 0; font-size: 17px; }
 </style>
 </head>
 <body>
 <div id="app"><p>Cargando…</p></div>
-<div id="overlay"><img id="big" alt=""></div>
+<div id="sheet" hidden></div>
+<div id="flash"></div>
+<div id="overlay"><img id="big" alt=""><div id="bigcap"></div></div>
 <input type="file" id="snapFile" accept="image/*" capture="environment" hidden>
 <script>
 "use strict";
@@ -86,10 +222,13 @@ let recOnDone = null, recStart = 0, recSeconds = 0, recTimer = null;
 let transcribing = false, noteMsg = "", noteMsgTimer = null;
 let optimistic = new Map();
 let cardOrder = [], retakePhotos = {}, spokenCard = null, lastShownCard = null;
+let cardsTotal = 0;
 let photosDoneSaid = false, saidFinal = false;
 let cardPanel = null, cardNoteId = null, cardNoteText = "";
 let toast = null, toastTimer = null;
 let retrying = false, navDepth = 0;
+let camStream = null, camStarting = false, camMode = "live", camSheet = null;
+let prevScreen = "";
 
 const REASONS = ["broken", "before", "supplies", "wont_clean", "other"];
 
@@ -104,14 +243,20 @@ const I18N = {
     starting: "Empezando…",
     greeting: "Hola",
     hello: "Empezamos",
-    progress: (room, rooms, taken, total) =>
-      `Habitación ${room} de ${rooms} · Foto ${taken} de ${total}`,
+    ofTotal: (done, total) => `${done} de ${total}`,
+    toFix: n => `${n} por arreglar`,
+    fixTag: "Arregla esto",
+    missingTag: "Falta foto",
+    shouldLook: "Así debe verse",
+    howShould: "Así debe verse",
+    camHint: "Permite el acceso a la cámara para hacer fotos aquí",
+    close: "Cerrar",
     checking: "Revisando…",
     checkingPhotos: (done, total) => `Revisando tus fotos: ${done} de ${total}`,
     photosDone: "Fotos listas ✓",
     repeat: "Repetir",
     take: "Fotografiar",
-    retakeLast: "↺ Repetir la última foto",
+    retakeLast: "Repetir la última foto",
     notSent: "Foto no enviada – toca para enviarla de nuevo",
     doneAll: "✓ Todo listo",
     proven: n => `Verificados: ${n}`,
@@ -160,14 +305,20 @@ const I18N = {
     starting: "Starting…",
     greeting: "Hello",
     hello: "Let's go",
-    progress: (room, rooms, taken, total) =>
-      `Room ${room} of ${rooms} · Photo ${taken} of ${total}`,
+    ofTotal: (done, total) => `${done} of ${total}`,
+    toFix: n => `${n} to fix`,
+    fixTag: "Fix this",
+    missingTag: "Missing photo",
+    shouldLook: "Should look like",
+    howShould: "How it should look",
+    camHint: "Allow camera access to take photos here",
+    close: "Close",
     checking: "Checking…",
     checkingPhotos: (done, total) => `Checking your photos: ${done} of ${total}`,
     photosDone: "Photos done ✓",
     repeat: "Repeat",
     take: "Take photo",
-    retakeLast: "↺ Retake last photo",
+    retakeLast: "Retake last photo",
     notSent: "Photo not sent – tap to send again",
     doneAll: "✓ All done",
     proven: n => `Proven: ${n}`,
@@ -216,14 +367,20 @@ const I18N = {
     starting: "Начинаем…",
     greeting: "Здравствуйте",
     hello: "Начинаем",
-    progress: (room, rooms, taken, total) =>
-      `Комната ${room} из ${rooms} · Фото ${taken} из ${total}`,
+    ofTotal: (done, total) => `${done} из ${total}`,
+    toFix: n => `Исправить: ${n}`,
+    fixTag: "Исправь это",
+    missingTag: "Нет фото",
+    shouldLook: "Как должно быть",
+    howShould: "Как должно выглядеть",
+    camHint: "Разрешите доступ к камере, чтобы снимать здесь",
+    close: "Закрыть",
     checking: "Проверяем…",
     checkingPhotos: (done, total) => `Проверяем ваши фото: ${done} из ${total}`,
     photosDone: "Фото готовы ✓",
     repeat: "Повторить",
     take: "Сфотографировать",
-    retakeLast: "↺ Переснять последнее фото",
+    retakeLast: "Переснять последнее фото",
     notSent: "Фото не отправлено – нажмите, чтобы отправить снова",
     doneAll: "✓ Всё готово",
     proven: n => `Подтверждено: ${n}`,
@@ -403,6 +560,118 @@ function chime() {
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+const ICONS = {
+  camera: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  speaker: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h3l5 4V6l-5 4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>',
+  mic: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  stop: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  check: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>',
+  x: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  home: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>',
+  back: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  exit: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
+};
+
+function camLive() {
+  return !!camStream && camStream.getTracks().some(t => t.readyState === "live");
+}
+
+function stopCamera() {
+  if (camStream) {
+    camStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+    camStream = null;
+  }
+}
+
+async function startCamera() {
+  if (camLive()) return true;
+  if (camStarting) return false;
+  if (DEMO || !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+    return false;
+  }
+  camStarting = true;
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: {facingMode: "environment", width: {ideal: 1920}, height: {ideal: 1440}},
+      audio: false,
+    });
+    return camLive();
+  } catch (e) {
+    stopCamera();
+    return false;
+  } finally {
+    camStarting = false;
+  }
+}
+
+function attachCamera(videoId) {
+  const video = document.getElementById(videoId);
+  if (!video || DEMO) return;
+  if (camMode !== "live") return;
+  if (camLive()) {
+    if (video.srcObject !== camStream) video.srcObject = camStream;
+    playQuiet(video);
+    return;
+  }
+  startCamera().then(ok => {
+    const el = document.getElementById(videoId);
+    if (ok && el) {
+      el.srcObject = camStream;
+      playQuiet(el);
+    }
+    if (camMode === "live" && !ok && !camStarting) {
+      camMode = "file";
+      lastKey = null;
+      renderMaybe();
+    }
+  });
+}
+
+function playQuiet(video) {
+  try {
+    const pr = video.play();
+    if (pr && pr.catch) pr.catch(() => {});
+  } catch (e) {}
+}
+
+function flash() {
+  const el = document.getElementById("flash");
+  el.classList.remove("off");
+  el.classList.add("on");
+  setTimeout(() => {
+    el.classList.remove("on");
+    el.classList.add("off");
+  }, 60);
+}
+
+function captureFrame(videoId) {
+  return new Promise(resolve => {
+    const video = document.getElementById(videoId);
+    if (!video || !video.videoWidth) { resolve(null); return; }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    canvas.toBlob(blob => {
+      resolve(blob ? new File([blob], "shot.jpg", {type: "image/jpeg"}) : null);
+    }, "image/jpeg", 0.9);
+  });
+}
+
+async function shutterShot(shot) {
+  if (camMode !== "live" || !camLive()) {
+    openCamera(shot.shot_id);
+    return;
+  }
+  const file = await captureFrame("camView");
+  if (!file) {
+    openCamera(shot.shot_id);
+    return;
+  }
+  flash();
+  snapShot(shot, file);
 }
 
 function roomName(roomId) {
@@ -596,6 +865,7 @@ function renderKey() {
       voiceKey(),
       (status.unchecked || []).length,
       (status.skipped_shots || []).join(","),
+      camMode,
     ]));
   }
   const byId = itemsById();
@@ -607,6 +877,7 @@ function renderKey() {
     item ? cardText(item) : null,
     item ? cardPhotoUrl(item) : null,
     cardPanel, cardNoteId, cardNoteText,
+    cardOrder.length, cardsTotal,
     total - left, total,
     toast,
     !shown && !left,
@@ -628,8 +899,11 @@ function render() {
   document.documentElement.lang = LANG;
   document.title = T().title;
   const app = document.getElementById("app");
+  const screen = screenOf();
+  if (prevScreen === "round" && screen !== "round" && !camSheet) stopCamera();
+  prevScreen = screen;
   if (!RUN) return renderStart(app);
-  if (!tour || !status) { app.innerHTML = `<p>${esc(T().loading)}</p>`; return; }
+  if (!tour || !status) { app.innerHTML = `<div class="wrap"><p>${esc(T().loading)}</p></div>`; return; }
   if (status.finished_at) return renderFinal(app);
   if (!allTaken() && !status.round_ended) return renderRound(app);
   return renderCards(app);
@@ -647,12 +921,15 @@ async function renderStart(app) {
   const options = houses.map(p =>
     `<option value="${esc(p.id)}"${p.id === savedHouse ? " selected" : ""}>${esc(p.name)}</option>`
   ).join("");
-  app.innerHTML = `<h1>${esc(T().title)}</h1>
+  app.innerHTML = `<div class="wrap">
+    <div class="brand">${ICONS.home}<div class="wordmark">Proof of Turnover</div></div>
+    <h1>${esc(T().title)}</h1>
     <label class="small" for="prop">${esc(T().house)}</label>
     <select id="prop">${options}</select>
     <button class="btn" id="start">${esc(T().start)}</button>
-    <p><a href="#" id="toChoice" class="small">‹ ${esc(T().back)}</a></p>
-    ${DEMO ? `<p class="small">${esc(T().demoNote)}</p>` : ""}`;
+    <p><a href="#" id="toChoice" class="link">${ICONS.back}${esc(T().back)}</a></p>
+    ${DEMO ? `<p class="small">${esc(T().demoNote)}</p>` : ""}
+  </div>`;
   document.getElementById("start").onclick = startTour;
   document.getElementById("toChoice").onclick = ev => {
     ev.preventDefault();
@@ -665,10 +942,12 @@ async function renderStart(app) {
 }
 
 function renderChoice(app) {
-  app.innerHTML = `<h1>${esc(T().title)}</h1>
-    <button class="btn" id="goSetup">${esc(T().setupHouse)}</button>
-    <button class="btn secondary" id="goTurnover">${esc(T().startTurnover)}</button>
-    <p><a href="#" id="changeLang" class="small">Idioma · Language · Язык</a></p>`;
+  app.innerHTML = `<div class="wrap">
+    <div class="brand">${ICONS.home}<div class="wordmark">Proof of Turnover</div></div>
+    <button class="btn tile" id="goTurnover">${esc(T().startTurnover)}</button>
+    <button class="btn secondary tile" id="goSetup">${esc(T().setupHouse)}</button>
+    <p class="langline"><a href="#" id="changeLang" class="link">Idioma · Language · Язык</a></p>
+  </div>`;
   document.getElementById("goTurnover").onclick = () => {
     modePicked = "turnover";
     navPush("houses");
@@ -704,7 +983,10 @@ async function renderLanguage(app) {
   const buttons = LANGS.map(l =>
     `<button class="btn${l.code === saved ? " saved" : ""}" data-lang="${esc(l.code)}">${esc(l.name)}</button>`
   ).join("");
-  app.innerHTML = `<h1>Idioma · Language · Язык</h1>${buttons}`;
+  app.innerHTML = `<div class="wrap">
+    <div class="brand">${ICONS.home}<div class="wordmark">Proof of Turnover</div></div>
+    <h1>Idioma · Language · Язык</h1>${buttons}
+  </div>`;
   app.querySelectorAll("[data-lang]").forEach(b => {
     b.onclick = () => {
       LANG = b.getAttribute("data-lang");
@@ -720,6 +1002,10 @@ async function renderLanguage(app) {
 }
 
 function resetRunState() {
+  stopCamera();
+  camSheet = null;
+  camMode = "live";
+  document.getElementById("sheet").hidden = true;
   for (const entry of optimistic.values()) {
     try { URL.revokeObjectURL(entry.url); } catch (e) {}
   }
@@ -738,6 +1024,7 @@ function resetRunState() {
   retakePhotos = {};
   spokenCard = null;
   lastShownCard = null;
+  cardsTotal = 0;
   photosDoneSaid = false;
   saidFinal = false;
   cardPanel = null;
@@ -753,7 +1040,7 @@ async function startTour() {
   const app = document.getElementById("app");
   const property = document.getElementById("prop").value;
   storeSet("pot-house", property);
-  app.innerHTML = `<p>${esc(T().starting)}</p>`;
+  app.innerHTML = `<div class="wrap"><p>${esc(T().starting)}</p></div>`;
   try {
     const created = await api("/api/runs", {
       method: "POST", headers: {"Content-Type": "application/json"},
@@ -776,13 +1063,15 @@ async function startTour() {
   } catch (e) { fail(app, e); }
 }
 
-function progressHtml() {
-  const p = status.progress;
-  const pct = p.shots_total ? Math.round(100 * p.shots_taken / p.shots_total) : 0;
-  return `<div class="progress">${esc(T().progress(
-    Math.min(p.rooms_done + 1, p.rooms_total), p.rooms_total,
-    p.shots_taken, p.shots_total))}</div>
-    <div class="bar"><div style="width:${pct}%"></div></div>`;
+function showBig(url, caption) {
+  document.getElementById("big").src = url;
+  document.getElementById("bigcap").textContent = caption || "";
+  document.getElementById("overlay").style.display = "block";
+}
+
+function exampleUrl(shot) {
+  return shot && shot.example_url
+    ? `${shot.example_url}?code=${encodeURIComponent(CODE)}` : "";
 }
 
 function micReady() {
@@ -797,15 +1086,12 @@ function fmtTime(seconds) {
 
 function micHtml(stopId, startId) {
   if (recorder) {
-    return `<button class="btn secondary" id="${stopId}">${esc(T().stop)} (${esc(fmtTime(recSeconds))})</button>`;
-  }
-  if (transcribing) {
-    return `<div class="result wait">${esc(T().transcribing)}</div>`;
+    return `<button class="iconbtn rec" id="${stopId}" aria-label="${esc(T().stop)}">${ICONS.stop}<span class="t">${esc(fmtTime(recSeconds))}</span></button>`;
   }
   if (micReady()) {
-    return `<button class="btn secondary" id="${startId}">${esc(T().mic)}</button>`;
+    return `<button class="iconbtn" id="${startId}" aria-label="${esc(T().mic)}" title="${esc(T().mic)}">${ICONS.mic}</button>`;
   }
-  return `<p class="small">${esc(T().insecure)}</p>`;
+  return "";
 }
 
 function cameraHtml(label, pickId, snapId) {
@@ -827,19 +1113,16 @@ function uncheckedCount() {
 
 function uncheckedLineHtml() {
   if (!uncheckedCount()) return "";
-  return `<div class="small">${esc(T().uncheckedLine)}</div>`;
+  return `<div class="pill warn">${esc(T().uncheckedLine)}</div>`;
 }
 
 function sendingHtml() {
-  if (!optimistic.size) return "";
-  const rows = Array.from(optimistic, ([shotId, entry]) => {
-    if (entry.state === "failed") {
-      return `<div class="thumb"><img src="${esc(entry.url)}" alt="">
-        <button data-retry="${esc(shotId)}">${esc(T().notSent)}</button></div>`;
-    }
-    return `<div class="thumb"><img src="${esc(entry.url)}" alt=""><span class="sent">✓</span></div>`;
-  }).join("");
-  return `<div class="thumbs">${rows}</div>`;
+  const rows = [];
+  for (const [shotId, entry] of optimistic) {
+    if (entry.state !== "failed") continue;
+    rows.push(`<div class="pill warn"><button data-retry="${esc(shotId)}">${esc(T().notSent)}</button></div>`);
+  }
+  return rows.join("");
 }
 
 function lastTakenShot() {
@@ -847,31 +1130,59 @@ function lastTakenShot() {
   return taken.length ? taken[taken.length - 1] : null;
 }
 
+function lastPhotoUrl() {
+  const last = lastTakenShot();
+  if (!last) return "";
+  const entry = (status.recent || []).find(e => e.shot_id === last.shot_id);
+  if (!entry) return "";
+  return `/api/runs/${encodeURIComponent(RUN)}/photos/${encodeURIComponent(entry.photo_id)}/overview`;
+}
+
 function renderRound(app) {
   const shot = roundCurrent();
-  let html = `<button class="link" id="exitLink">${esc(T().exit)}</button>`
-    + `<h1>${esc(T().title)}</h1>` + uncheckedLineHtml()
-    + progressHtml() + sendingHtml();
-  if (shot) {
-    html += `<h2 class="room">${esc(roomHeading(shot))}</h2>
-      <div class="instruction">${esc(instruction(shot))}</div>`;
-    if (shot.example_url) {
-      html += `<img class="example" src="${esc(shot.example_url)}?code=${encodeURIComponent(CODE)}" alt="">`;
-    }
-    if (TEST || DEMO) html += `<button class="link" id="skipShot">${esc(T().skipTest)}</button>`;
-    if (voiceMissing()) html += `<p class="small">${esc(T().noVoice)}</p>`;
-    html += `<button class="btn secondary" id="repeat">${esc(T().repeat)}</button>`;
-    html += cameraHtml(T().take, "demoPick", "snapCam");
-    html += micHtml("micStop", "micStart");
-    if (noteMsg) html += `<div class="result wait">${esc(noteMsg)}</div>`;
+  const p = status.progress;
+  const pct = p.shots_total ? Math.round(100 * p.shots_taken / p.shots_total) : 0;
+  let center = "";
+  if (DEMO) {
+    center = `<div class="novid">${cameraHtml(T().take, "demoPick", "snapCam")}</div>`;
+  } else if (camMode === "live") {
+    center = `<video id="camView" playsinline muted autoplay></video>`;
   } else {
-    html += `<div class="result wait">${esc(T().checking)}</div>`;
+    center = `<div class="novid">${esc(T().camHint)}</div>`;
   }
+  const ex = exampleUrl(shot);
+  const lastUrl = lastPhotoUrl();
   const last = lastTakenShot();
-  if (last) html += `<button class="link" id="retakeLast">${esc(T().retakeLast)}</button>`;
-  if (TEST || DEMO) html += `<p><a href="#" id="finishEarly" class="small">${esc(T().finishEarly)}</a></p>`;
-  if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
-  app.innerHTML = html;
+  let msgs = uncheckedLineHtml() + sendingHtml();
+  if (transcribing) msgs += `<div class="pill">${esc(T().transcribing)}</div>`;
+  if (noteMsg) msgs += `<div class="pill">${esc(noteMsg)}</div>`;
+  if (!micReady() && !recorder) msgs += `<div class="pill">${esc(T().insecure)}</div>`;
+  if (voiceMissing()) msgs += `<div class="pill">${esc(T().noVoice)}</div>`;
+  if (photoError) msgs += `<div class="pill warn">${esc(photoError)}</div>`;
+  app.innerHTML = `<div class="round">${center}
+    <div class="topcard">
+      <div class="row1">
+        <button class="iconbtn small" id="exitLink" aria-label="${esc(T().exit)}">${ICONS.exit}</button>
+        <span class="room">${shot ? esc(roomHeading(shot)) : ""}</span>
+        <span class="count">${esc(T().ofTotal(p.shots_taken, p.shots_total))}</span>
+      </div>
+      <div class="bar"><div style="width:${pct}%"></div></div>
+      <div class="instruction">${shot ? esc(instruction(shot)) : esc(T().checking)}</div>
+    </div>
+    <div class="roundmsg">${msgs}</div>
+    <div class="bottombar">
+      <div class="sidecol">
+        ${lastUrl ? `<button class="lastshot" id="retakeLast" aria-label="${esc(T().retakeLast)}"><img src="${esc(lastUrl)}" alt=""><span class="check">✓</span></button>` : ""}
+        ${ex ? `<button class="exthumb" id="exBtn" aria-label="${esc(T().howShould)}"><img src="${esc(ex)}" alt=""></button>` : ""}
+      </div>
+      ${shot && !DEMO ? `<button class="shutter" id="snapCam" aria-label="${esc(T().take)}"><span></span></button>` : ""}
+      <div class="sidecol">
+        ${shot ? `<button class="iconbtn" id="repeat" aria-label="${esc(T().repeat)}" title="${esc(T().repeat)}">${ICONS.speaker}</button>` : ""}
+        ${shot ? micHtml("micStop", "micStart") : ""}
+      </div>
+    </div>
+    ${(TEST || DEMO) ? `<div class="testlinks">${shot ? `<button class="link" id="skipShot">${esc(T().skipTest)}</button>` : ""}<a href="#" id="finishEarly" class="small">${esc(T().finishEarly)}</a></div>` : ""}
+  </div>`;
   document.getElementById("exitLink").onclick = () => {
     if (confirm(T().exitConfirm)) newTurnover();
   };
@@ -880,13 +1191,15 @@ function renderRound(app) {
     ev.preventDefault();
     if (confirm(T().finishEarlyConfirm)) endRound();
   };
+  const exBtn = document.getElementById("exBtn");
+  if (exBtn) exBtn.onclick = () => showBig(ex, T().howShould);
   if (shot) {
     document.getElementById("repeat").onclick = () =>
       repeatSay(roomHeading(shot) + ". " + instruction(shot));
-    wireDemo("demoPick", "snapCam", file => snapShot(shot, file));
-    if (!DEMO) {
-      const cam = document.getElementById("snapCam");
-      if (cam) cam.onclick = () => openCamera(shot.shot_id);
+    if (DEMO) {
+      wireDemo("demoPick", "snapCam", file => snapShot(shot, file));
+    } else {
+      document.getElementById("snapCam").onclick = () => shutterShot(shot);
     }
     const micStart = document.getElementById("micStart");
     if (micStart) micStart.onclick = () => startRec(shot.room_id, null, null);
@@ -908,6 +1221,7 @@ function renderRound(app) {
       }
     };
   });
+  attachCamera("camView");
 }
 
 function panelHtml(itemId) {
@@ -942,23 +1256,29 @@ function panelHtml(itemId) {
   return html;
 }
 
-function cardHtml(item, animate) {
-  const shot = shotOfItem(item.id);
-  const head = shot
-    ? `${esc(roomHeading(shot))} · ${esc(shortName(shot))}`
-    : esc(roomName(item.id.split(".")[0]));
+function cardHtml(item, animate, pos, total) {
+  const missing = !item.has_evidence && !item.photo_id;
   const url = cardPhotoUrl(item);
-  const img = url
-    ? `<img class="photo" src="${url}" data-full="${url}" alt="">` : "";
+  const ex = exampleUrl(shotOfItem(item.id));
+  let img = "";
+  if (url) {
+    img = `<div class="photowrap"><img class="photo" src="${url}" data-full="${url}" alt="">`
+      + (ex ? `<button class="inset" data-full="${esc(ex)}" data-cap="${esc(T().shouldLook)}"><img src="${esc(ex)}" alt=""><span>${esc(T().shouldLook)}</span></button>` : "")
+      + `</div>`;
+  } else if (ex) {
+    img = `<div class="photowrap"><img class="photo" src="${esc(ex)}" data-full="${esc(ex)}" data-cap="${esc(T().shouldLook)}" alt=""></div>`;
+  }
   const fixed = shotForCard(item.id)
-    ? `<button class="btn" id="cardFixed">${esc(T().fixed)}</button>` : "";
+    ? `<button class="btn" id="cardFixed">${ICONS.camera}${esc(T().fixed)}</button>` : "";
   return `<div class="card${animate ? " slide" : ""}">
-    <div class="head">${head}</div>
+    <div class="tagrow"><span class="tag ${missing ? "missing" : "fix"}">${esc(missing ? T().missingTag : T().fixTag)}</span><span class="of">${esc(T().ofTotal(pos, total))}</span></div>
     ${img}
     <div class="instruction">${esc(cardText(item))}</div>
     ${fixed}
-    <button class="btn secondary" id="cardCant">${esc(T().cantFix)}</button>
-    <button class="btn secondary" id="cardFine">${esc(T().itsFine)}</button>
+    <div class="btnrow">
+      <button class="btn secondary" id="cardCant">${esc(T().cantFix)}</button>
+      <button class="btn secondary" id="cardFine">${esc(T().itsFine)}</button>
+    </div>
     ${panelHtml(item.id)}
     <button class="link" id="cardLater">${esc(T().later)}</button>
   </div>`;
@@ -966,8 +1286,12 @@ function cardHtml(item, animate) {
 
 function renderCards(app) {
   const byId = itemsById();
-  let html = `<h1>${esc(T().title)}</h1>` + uncheckedLineHtml() + progressHtml();
-  html += `<div class="result ok">${esc(T().photosDone)}</div>`;
+  const remaining = cardOrder.length;
+  if (remaining > cardsTotal) cardsTotal = remaining;
+  const pos = Math.max(1, cardsTotal - remaining + 1);
+  let html = `<div class="wrap"><div class="cardshead"><h1>${esc(T().photosDone)}</h1>`
+    + (remaining ? `<div class="left">${esc(T().toFix(remaining))}</div>` : "")
+    + `</div>` + uncheckedLineHtml();
   const total = status.progress.photos;
   const left = status.checking.length;
   if (left) {
@@ -984,7 +1308,9 @@ function renderCards(app) {
   if (shown && byId[shown]) {
     const animate = shown !== lastShownCard;
     lastShownCard = shown;
-    html += cardHtml(byId[shown], animate);
+    const peek1 = remaining > 1 ? `<div class="peek p1"></div>` : "";
+    const peek2 = remaining > 2 ? `<div class="peek p2"></div>` : "";
+    html += `<div class="stack">${peek2}${peek1}${cardHtml(byId[shown], animate, pos, cardsTotal)}</div>`;
     if (cardPanel && cardPanel.action === "retake" &&
         (!cardPanel.item || cardPanel.item !== shown)) {
       cardPanel = null;
@@ -995,17 +1321,15 @@ function renderCards(app) {
   }
   if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
   if (toast) html += `<div class="toast">${esc(toast)}</div>`;
+  html += `</div>`;
   app.innerHTML = html;
   if (shown && byId[shown]) wireCard(byId[shown]);
   const retryBtn = document.getElementById("retryUnchecked");
   if (retryBtn) retryBtn.onclick = retryUnchecked;
   const finish = document.getElementById("finish");
   if (finish) finish.onclick = finishRun;
-  app.querySelectorAll("[data-full]").forEach(img => {
-    img.onclick = () => {
-      document.getElementById("big").src = img.getAttribute("data-full");
-      document.getElementById("overlay").style.display = "block";
-    };
+  app.querySelectorAll("[data-full]").forEach(el => {
+    el.onclick = () => showBig(el.getAttribute("data-full"), el.getAttribute("data-cap") || "");
   });
 }
 
@@ -1052,16 +1376,17 @@ function app_query(sel) {
 function renderFinal(app) {
   unlockScreen();
   const c = finalCounts();
-  app.innerHTML = `<h1>${esc(T().title)}</h1>
-    <div class="result ok">${esc(T().doneAll)}</div>
-    <ul class="counts">
+  app.innerHTML = `<div class="wrap">
+    <div class="stampwrap"><div class="stamp">${ICONS.check}<span>${esc(T().doneAll.replace(/^✓ /, ""))}</span></div></div>
+    <ul class="stats">
       <li>${esc(T().proven(c.proven))}</li>
       <li>${esc(T().fixedByYou(c.fixed))}</li>
       <li>${esc(T().cantFixCount(c.cantFix))}</li>
       <li>${esc(T().markedFineCount(c.fine))}</li>
     </ul>
     <button class="btn secondary" id="newTurnover">${esc(T().newTurnover)}</button>
-    ${toast ? `<div class="toast">${esc(toast)}</div>` : ""}`;
+    ${toast ? `<div class="toast">${esc(toast)}</div>` : ""}
+  </div>`;
   document.getElementById("newTurnover").onclick = newTurnover;
 }
 
@@ -1118,7 +1443,10 @@ function tickRec() {
   recSeconds = Math.floor((Date.now() - recStart) / 1000);
   for (const id of ["micStop", "cardMicStop"]) {
     const b = document.getElementById(id);
-    if (b) b.textContent = `${T().stop} (${fmtTime(recSeconds)})`;
+    if (!b) continue;
+    const t = b.querySelector(".t");
+    if (t) t.textContent = fmtTime(recSeconds);
+    else b.textContent = `${T().stop} (${fmtTime(recSeconds)})`;
   }
   if (recSeconds >= 60) stopRec();
 }
@@ -1268,6 +1596,54 @@ function startCardRetake(itemId) {
     renderMaybe();
     return;
   }
+  openSheet(itemId);
+}
+
+function openSheet(itemId) {
+  camSheet = {item: itemId};
+  const byId = itemsById();
+  const item = byId[itemId];
+  const text = item ? cardText(item) : "";
+  const ex = exampleUrl(shotOfItem(itemId));
+  const sheet = document.getElementById("sheet");
+  const center = camMode === "live"
+    ? `<video id="sheetVideo" playsinline muted autoplay></video>`
+    : `<div class="novid">${esc(T().camHint)}</div>`;
+  sheet.innerHTML = `${center}
+    <div class="sheettop"><div class="sheetrow">
+      <button class="iconbtn small" id="sheetClose" aria-label="${esc(T().close)}">${ICONS.x}</button>
+      <div class="instruction">${esc(text)}</div>
+      ${ex ? `<button class="exthumb" id="sheetEx" aria-label="${esc(T().howShould)}"><img src="${esc(ex)}" alt=""></button>` : ""}
+    </div></div>
+    <div class="sheetbar"><button class="shutter" id="sheetSnap" aria-label="${esc(T().fixed)}"><span></span></button></div>`;
+  sheet.hidden = false;
+  document.getElementById("sheetClose").onclick = closeSheet;
+  const sheetEx = document.getElementById("sheetEx");
+  if (sheetEx) sheetEx.onclick = () => showBig(ex, T().howShould);
+  document.getElementById("sheetSnap").onclick = () => sheetSnap(itemId);
+  attachCamera("sheetVideo");
+}
+
+function closeSheet() {
+  camSheet = null;
+  const sheet = document.getElementById("sheet");
+  sheet.hidden = true;
+  sheet.innerHTML = "";
+  stopCamera();
+  renderMaybe();
+}
+
+async function sheetSnap(itemId) {
+  if (camMode === "live" && camLive()) {
+    const file = await captureFrame("sheetVideo");
+    if (file) {
+      flash();
+      closeSheet();
+      cardSnap(itemId, file);
+      return;
+    }
+  }
+  closeSheet();
   pendingCard = itemId;
   pendingShot = null;
   document.getElementById("snapFile").click();
@@ -1276,11 +1652,23 @@ function startCardRetake(itemId) {
 function cardSnap(itemId, file) {
   const shot = shotForCard(itemId);
   if (!shot) return;
-  retakePhotos[itemId] = null;
-  const i = cardOrder.indexOf(itemId);
-  if (i >= 0) cardOrder.splice(i, 1);
-  cardPanel = null;
-  renderMaybe();
+  const btn = document.getElementById("cardFixed");
+  if (btn) btn.disabled = true;
+  const remove = () => {
+    retakePhotos[itemId] = null;
+    const i = cardOrder.indexOf(itemId);
+    if (i >= 0) cardOrder.splice(i, 1);
+    cardPanel = null;
+    renderMaybe();
+  };
+  const card = document.querySelector("#app .stack .card");
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (card && !calm) {
+    card.classList.add("out");
+    setTimeout(remove, 220);
+  } else {
+    remove();
+  }
   (async () => {
     const form = new FormData();
     form.append("shot_id", shot.shot_id);
@@ -1492,9 +1880,15 @@ async function boot() {
     document.getElementById("overlay").style.display = "none";
   };
   document.addEventListener("visibilitychange", async () => {
-    if (!document.hidden && RUN) {
+    if (document.hidden) {
+      stopCamera();
+      return;
+    }
+    if (RUN) {
       if (!status || !status.finished_at) lockScreen();
       try { await refresh(); renderMaybe(); } catch (e) {}
+      if (camSheet) attachCamera("sheetVideo");
+      else if (screenOf() === "round") attachCamera("camView");
     }
   });
   window.addEventListener("popstate", ev => {
