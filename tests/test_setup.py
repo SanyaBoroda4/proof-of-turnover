@@ -199,7 +199,9 @@ def test_photos_capped_and_non_images_refused(dirs, client):
         f"/api/setups/{sid}/rooms/kitchen/photos/9?code={code}").status_code == 404
     dropped = test.delete(f"/api/setups/{sid}/rooms/kitchen/photos/2?code={code}")
     assert dropped.json()["photos"] == [1, 3]
-    assert _photo(test, code, sid, "kitchen").status_code == 200
+    fourth = _photo(test, code, sid, "kitchen")
+    assert fourth.status_code == 200
+    assert fourth.json() == {"n": 4}  # numbers never reused after delete
 
 
 def test_draft_needs_a_photo_and_stores_fixup(dirs, client):
@@ -438,3 +440,217 @@ def test_tour_failure_keeps_property_and_retries(dirs):
     assert retried == {"property_id": "setup-test", "shots": retried["shots"]}
     assert retried["shots"] > 0
     assert (dirs / "properties" / "setup-test" / "tour.json").is_file()
+
+
+def _kitchen(test, code, sid):
+    setup = test.get(f"/api/setups/{sid}?code={code}").json()
+    rooms = {room["id"]: room for room in setup["rooms"]}
+    return rooms["kitchen"]
+
+
+def test_rules_change_marks_stale_and_blocks_save(dirs):
+    test = TestClient(create_app(_drafting_client()))
+    code = test.app.state.server.code
+    sid = _ready_setup(test, code)
+    assert _kitchen(test, code, sid)["stale"] is False
+    put = test.put(
+        f"/api/setups/{sid}/rooms/kitchen?code={code}", json={"rules": "New rule."}
+    )
+    assert put.status_code == 200
+    assert _kitchen(test, code, sid)["stale"] is True
+    refused = test.post(f"/api/setups/{sid}/save?code={code}")
+    assert refused.status_code == 400
+    name = _kitchen(test, code, sid)["name"]
+    assert name in refused.json()["detail"]
+    drafted = test.post(f"/api/setups/{sid}/rooms/kitchen/draft?code={code}")
+    assert drafted.status_code == 200
+    assert _kitchen(test, code, sid)["stale"] is False
+    saved = test.post(f"/api/setups/{sid}/save?code={code}")
+    assert saved.status_code == 200
+
+
+def test_same_rules_and_photo_tweaks_set_stale(dirs):
+    test = TestClient(create_app(_drafting_client()))
+    code = test.app.state.server.code
+    sid = _create(test, code)["setup_id"]
+    assert _photo(test, code, sid, "kitchen").status_code == 200
+    test.put(f"/api/setups/{sid}/rooms/kitchen?code={code}", json={"rules": "Same."})
+    assert (
+        test.post(f"/api/setups/{sid}/rooms/kitchen/draft?code={code}").status_code
+        == 200
+    )
+    # Saving the same rules again is not a change.
+    test.put(f"/api/setups/{sid}/rooms/kitchen?code={code}", json={"rules": "Same."})
+    assert _kitchen(test, code, sid)["stale"] is False
+    assert (
+        test.delete(f"/api/setups/{sid}/rooms/kitchen/photos/1?code={code}").status_code
+        == 200
+    )
+    assert _kitchen(test, code, sid)["stale"] is True
+
+
+def test_save_twice_reuses_property_id(dirs):
+    test = TestClient(create_app(_drafting_client()))
+    code = test.app.state.server.code
+    sid = _ready_setup(test, code)
+    first = test.post(f"/api/setups/{sid}/save?code={code}").json()
+    second = test.post(f"/api/setups/{sid}/save?code={code}").json()
+    assert second["property_id"] == first["property_id"]
+    assert [p.name for p in (dirs / "properties").iterdir()] == [
+        first["property_id"]]
+
+
+def test_second_save_while_saving_returns_409(dirs):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow_tour(call):
+        entered.set()
+        assert release.wait(30)
+        return {"shots": []}
+
+    test = TestClient(create_app(FakeSpark(
+        drafter=lambda call: _draft_answer(), tour=slow_tour)))
+    code = test.app.state.server.code
+    sid = _ready_setup(test, code)
+    outcome = {}
+
+    def save_in_background():
+        outcome["status"] = test.post(f"/api/setups/{sid}/save?code={code}").status_code
+
+    worker = threading.Thread(target=save_in_background)
+    worker.start()
+    assert entered.wait(30)
+    busy = test.post(f"/api/setups/{sid}/tour?code={code}")
+    assert busy.status_code == 409
+    release.set()
+    worker.join(30)
+    assert outcome["status"] == 200
+
+
+def _blocking_draft_client(entered, release):
+    def slow_draft(call):
+        entered.set()
+        assert release.wait(30)
+        return _draft_answer()
+
+    return create_app(FakeSpark(drafter=slow_draft))
+
+
+def test_get_answers_while_draft_is_blocked(dirs):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+    test = TestClient(_blocking_draft_client(entered, release))
+    code = test.app.state.server.code
+    sid = _create(test, code)["setup_id"]
+    assert _photo(test, code, sid, "kitchen").status_code == 200
+    outcome = {}
+
+    def draft_in_background():
+        outcome["status"] = test.post(
+            f"/api/setups/{sid}/rooms/kitchen/draft?code={code}"
+        ).status_code
+
+    worker = threading.Thread(target=draft_in_background)
+    worker.start()
+    assert entered.wait(30)
+    # The drafter holds no lock: this GET answers while it is blocked.
+    assert test.get(f"/api/setups/{sid}?code={code}").status_code == 200
+    release.set()
+    worker.join(30)
+    assert outcome["status"] == 200
+
+
+def test_mid_draft_room_delete_drops_result(dirs):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+    test = TestClient(_blocking_draft_client(entered, release))
+    code = test.app.state.server.code
+    sid = _create(test, code)["setup_id"]
+    assert _photo(test, code, sid, "kitchen").status_code == 200
+    outcome = {}
+
+    def draft_in_background():
+        outcome["status"] = test.post(
+            f"/api/setups/{sid}/rooms/kitchen/draft?code={code}"
+        ).status_code
+
+    worker = threading.Thread(target=draft_in_background)
+    worker.start()
+    assert entered.wait(30)
+    path = dirs / "setups" / sid / "setup.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["rooms"] = [room for room in data["rooms"] if room["id"] != "kitchen"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    release.set()
+    worker.join(30)
+    assert outcome["status"] == 200
+    setup = test.get(f"/api/setups/{sid}?code={code}").json()
+    assert "kitchen" not in {room["id"] for room in setup["rooms"]}
+
+
+def test_mid_draft_rule_change_marks_stale(dirs):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+    test = TestClient(_blocking_draft_client(entered, release))
+    code = test.app.state.server.code
+    sid = _create(test, code)["setup_id"]
+    assert _photo(test, code, sid, "kitchen").status_code == 200
+    outcome = {}
+
+    def draft_in_background():
+        outcome["status"] = test.post(
+            f"/api/setups/{sid}/rooms/kitchen/draft?code={code}"
+        ).status_code
+
+    worker = threading.Thread(target=draft_in_background)
+    worker.start()
+    assert entered.wait(30)
+    put = test.put(
+        f"/api/setups/{sid}/rooms/kitchen?code={code}", json={"rules": "Changed."}
+    )
+    assert put.status_code == 200
+    release.set()
+    worker.join(30)
+    assert outcome["status"] == 200
+    room = _kitchen(test, code, sid)
+    assert room["status"] == "ready"
+    assert room["stale"] is True
+
+
+def test_fixup_drops_photo_items_with_standard_keys():
+    room = {"id": "kitchen", "type": "kitchen", "name": "Kitchen"}
+    draft = _draft_answer(items=[
+        {"key": "counters", "label": "Counters",
+         "requirement": "Repeat of the standard check.",
+         "sam_prompt": None, "min_count": None, "problem_area": None,
+         "critical": True, "source": "photo"},
+        {"key": "counters", "label": "Counters",
+         "requirement": "The host's own wording replaces it.",
+         "sam_prompt": None, "min_count": None, "problem_area": None,
+         "critical": True, "source": "rule"},
+    ])
+    fixed = setup_mod.fixup_draft(draft, room)
+    assert [item["source"] for item in fixed["items"]] == ["rule"]
+    assert fixed["items"][0]["requirement"] == "The host's own wording replaces it."
+
+
+def test_setup_draft_prompt_states_counting_and_photo_rules():
+    from pot import prompts
+
+    text = prompts.setup_draft_instructions(
+        "Half bathroom", "half_bathroom", "spare roll",
+        [{"key": "toilet_paper", "label": "Toilet paper",
+          "requirement": "Toilet paper on the holder."}],
+    )
+    assert "including the ones already in place" in text
+    assert "min_count 2" in text
+    assert "Never cups, used toiletries" in text

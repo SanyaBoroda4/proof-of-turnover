@@ -59,6 +59,7 @@
   .pill.ready { background: var(--green); }
   .pill.new { background: var(--orange); }
   .pill.skipped { background: var(--grey); }
+  .pill.stale { background: var(--orange); }
   .roomrow { display: block; width: 100%; text-align: left; border: 1px solid #ddd;
     border-radius: 10px; padding: 12px; margin: 10px 0; background: #fff;
     font-size: 18px; cursor: pointer; }
@@ -92,6 +93,9 @@ const I18N = {
     sayRule: "Di una regla", stop: "Detener", transcribing: "Transcribiendo…",
     noSpeech: "No se escuchó nada.", micDenied: "Sin acceso al micrófono.",
     makeList: "Crear lista", writing: "Escribiendo la lista…",
+    updateList: "Actualizar lista",
+    editsLost: "Tus cambios en esta lista se reemplazarán.",
+    needsUpdate: "necesita actualizar",
     yourRule: "tu regla", fromPhoto: "de la foto",
     critical: "obligatorio", optional: "opcional",
     recognizes: d => `Cómo reconoce la app este cuarto: ${d}`,
@@ -107,7 +111,7 @@ const I18N = {
     authError: "Este enlace no tiene código. Pide el enlace completo.",
     rooms: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "cuarto" : "cuartos"}`,
     checks: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "punto" : "puntos"}`,
-    photos: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "foto" : "fotos"}`,
+    photosPerTurnover: n => `${n} ${new Intl.PluralRules("es").select(n) === "one" ? "foto por turno" : "fotos por turno"}`,
     types: {bedroom: "Dormitorio", bathroom: "Baño", half_bathroom: "Medio baño",
       kitchen: "Cocina", living_room: "Sala", dining_room: "Comedor",
       laundry: "Lavandería", office: "Oficina", hallway: "Pasillo",
@@ -142,6 +146,9 @@ const I18N = {
     sayRule: "Say a rule", stop: "Stop", transcribing: "Transcribing…",
     noSpeech: "No speech heard.", micDenied: "No microphone access.",
     makeList: "Make checklist", writing: "Writing the checklist…",
+    updateList: "Update checklist",
+    editsLost: "Your edits to this list will be replaced.",
+    needsUpdate: "needs update",
     yourRule: "your rule", fromPhoto: "from photo",
     critical: "critical", optional: "optional",
     recognizes: d => `How the app recognizes this room: ${d}`,
@@ -157,7 +164,7 @@ const I18N = {
     authError: "This link has no code. Ask for the full link.",
     rooms: n => `${n} room${n === 1 ? "" : "s"}`,
     checks: n => `${n} check${n === 1 ? "" : "s"}`,
-    photos: n => `${n} photo${n === 1 ? "" : "s"}`,
+    photosPerTurnover: n => `${n} photo${n === 1 ? "" : "s"} per turnover`,
     types: {bedroom: "Bedroom", bathroom: "Bathroom", half_bathroom: "Half bathroom",
       kitchen: "Kitchen", living_room: "Living room", dining_room: "Dining room",
       laundry: "Laundry", office: "Office", hallway: "Hallway",
@@ -192,6 +199,9 @@ const I18N = {
     sayRule: "Скажите правило", stop: "Стоп", transcribing: "Распознаём…",
     noSpeech: "Речь не слышна.", micDenied: "Нет доступа к микрофону.",
     makeList: "Составить список", writing: "Составляем список…",
+    updateList: "Обновить список",
+    editsLost: "Ваши правки в этом списке будут заменены.",
+    needsUpdate: "нужно обновить",
     yourRule: "ваше правило", fromPhoto: "с фото",
     critical: "важно", optional: "необязательно",
     recognizes: d => `Как приложение узнаёт комнату: ${d}`,
@@ -213,7 +223,7 @@ const I18N = {
       const f = new Intl.PluralRules("ru").select(n);
       return `${n} ${f === "one" ? "проверка" : f === "few" ? "проверки" : "проверок"}`;
     },
-    photos: n => `${n} фото`,
+    photosPerTurnover: n => `${n} фото за уборку`,
     types: {bedroom: "Спальня", bathroom: "Ванная", half_bathroom: "Гостевой туалет",
       kitchen: "Кухня", living_room: "Гостиная", dining_room: "Столовая",
       laundry: "Прачечная", office: "Кабинет", hallway: "Коридор",
@@ -438,6 +448,10 @@ function renderRoom(app) {
   if (!draft) {
     html += `<button class="btn" id="draft" ${busy || !room.photos.length ? "disabled" : ""}>${esc(busy === "draft" ? t.writing : t.makeList)}</button>`;
   } else {
+    if (room.stale) {
+      html += `<button class="btn" id="draft" ${busy || !room.photos.length ? "disabled" : ""}>${esc(busy === "draft" ? t.writing : t.updateList)}</button>
+        <p class="small">${esc(t.editsLost)}</p>`;
+    }
     html += draftHtml(room, draft);
   }
   const canNext = room.status === "ready" || room.status === "skipped";
@@ -707,15 +721,26 @@ async function sendRec(room) {
 
 async function makeDraft(room) {
   err = "";
+  const box = document.getElementById("rrules");
+  const currentRules = box ? box.value : room.rules;
   busy = "draft";
   render();
   try {
+    await api(roomUrl(room), {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({rules: currentRules}),
+    });
     await api(roomUrl(room, "/draft"), {method: "POST"});
-    await reloadSetup();
   } catch (e) {
     err = e.message === "auth" ? T().authError : e.message;
   }
+  try {
+    await reloadSetup();
+  } catch (e2) {
+    if (!err) err = e2.message;
+  }
   busy = "";
+  editing = null;
   render();
 }
 
@@ -725,7 +750,9 @@ function renderReview(app) {
   if (err) html += `<div class="error">${esc(err)}</div>`;
   setup.rooms.forEach((room, idx) => {
     const checks = room.draft ? t.checks(room.draft.items.length) : "";
-    const status = room.status === "ready"
+    const status = room.status === "ready" && room.stale
+      ? `<span class="pill stale">${esc(t.needsUpdate)}</span> ${esc(checks)}`
+      : room.status === "ready"
       ? `<span class="pill ready">${esc(t.ready)}</span> ${esc(checks)}`
       : room.status === "skipped"
       ? `<span class="pill skipped">${esc(t.skipped)}</span>`
@@ -792,10 +819,8 @@ async function saveHouse() {
     await reloadSetup();
     if (res.tour_error) {
       err = res.tour_error;
-      screen = "review";
-    } else {
-      screen = "done";
     }
+    screen = "done";
   } catch (e) {
     err = e.message === "auth" ? T().authError : e.message;
   }
@@ -806,9 +831,8 @@ async function saveHouse() {
 function renderDone(app) {
   const t = T();
   const res = setup.save_result || {};
-  const photoCount = setup.rooms.reduce((n, r) => n + (r.photos || []).length, 0);
   const summary = t.done(setup.name, t.rooms(res.rooms || 0),
-    t.checks(res.items || 0), t.photos(photoCount));
+    t.checks(res.items || 0), t.photosPerTurnover(res.shots || 0));
   let html = `<h1>${esc(t.title)}</h1>`;
   if (err) html += `<div class="error">${esc(err)}</div>`;
   html += `<div class="result ok">${esc(summary)}</div>`;

@@ -268,12 +268,14 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
         else:
             sam = sams.get(item_id)
         boxes = list(sam.boxes) if sam is not None else []
+        box_width = BOX_WIDTH
         if proof.status == PROBLEM and not boxes:
             # A problem photo always shows red: frame the whole photo.
             boxes = [{
                 "left": 0, "top": 0,
                 "right": source.width - 1, "bottom": source.height - 1,
             }]
+            box_width = max(3 * BOX_WIDTH, min(source.width, source.height) // 60)
         for box in boxes:
             draw.rectangle(
                 [
@@ -283,7 +285,7 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
                     int(box["bottom"]) + bar_height,
                 ],
                 outline=color,
-                width=BOX_WIDTH,
+                width=box_width,
             )
         path = evidence_dir / f"{item_id}.jpg"
         fd, tmp_name = tempfile.mkstemp(

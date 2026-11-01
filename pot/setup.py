@@ -47,8 +47,30 @@ class SetupNotFound(SetupError):
     """Unknown setup, room or photo; the server answers 404."""
 
 
+class SetupBusy(SetupError):
+    """A save or tour retry is already running; the server answers 409."""
+
+
 _locks = {}
 _locks_guard = threading.Lock()
+
+#: Setup ids with a save or tour retry in flight (memory only, so a
+#: crash can't leave them stuck).
+_saving = set()
+_saving_guard = threading.Lock()
+
+
+def _claim_saving(setup_id):
+    with _saving_guard:
+        if setup_id in _saving:
+            return False
+        _saving.add(setup_id)
+        return True
+
+
+def _release_saving(setup_id):
+    with _saving_guard:
+        _saving.discard(setup_id)
 
 
 def _lock_for(setup_id):
@@ -109,6 +131,8 @@ def _room_entry(room_id, room_type, name, floor):
         "photos": [],
         "draft": None,
         "status": "new",  # new | ready | skipped
+        "stale": False,
+        "next_photo": 1,
     }
 
 
@@ -198,6 +222,10 @@ def load_setup(setup_id):
             raise SetupError(f"Setup '{setup_id}' is unreadable: {exc}") from exc
         if not isinstance(data, dict) or data.get("id") != setup_id:
             raise SetupError(f"Setup '{setup_id}' is unreadable")
+        for room in data.get("rooms", []):
+            room.setdefault("stale", False)
+            if "next_photo" not in room:
+                room["next_photo"] = max(room.get("photos", []) + [0]) + 1
         return data
 
 
@@ -231,6 +259,8 @@ def update_room(setup_id, room_id, edits):
             rules = edits["rules"]
             if not isinstance(rules, str) or len(rules) > 2000:
                 raise SetupError("Rules must be text of up to 2000 characters")
+            if room["draft"] is not None and rules != room["rules"]:
+                room["stale"] = True
             room["rules"] = rules
         if "skipped" in edits:
             if not isinstance(edits["skipped"], bool):
@@ -321,7 +351,10 @@ def add_room_photo(setup_id, room_id, filename, data):
             raise SetupError("Empty photo upload")
         photos_dir = _setup_dir(setup_id) / "photos" / room_id
         photos_dir.mkdir(parents=True, exist_ok=True)
-        number = max(room["photos"], default=0) + 1
+        # The counter never goes back, so a photo URL (long cache
+        # header) can never show an older thumbnail.
+        number = room.get("next_photo", 1)
+        room["next_photo"] = number + 1
         suffix = Path(filename or "photo.jpg").suffix.lower() or ".jpg"
         fd, tmp_name = tempfile.mkstemp(dir=str(photos_dir), suffix=suffix)
         try:
@@ -336,6 +369,8 @@ def add_room_photo(setup_id, room_id, filename, data):
             except OSError:
                 pass
         room["photos"].append(number)
+        if room["draft"] is not None:
+            room["stale"] = True
         _save_locked(setup)
         return {"n": number}
 
@@ -354,6 +389,8 @@ def delete_room_photo(setup_id, room_id, number):
             except OSError:
                 pass
         room["photos"] = [n for n in room["photos"] if n != number]
+        if room["draft"] is not None:
+            room["stale"] = True
         _save_locked(setup)
         return room
 
@@ -521,6 +558,7 @@ def fixup_draft(answer, room):
     raw_items = answer.get("items")
     if not isinstance(raw_items, list):
         raise SetupError("The checklist came back unreadable; tap Make checklist again")
+    standard_keys = {check["key"] for check in standard_checks_for(room["type"])}
     seen = set()
     rules, photos = [], []
     for number, entry in enumerate(raw_items, start=1):
@@ -532,6 +570,9 @@ def fixup_draft(answer, room):
         requirement = requirement.strip()[:300] if isinstance(requirement, str) else ""
         key = _fix_key(entry.get("key"), seen, label or f"rule_{number}")
         sam_prompt, min_count = _fix_sam(entry)
+        source = "rule" if entry.get("source") == "rule" else "photo"
+        if source == "photo" and key in standard_keys:
+            continue  # a photo item repeating a standard check
         fixed = {
             "key": key,
             "label": label or key,
@@ -540,7 +581,7 @@ def fixup_draft(answer, room):
             "min_count": min_count,
             "problem_area": _fix_area(entry.get("problem_area")),
             "critical": bool(entry.get("critical", True)),
-            "source": "rule" if entry.get("source") == "rule" else "photo",
+            "source": source,
         }
         (rules if fixed["source"] == "rule" else photos).append(fixed)
     items = rules + photos[: min(3, max(0, 12 - len(rules)))]
@@ -570,34 +611,60 @@ def standard_checks_for(room_type):
 
 
 def draft_room(client, setup_id, room_id, effort=None):
-    """Draft one room's checklist from its rules + photos; returns the draft."""
-    effort = prompts.REASONING_EFFORT if effort is None else effort
+    """Draft one room's checklist from its rules + photos; returns the draft.
+
+    The setup lock is released during the model call (runs.py pattern):
+    the read snapshots what it needs, the call runs free, then the
+    result is stored under the lock again. A room deleted meanwhile
+    drops the result; changed rules or photos store it but mark the
+    room stale.
+    """
+    effort = prompts.SETUP_EFFORT if effort is None else effort
     with _lock_for(setup_id):
         setup = load_setup(setup_id)
         room = _room_locked(setup, room_id)
         if not room["photos"]:
             raise SetupError("Take at least one photo of the room first")
         photos_dir = _setup_dir(setup_id) / "photos" / room_id
+        snapshot = {
+            "name": room["name"],
+            "type": room["type"],
+            "rules": room["rules"],
+            "photos": sorted(room["photos"]),
+        }
         content = []
-        for number in sorted(room["photos"]):
+        for number in snapshot["photos"]:
             check_path = photos_dir / f"{number}_check.jpg"
             if not check_path.is_file():
                 raise SetupError(f"Room '{room['name']}' is missing photo {number}")
-            fake = SimpleNamespace(id=f"P{number:02d}", check_path=check_path)
-            content.extend(prompts.photo_parts(fake, "check"))
-        answer = client.respond(
-            f"setup draft {setup_id} {room_id}",
-            content,
-            instructions=prompts.setup_draft_instructions(
-                room["name"], room["type"], room["rules"],
-                standard_checks_for(room["type"]),
-            ),
-            schema=draft_schema(),
-            effort=effort,
-        )
-        draft = fixup_draft(answer, room)
+            fake = SimpleNamespace(
+                id=f"P{number:02d}", check_path=check_path,
+                overview_path=photos_dir / f"{number}_overview.jpg",
+            )
+            content.extend(prompts.photo_parts(fake, prompts.SETUP_PHOTO_SIZE))
+    answer = client.respond(
+        f"setup draft {setup_id} {room_id}",
+        content,
+        instructions=prompts.setup_draft_instructions(
+            snapshot["name"], snapshot["type"], snapshot["rules"],
+            standard_checks_for(snapshot["type"]),
+        ),
+        schema=draft_schema(),
+        effort=effort,
+    )
+    draft = fixup_draft(answer, snapshot)
+    with _lock_for(setup_id):
+        setup = load_setup(setup_id)
+        try:
+            room = _room_locked(setup, room_id)
+        except SetupNotFound:
+            return draft  # room deleted meanwhile: drop the stored result
         room["draft"] = draft
         room["status"] = "ready"
+        room["stale"] = (
+            room["rules"] != snapshot["rules"]
+            or sorted(room["photos"]) != snapshot["photos"]
+        )
         _save_locked(setup)
         return draft
 
@@ -611,7 +678,21 @@ def _claim_property_id(name):
 
 
 def save_setup(client, setup_id):
-    """Write property.json + tour; returns counts (or tour_error)."""
+    """Write property.json + tour; returns counts (or tour_error).
+
+    A setup that was saved before reuses its property id (the files
+    are overwritten and the tour is planned again); only a setup that
+    was never saved claims a new id.
+    """
+    if not _claim_saving(setup_id):
+        raise SetupBusy("Already saving")
+    try:
+        return _save_now(client, setup_id)
+    finally:
+        _release_saving(setup_id)
+
+
+def _save_now(client, setup_id):
     with _lock_for(setup_id):
         setup = load_setup(setup_id)
         pending = [room["name"] for room in setup["rooms"]
@@ -620,6 +701,13 @@ def save_setup(client, setup_id):
         if pending:
             raise SetupError(
                 "These rooms have no checklist yet: " + ", ".join(pending)
+            )
+        stale = [room["name"] for room in setup["rooms"]
+                 if room["status"] == "ready" and room.get("stale")]
+        if stale:
+            raise SetupError(
+                "These rooms have new rules that are not in their checklist yet: "
+                + ", ".join(stale)
             )
         if all(room["status"] == "skipped" for room in setup["rooms"]):
             raise SetupError("At least one room must be ready")
@@ -651,7 +739,7 @@ def save_setup(client, setup_id):
                     "critical": item["critical"],
                     "problem_area": item["problem_area"],
                 })
-        property_id = _claim_property_id(setup["name"])
+        property_id = setup.get("property_id") or _claim_property_id(setup["name"])
         property = validate_property({
             "id": property_id,
             "name": setup["name"],
@@ -669,34 +757,51 @@ def save_setup(client, setup_id):
             "rooms": len(rooms_out),
             "items": len(checklist),
         }
-        try:
-            shots, _notes = generate_tour(client, property, checklist)
-        except PropertyError as exc:
+    # The tour call runs without the lock; reads and edits keep working.
+    try:
+        shots, _notes = generate_tour(client, property, checklist)
+    except PropertyError as exc:
+        with _lock_for(setup_id):
+            setup = load_setup(setup_id)
             setup["property_id"] = property_id
             setup["save_result"] = dict(result, tour_error=str(exc))
             _save_locked(setup)
-            return dict(result, tour_error=str(exc))
-        result["shots"] = len(shots)
+        return dict(result, tour_error=str(exc))
+    result["shots"] = len(shots)
+    with _lock_for(setup_id):
+        setup = load_setup(setup_id)
         setup["property_id"] = property_id
         setup["save_result"] = dict(result)
         _save_locked(setup)
-        return result
+    return result
 
 
 def retry_tour(client, setup_id):
     """Plan the photo tour again after a failed tour call."""
+    if not _claim_saving(setup_id):
+        raise SetupBusy("Already saving")
+    try:
+        return _retry_tour_now(client, setup_id)
+    finally:
+        _release_saving(setup_id)
+
+
+def _retry_tour_now(client, setup_id):
     with _lock_for(setup_id):
         setup = load_setup(setup_id)
         property_id = setup.get("property_id")
         if not property_id:
             raise SetupError("Save the house before planning its tour")
-        property = load_property(property_id)
-        try:
-            shots, _notes = generate_tour(client, property, build_checklist(property))
-        except PropertyError as exc:
-            return {"property_id": property_id, "tour_error": str(exc)}
+    property = load_property(property_id)
+    try:
+        shots, _notes = generate_tour(client, property, build_checklist(property))
+    except PropertyError as exc:
+        return {"property_id": property_id, "tour_error": str(exc)}
+    with _lock_for(setup_id):
+        setup = load_setup(setup_id)
         result = dict(setup.get("save_result") or {}, property_id=property_id)
         result["shots"] = len(shots)
+        result.pop("tour_error", None)
         setup["save_result"] = result
         _save_locked(setup)
-        return {"property_id": property_id, "shots": len(shots)}
+    return {"property_id": property_id, "shots": len(shots)}

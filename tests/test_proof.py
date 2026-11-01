@@ -406,3 +406,24 @@ def test_problem_without_boxes_gets_red_frame(tmp_path):
         assert any(_is_red(pixels[1, y]) for y in range(13, img.height - 1))
     with Image.open(paths["bed.proven"]) as img:
         assert not _has_color(img, _is_red)  # proven items unchanged
+
+
+def test_red_frame_width_scales_with_photo(tmp_path):
+    from types import SimpleNamespace
+
+    big = tmp_path / "big.jpg"
+    Image.new("RGB", (1200, 1600), "blue").save(big, "JPEG")
+    from pot.proof import ProofItem
+    proofs = {"bed.framed": ProofItem("bed.framed", PROBLEM, "bad", "P01")}
+    items = {"bed.framed": _item(id="bed.framed", key="framed")}
+    problem_sams = {
+        "bed.framed": SamCheck("bed.framed", "P01", "stain", 0, []),
+    }
+    paths = save_evidence(
+        tmp_path, proofs, items, {"P01": SimpleNamespace(check_path=big)},
+        {}, problem_sams)
+    with Image.open(paths["bed.framed"]) as img:
+        # 20 px on 1200x1600: inside the frame is red, beyond it is not.
+        middle = img.height // 2
+        assert _is_red(img.getpixel((15, middle)))
+        assert not _is_red(img.getpixel((60, middle)))

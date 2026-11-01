@@ -633,6 +633,8 @@ def create_app(client=None):
         try:
             try:
                 return setup_mod.save_setup(server.client, setup_id)
+            except setup_mod.SetupBusy as exc:
+                raise HTTPException(409, str(exc))
             except setup_mod.SetupError as exc:
                 raise HTTPException(400, str(exc))
             except PropertyError as exc:
@@ -648,6 +650,8 @@ def create_app(client=None):
         try:
             try:
                 return setup_mod.retry_tour(server.client, setup_id)
+            except setup_mod.SetupBusy as exc:
+                raise HTTPException(409, str(exc))
             except setup_mod.SetupError as exc:
                 raise HTTPException(400, str(exc))
             except PropertyError as exc:

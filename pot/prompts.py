@@ -19,6 +19,8 @@ def verify_effort():
 MATCH_PHOTO_SIZE = "overview"  # 768 px copies are enough to match rooms
 FIRST_LOOK_PHOTO_SIZE = "check"  # 1600 px copies keep small details (stains)
 VERIFY_PHOTO_SIZE = "check"  # second look also needs full detail
+SETUP_PHOTO_SIZE = "overview"  # 768 px drafts match 1600 px (Step 26)
+SETUP_EFFORT = "medium"  # low effort weakened sam_prompts (Step 26)
 
 
 def pick_boxes_schema():
@@ -278,9 +280,10 @@ Rules:
 - beds (bedrooms only): one entry per bed as a guest would say it ("king bed", "twin bunk bed"); [] for other rooms. towels (full bathrooms only): the number of bath towels set out for guests in the photos; 0 if none seen; 0 for other rooms.
 - Every host rule becomes at least one item with source "rule", one item per separate thing to check. Keep the host's meaning and numbers exactly; never drop or soften a rule. A rule that cannot be checked from a photo goes to unclear_rules instead.
 - At most 3 items with source "photo": only things clearly set out for guests that the cleaner must put back every time (pillows arranged on a bed, paper towel roll on its holder, soap at the sink). Not general cleanliness: the standard checks already cover that.
+- Items with source "photo" are only guest amenities or decor clearly set out for guests (pillows, throws, towels, toilet paper, soap, coffee, paper towels, decor). Never cups, used toiletries, clothes or other personal things.
 - Don't repeat a standard check. When a host rule changes one, reuse that standard key so the new item replaces it (example: "toilet lid open for the photo" -> key "toilet").
 - requirement: one sentence, at most 35 words, saying what the photo must show when it's done. If the check is inside something normally closed (fridge, freezer, dishwasher, washer, dryer, oven, microwave, cabinet), start with what to open for the photo ("Fridge doors open for the photo: ...").
-- sam_prompt: a 1-3 word noun for an object that must be visible when it's done ("paper towel roll", "pillow"); null for checks about something empty, clean or absent. min_count: the number the rule asks for (or the number set out in the photos); only with sam_prompt, else null.
+- sam_prompt: a 1-3 word noun for an object that must be visible when it's done ("paper towel roll", "pillow"); null for checks about something empty, clean or absent. min_count: the number the rule asks for (or the number set out in the photos); only with sam_prompt, else null. min_count counts every matching object the photo shows, including the ones already in place. Example: "at least one spare toilet paper roll besides the one on the holder" -> sam_prompt "toilet paper roll", min_count 2.
 - problem_area: for "must be empty" rules, the whole place in 1-3 words ("refrigerator door", "washing machine"); else null.
 - critical: true unless the host calls it optional or nice to have.
 - Plain English. Never mention door codes, Wi-Fi passwords or people."""
