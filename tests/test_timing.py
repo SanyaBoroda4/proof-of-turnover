@@ -69,6 +69,32 @@ def test_timing_reports_waits_slowest_and_open_items(tmp_path, monkeypatch, caps
     assert "bath.towels [problem]: Foto toallas" in out
 
 
+def test_timing_same_millisecond_card_ready(tmp_path, monkeypatch, capsys):
+    """Two card_ready events in the same millisecond must not crash min()."""
+    import pot.config as config
+
+    monkeypatch.setattr(config, "RUNS_DIR", tmp_path)
+    run_dir = tmp_path / "run-20261101-120000"
+    run_dir.mkdir(parents=True)
+    _write(run_dir, "timeline.jsonl", [
+        {"time": "2026-11-01T12:00:00.000", "event": "photo_received",
+         "photo_id": "P01", "shot_id": "bed-1"},
+        {"time": "2026-11-01T12:00:10.000", "event": "photo_finished",
+         "photo_id": "P01", "outcome": "ok"},
+        {"time": "2026-11-01T12:00:10.000", "event": "card_ready",
+         "item_id": "bed.made"},
+        {"time": "2026-11-01T12:00:10.000", "event": "card_ready",
+         "item_id": "bed.floor"},
+        {"time": "2026-11-01T12:00:10.100", "event": "all_checked", "photos": 1},
+    ])
+    _write(run_dir, "calls.jsonl", [])
+
+    timing = _load_timing()
+    assert timing.main(["timing.py", "run-20261101-120000"]) == 0
+    out = capsys.readouterr().out
+    assert "First card overall:" in out
+
+
 def test_timing_missing_run_exits(tmp_path, monkeypatch):
     import pot.config as config
 

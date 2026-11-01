@@ -97,7 +97,7 @@ def main(argv):
             print("  -> all checked: not yet")
         cards = [(when, row) for when, row in after if row.get("event") == "card_ready"]
         if cards:
-            when, row = min(cards)
+            when, row = min(cards, key=lambda pair: pair[0])
             print(f"  -> first card ready: {(when - last_upload).total_seconds():.1f} s "
                   f"({row.get('item_id', '?')})")
         else:
@@ -106,7 +106,7 @@ def main(argv):
                        [(_at(row), row) for row in timeline]
                        if row.get("event") == "card_ready"]
         if first_cards:
-            when, row = min(first_cards)
+            when, row = min(first_cards, key=lambda pair: pair[0])
             print(f"First card overall: {row.get('item_id', '?')} "
                   f"at {when.strftime('%H:%M:%S.%f')[:-3]}")
 

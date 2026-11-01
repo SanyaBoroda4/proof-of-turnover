@@ -128,6 +128,7 @@ const I18N = {
     noVoice: "Este teléfono no tiene voz en español; solo se muestra el texto.",
     setupHouse: "Configurar una casa nueva",
     startTurnover: "Empezar turno",
+    newTurnover: "Nuevo turno",
     back: "Atrás",
     mic: "Grabar nota",
     stop: "Detener",
@@ -174,6 +175,7 @@ const I18N = {
     noVoice: "This phone has no English voice; text only.",
     setupHouse: "Set up a new house",
     startTurnover: "Start turnover",
+    newTurnover: "New turnover",
     back: "Back",
     mic: "Record note",
     stop: "Stop",
@@ -220,6 +222,7 @@ const I18N = {
     noVoice: "На этом телефоне нет русского голоса; только текст.",
     setupHouse: "Настроить новый дом",
     startTurnover: "Начать уборку",
+    newTurnover: "Новая уборка",
     back: "Назад",
     mic: "Записать заметку",
     stop: "Стоп",
@@ -254,6 +257,17 @@ async function api(path, opts) {
     throw new Error(detail);
   }
   return r.json();
+}
+
+const UPLOAD_TIMEOUT_MS = 30000;
+async function apiUpload(path, opts) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_MS);
+  try {
+    return await api(path, {...(opts || {}), signal: ctrl.signal});
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const VOICE_PREFS = {es: ["es-us", "es-mx"], en: ["en-us"], ru: ["ru-ru"]};
@@ -313,6 +327,23 @@ function repeatSay(text) {
   if ("speechSynthesis" in window) speechSynthesis.cancel();
   speaking = false;
   say(text);
+}
+
+let wakeLock = null;
+async function lockScreen() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+  } catch (e) {
+    wakeLock = null;
+  }
+}
+async function unlockScreen() {
+  if (!wakeLock) return;
+  try {
+    await wakeLock.release();
+  } catch (e) {}
+  wakeLock = null;
 }
 
 let audioCtx = null;
@@ -631,6 +662,7 @@ async function startTour() {
     history.replaceState(null, "", url);
     await refresh();
     startPoll();
+    lockScreen();
     const shot = roundCurrent();
     if (shot) {
       prevShotId = shot.shot_id;
@@ -879,6 +911,7 @@ function app_query(sel) {
 }
 
 function renderFinal(app) {
+  unlockScreen();
   const c = finalCounts();
   app.innerHTML = `<h1>${esc(T().title)}</h1>
     <div class="result ok">${esc(T().doneAll)}</div>
@@ -888,7 +921,19 @@ function renderFinal(app) {
       <li>${esc(T().cantFixCount(c.cantFix))}</li>
       <li>${esc(T().markedFineCount(c.fine))}</li>
     </ul>
+    <button class="btn secondary" id="newTurnover">${esc(T().newTurnover)}</button>
     ${toast ? `<div class="toast">${esc(toast)}</div>` : ""}`;
+  document.getElementById("newTurnover").onclick = newTurnover;
+}
+
+function newTurnover() {
+  RUN = "";
+  modePicked = "";
+  resetRunState();
+  const url = new URL(location.href);
+  url.searchParams.delete("run");
+  history.replaceState(null, "", url);
+  renderMaybe();
 }
 
 function fail(app, e) {
@@ -1048,7 +1093,7 @@ async function sendShot(shotId, file) {
   form.append("shot_id", shotId);
   form.append("image", file);
   try {
-    await api(`/api/runs/${encodeURIComponent(RUN)}/photos`, {method: "POST", body: form});
+    await apiUpload(`/api/runs/${encodeURIComponent(RUN)}/photos`, {method: "POST", body: form});
     const entry = optimistic.get(shotId);
     if (entry) {
       try { URL.revokeObjectURL(entry.url); } catch (e) {}
@@ -1102,7 +1147,7 @@ function cardSnap(itemId, file) {
     form.append("shot_id", shot.shot_id);
     form.append("image", file);
     try {
-      const res = await api(`/api/runs/${encodeURIComponent(RUN)}/photos`,
+      const res = await apiUpload(`/api/runs/${encodeURIComponent(RUN)}/photos`,
         {method: "POST", body: form});
       retakePhotos[itemId] = res.photo_id;
       photoError = "";
@@ -1110,7 +1155,8 @@ function cardSnap(itemId, file) {
     } catch (e) {
       delete retakePhotos[itemId];
       if (cardOrder.indexOf(itemId) < 0) cardOrder.unshift(itemId);
-      photoError = e.message.indexOf("foto antigua") >= 0 ? T().oldPhoto : e.message;
+      photoError = e.name === "AbortError" ? T().notSent
+        : e.message.indexOf("foto antigua") >= 0 ? T().oldPhoto : e.message;
     }
     renderMaybe();
   })();
@@ -1266,6 +1312,7 @@ async function boot() {
   };
   document.addEventListener("visibilitychange", async () => {
     if (!document.hidden && RUN) {
+      if (!status || !status.finished_at) lockScreen();
       try { await refresh(); renderMaybe(); } catch (e) {}
     }
   });
@@ -1275,6 +1322,7 @@ async function boot() {
       resetRunState();
       await refresh();
       startPoll();
+      if (!status.finished_at) lockScreen();
     }
     renderMaybe();
   } catch (e) { fail(app, e); }
