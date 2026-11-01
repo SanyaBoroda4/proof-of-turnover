@@ -620,7 +620,7 @@ function render() {
   if (!RUN) return renderStart(app);
   if (!tour || !status) { app.innerHTML = `<p>${esc(T().loading)}</p>`; return; }
   if (status.finished_at) return renderFinal(app);
-  if (!allTaken()) return renderRound(app);
+  if (!allTaken() && !status.round_ended) return renderRound(app);
   return renderCards(app);
 }
 

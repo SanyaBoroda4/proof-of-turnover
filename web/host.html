@@ -66,6 +66,8 @@
 "use strict";
 const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
+const DEMO = params.get("demo") === "1";
+const TEST = params.get("test") === "1";
 const FOLLOW = !params.get("run");
 let RUN = params.get("run") || "";
 let status = null, calls = [], runsList = [], lastKey = null, cleanerUrl = "";
@@ -339,7 +341,8 @@ async function resolveCleanerUrl() {
       hostPart = ip + (location.port ? ":" + location.port : "");
     } catch (e) {}
   }
-  cleanerUrl = `${location.protocol}//${hostPart}/clean?code=${encodeURIComponent(CODE)}`;
+  cleanerUrl = `${location.protocol}//${hostPart}/clean?code=${encodeURIComponent(CODE)}`
+    + (DEMO ? "&demo=1" : "") + (TEST ? "&test=1" : "");
   paintQr();
 }
 

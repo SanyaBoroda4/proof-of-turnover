@@ -311,8 +311,8 @@ function applyNavState(state) {
   } else if (setup.property_id) {
     screen = "done";
   } else if (state.screen === "house") {
-    screen = "room";
-    roomIdx = 0;
+    location.href = cleanHref();
+    return;
   } else if (state.screen === "review") {
     screen = "review";
   } else {
