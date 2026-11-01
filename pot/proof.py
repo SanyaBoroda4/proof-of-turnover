@@ -222,7 +222,7 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
                   item_ids=None):
     """Save one annotated photo per proven/problem item under evidence/.
 
-    Proven items get their green SAM boxes; problem items get the red
+    Proven items get their muted-blue SAM boxes; problem items get the red
     problem-object boxes instead. The caption shows label + status on
     line 1 and the reason on line 2. With item_ids, only those are saved.
     """
@@ -262,7 +262,7 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
             fill="black",
             font=font,
         )
-        color = (0, 180, 0) if proof.status == PROVEN else (220, 0, 0)
+        color = (63, 111, 181) if proof.status == PROVEN else (220, 0, 0)
         if proof.status == PROBLEM:
             sam = problem_sams.get(item_id)
         else:

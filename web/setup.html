@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F3F6F5">
+<meta name="theme-color" content="#F2F3F5">
 <title>Set up a house</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --linen: #F3F6F5; --ink: #1B2A2C; --haint: #A8D5CF; --marsh: #1F5E59;
-    --marsh-dark: #174844; --brick: #B5432F; --dune: #C9962E; --dune-bg: #FBF3DF;
-    --white: #FFFFFF; --muted: #5C7375; --line: #D8E2E0;
-    --float-shadow: 0 8px 28px rgba(27, 42, 44, 0.18);
+    --linen: #F2F3F5; --ink: #1F2328; --haint: #D6DCE4; --marsh: #3D4756;
+    --marsh-dark: #2C3440; --brick: #A8554C; --dune: #9A7F4E; --dune-bg: #F1ECE2;
+    --white: #FFFFFF; --muted: #6A707A; --line: #E1E4E8;
+    --float-shadow: 0 8px 28px rgba(31, 35, 40, 0.16);
   }
   * { box-sizing: border-box; }
   body { font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -35,14 +35,14 @@
   .rowbtns .btn { margin: 10px 0; font-size: 16px; }
   .result { border-radius: 20px; padding: 14px 16px; margin: 12px 0; font-size: 17px; }
   .result.ok { background: var(--haint); color: var(--ink); }
-  .result.bad { background: #F7D9D2; }
+  .result.bad { background: #F3E1DD; }
   .result.wait { background: var(--dune-bg); }
   select, input[type=text], input[type=number], textarea {
     font-size: 17px; padding: 12px; width: 100%; margin: 6px 0;
     border-radius: 20px; border: 2px solid var(--line); background: var(--white);
     color: var(--ink); font-family: inherit; min-height: 56px; }
   textarea { min-height: 96px; }
-  .error { background: #F7D9D2; border-radius: 20px; padding: 14px 16px; margin: 12px 0; }
+  .error { background: #F3E1DD; border-radius: 20px; padding: 14px 16px; margin: 12px 0; }
   .small { font-size: 14px; line-height: 19px; color: var(--muted); }
   a.small { color: var(--marsh); font-weight: 700; }
   .stepper { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
@@ -76,7 +76,7 @@
     color: var(--ink); white-space: nowrap; min-height: 48px; }
   .mini.crit { background: var(--haint); border-color: var(--haint); }
   .mini.opt { background: var(--white); }
-  .mini.del { background: #F7D9D2; border-color: #F7D9D2; color: var(--brick); }
+  .mini.del { background: #F3E1DD; border-color: #F3E1DD; color: var(--brick); }
   .pill { display: inline-block; font-size: 14px; font-weight: 700; border-radius: 999px;
     padding: 4px 12px; color: var(--ink); }
   .pill.ready { background: var(--haint); }

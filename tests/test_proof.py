@@ -342,9 +342,9 @@ def _has_color(img, pred):
     )
 
 
-def _is_green(pixel):
+def _is_muted_blue(pixel):
     red, green, blue = pixel
-    return green > 150 and red < 60 and blue < 60
+    return blue > 140 and red < 110 and green < 140
 
 
 def _is_red(pixel):
@@ -372,11 +372,11 @@ def test_evidence_images_drawn_with_caption(tmp_path):
     with Image.open(paths["bed.beds_made"]) as img:
         assert img.size[0] == 32 and img.size[1] > 24 + 20  # caption bar added
         assert img.getpixel((2, 2)) == (255, 255, 255)
-        assert _has_color(img, _is_green)
+        assert _has_color(img, _is_muted_blue)
         assert not _has_color(img, _is_red)
     with Image.open(paths["bed.other"]) as img:
         assert _has_color(img, _is_red)  # problem-object boxes, not item boxes
-        assert not _has_color(img, _is_green)
+        assert not _has_color(img, _is_muted_blue)
     assert not (Path(tmp_path) / "evidence" / "bed.skip.jpg").exists()
 
 

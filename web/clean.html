@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F3F6F5">
+<meta name="theme-color" content="#F2F3F5">
 <title>Turno de limpieza</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --linen: #F3F6F5; --ink: #1B2A2C; --haint: #A8D5CF; --marsh: #1F5E59;
-    --marsh-dark: #174844; --brick: #B5432F; --dune: #C9962E; --dune-bg: #FBF3DF;
-    --white: #FFFFFF; --muted: #5C7375; --line: #D8E2E0;
-    --float-shadow: 0 8px 28px rgba(27, 42, 44, 0.18);
+    --linen: #F2F3F5; --ink: #1F2328; --haint: #D6DCE4; --marsh: #3D4756;
+    --marsh-dark: #2C3440; --brick: #A8554C; --dune: #9A7F4E; --dune-bg: #F1ECE2;
+    --white: #FFFFFF; --muted: #6A707A; --line: #E1E4E8;
+    --float-shadow: 0 8px 28px rgba(31, 35, 40, 0.16);
   }
   * { box-sizing: border-box; }
   body { font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -37,12 +37,12 @@
   .btn svg, .iconbtn svg, .link svg { flex: none; }
   .result { border-radius: 20px; padding: 14px 16px; margin: 12px 0; font-size: 17px; }
   .result.ok { background: var(--haint); color: var(--ink); }
-  .result.bad { background: #F7D9D2; }
+  .result.bad { background: #F3E1DD; }
   .result.wait { background: var(--dune-bg); }
   select, input[type=text] { font-size: 17px; padding: 12px; width: 100%; margin: 6px 0;
          border-radius: 20px; border: 2px solid var(--line); background: var(--white);
          color: var(--ink); font-family: inherit; min-height: 56px; }
-  .error { background: #F7D9D2; border-radius: 20px; padding: 14px 16px; margin: 12px 0; }
+  .error { background: #F3E1DD; border-radius: 20px; padding: 14px 16px; margin: 12px 0; }
   .small { font-size: 14px; line-height: 19px; color: var(--muted); }
   .link { display: inline-flex; align-items: center; gap: 6px; background: none;
           border: none; color: var(--marsh); font-size: 16px; font-weight: 700;
@@ -53,7 +53,7 @@
   .tile { min-height: 88px; font-size: 20px; }
   .langline { text-align: center; margin-top: 24px; }
   /* Round: full-bleed camera */
-  .round { position: fixed; inset: 0; background: #0c1415; overflow: hidden; }
+  .round { position: fixed; inset: 0; background: #121417; overflow: hidden; }
   .round video { position: absolute; inset: 0; width: 100%; height: 100%;
                  object-fit: cover; }
   .round .novid { position: absolute; inset: 0; display: flex; align-items: center;
@@ -163,13 +163,13 @@
            background: var(--marsh); color: var(--white); font-size: 17px; font-weight: 700;
            border-radius: 999px; padding: 12px 22px; z-index: 50;
            box-shadow: var(--float-shadow); white-space: nowrap; }
-  #overlay { display: none; position: fixed; inset: 0; background: rgba(12, 20, 21, 0.9);
+  #overlay { display: none; position: fixed; inset: 0; background: rgba(18, 20, 23, 0.9);
              cursor: zoom-out; z-index: 60; text-align: center; padding: 48px 24px 24px; }
   #overlay img { max-width: 95%; max-height: 85%; border-radius: 20px; }
   #bigcap { color: var(--white); font-size: 17px; margin-top: 12px; }
   /* Retake sheet */
   #sheet[hidden] { display: none; }
-  #sheet { position: fixed; inset: 0; z-index: 30; background: #0c1415; }
+  #sheet { position: fixed; inset: 0; z-index: 30; background: #121417; }
   #sheet video { position: absolute; inset: 0; width: 100%; height: 100%;
                  object-fit: cover; }
   #sheet .sheettop { position: absolute; top: max(12px, env(safe-area-inset-top));
