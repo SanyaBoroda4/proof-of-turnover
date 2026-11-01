@@ -139,6 +139,7 @@
     .card.slide, .card.out { animation: none; }
     #flash.on, #flash.off { transition: none; }
     .stamp { animation: none; }
+    .psheet.anim, .pbackdrop.anim { animation: none; }
   }
   .tagrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .tag { display: inline-block; border-radius: 999px; padding: 6px 14px;
@@ -148,7 +149,10 @@
                  border: 2px solid var(--dune); }
   .tagrow .of { margin-left: auto; font-size: 14px; color: var(--muted); }
   .photowrap { position: relative; margin: 0 0 12px; }
-  .photowrap img.photo { width: 100%; border-radius: 20px; cursor: zoom-in; display: block; }
+  .photowrap img.photo { width: 100%; border-radius: 20px; cursor: zoom-in; display: block;
+    max-height: max(200px, calc(100vh - 430px));
+    max-height: max(200px, calc(100svh - 430px));
+    object-fit: contain; background: var(--linen); }
   .inset { position: absolute; right: 8px; bottom: 8px; width: 96px; cursor: zoom-in;
            background: var(--white); border-radius: 12px; padding: 4px;
            box-shadow: var(--float-shadow); border: none; }
@@ -156,16 +160,32 @@
   .inset span { display: block; font-size: 11px; line-height: 14px; padding: 2px 4px;
                 color: var(--muted); }
   .card .instruction { font-size: 22px; line-height: 28px; }
+  .cardactions { position: sticky; bottom: 0; z-index: 2; background: var(--white);
+                 margin: 0 -16px; padding: 2px 16px calc(6px + env(safe-area-inset-bottom));
+                 border-radius: 0 0 20px 20px;
+                 box-shadow: 0 -12px 16px -14px rgba(31, 35, 40, 0.28); }
   .btnrow { display: flex; gap: 10px; }
   .btnrow .btn { margin: 10px 0; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
   .chip { border: 2px solid var(--line); border-radius: 999px; background: var(--white);
           color: var(--ink); font-size: 16px; font-family: inherit;
           padding: 10px 16px; min-height: 48px; cursor: pointer; }
-  .toast { position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
+  .toast { position: fixed; left: 12px; right: 12px; transform: none;
+           top: max(12px, env(safe-area-inset-top));
            background: var(--marsh); color: var(--white); font-size: 17px; font-weight: 700;
-           border-radius: 999px; padding: 12px 22px; z-index: 50;
-           box-shadow: var(--float-shadow); white-space: nowrap; }
+           border-radius: 16px; padding: 16px 20px; text-align: center; z-index: 50;
+           box-shadow: var(--float-shadow); white-space: normal; pointer-events: none; }
+  .pbackdrop { position: fixed; inset: 0; z-index: 20; background: rgba(18, 20, 23, 0.38); }
+  .psheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-width: 640px; margin: 0 auto;
+            background: var(--white); border-radius: 24px 24px 0 0; box-shadow: var(--float-shadow);
+            padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+            max-height: 85vh; max-height: 85svh; overflow-y: auto; }
+  .psheethead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+  .psheethead h2 { margin: 0; font-size: 22px; line-height: 28px; }
+  .psheet.anim { animation: sheetup 220ms ease-out; }
+  .pbackdrop.anim { animation: fadein 160ms ease-out; }
+  @keyframes sheetup { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
   #overlay { display: none; position: fixed; inset: 0; background: rgba(18, 20, 23, 0.9);
              cursor: zoom-out; z-index: 60; text-align: center; padding: 48px 24px 24px; }
   #overlay img { max-width: 95%; max-height: 85%; border-radius: 20px; }
@@ -232,6 +252,7 @@ let cardOrder = [], retakePhotos = {}, spokenCard = null, lastShownCard = null;
 let cardsTotal = 0;
 let photosDoneSaid = false, saidFinal = false;
 let cardPanel = null, cardNoteId = null, cardNoteText = "";
+let panelFresh = false;
 let toast = null, toastTimer = null;
 let retrying = false, navDepth = 0;
 let camStream = null, camStarting = false, camMode = "live", camSheet = null;
@@ -279,6 +300,8 @@ const I18N = {
     cantFix: "No se puede",
     itsFine: "Está bien así",
     later: "Más tarde",
+    whyCant: "¿Por qué no se puede arreglar?",
+    sureFine: "¿Seguro que está bien? El anfitrión lo verá.",
     reasons: ["Roto o dañado", "Ya estaba así", "Faltan suministros", "No sale", "Otro"],
     confirm: "Confirmar",
     sendToHost: "Enviar al anfitrión",
@@ -345,6 +368,8 @@ const I18N = {
     cantFix: "Can't fix",
     itsFine: "It's fine",
     later: "Later",
+    whyCant: "Why can't you fix it?",
+    sureFine: "Sure it's fine? The host will see it.",
     reasons: ["Broken or damaged", "Was like this before", "Out of supplies", "Won't come clean", "Other"],
     confirm: "Confirm",
     sendToHost: "Send to host",
@@ -411,6 +436,8 @@ const I18N = {
     cantFix: "Не получается",
     itsFine: "Всё в порядке",
     later: "Позже",
+    whyCant: "Почему не получается исправить?",
+    sureFine: "Точно всё в порядке? Хозяин это увидит.",
     reasons: ["Сломано", "Так было до меня", "Закончились расходники", "Не отмывается", "Другое"],
     confirm: "Подтвердить",
     sendToHost: "Отправить хозяину",
@@ -1099,6 +1126,7 @@ function resetRunState() {
   cardPanel = null;
   cardNoteId = null;
   cardNoteText = "";
+  panelFresh = false;
   toast = null;
   retrying = false;
   lastKey = null;
@@ -1342,14 +1370,15 @@ function cardHtml(item, animate, pos, total) {
     ? `<button class="btn" id="cardFixed">${ICONS.camera}${esc(T().fixed)}</button>` : "";
   return `<div class="card${animate ? " slide" : ""}">
     <div class="tagrow"><span class="tag ${missing ? "missing" : "fix"}">${esc(missing ? T().missingTag : T().fixTag)}</span><span class="of">${esc(T().ofTotal(pos, total))}</span></div>
-    ${img}
     <div class="instruction">${esc(cardText(item))}</div>
-    ${fixed}
-    <div class="btnrow">
-      <button class="btn secondary" id="cardCant">${esc(T().cantFix)}</button>
-      <button class="btn secondary" id="cardFine">${esc(T().itsFine)}</button>
+    ${img}
+    <div class="cardactions">
+      ${fixed}
+      <div class="btnrow">
+        <button class="btn secondary" id="cardCant">${esc(T().cantFix)}</button>
+        <button class="btn secondary" id="cardFine">${esc(T().itsFine)}</button>
+      </div>
     </div>
-    ${panelHtml(item.id)}
     <button class="link" id="cardLater">${esc(T().later)}</button>
   </div>`;
 }
@@ -1385,6 +1414,18 @@ function renderCards(app) {
         (!cardPanel.item || cardPanel.item !== shown)) {
       cardPanel = null;
     }
+    if (cardPanel && cardPanel.item === shown) {
+      const anim = panelFresh ? " anim" : "";
+      panelFresh = false;
+      const title = cardPanel.action === "cant_fix" ? T().whyCant
+        : cardPanel.action === "its_fine" ? T().sureFine : T().fixed;
+      const x = (recorder || transcribing) ? "" :
+        `<button class="iconbtn small" id="panelX" aria-label="${esc(T().close)}">${ICONS.x}</button>`;
+      html += `<div class="pbackdrop${anim}" id="panelBackdrop"></div>`
+        + `<div class="psheet${anim}" role="dialog" aria-modal="true">`
+        + `<div class="psheethead"><h2>${esc(title)}</h2>${x}</div>`
+        + `${panelHtml(shown)}</div>`;
+    }
   } else {
     lastShownCard = null;
     if (!left) html += `<button class="btn" id="finish">${esc(T().sendToHost)}</button>`;
@@ -1410,12 +1451,14 @@ function wireCard(item) {
     cardPanel = {item: item.id, action: "cant_fix"};
     cardNoteId = null;
     cardNoteText = "";
+    panelFresh = true;
     renderMaybe();
   };
   document.getElementById("cardFine").onclick = () => {
     cardPanel = {item: item.id, action: "its_fine"};
     cardNoteId = null;
     cardNoteText = "";
+    panelFresh = true;
     renderMaybe();
   };
   document.getElementById("cardLater").onclick = () => {
@@ -1437,6 +1480,20 @@ function wireCard(item) {
   const confirm = document.getElementById("cardConfirm");
   if (confirm) confirm.onclick = () => resolveCard(item.id, "its_fine", null);
   wireDemo("demoPickCard", "snapDemoCard", file => cardSnap(item.id, file));
+  const panelX = document.getElementById("panelX");
+  if (panelX) panelX.onclick = closePanel;
+  const backdrop = document.getElementById("panelBackdrop");
+  if (backdrop) backdrop.onclick = () => {
+    if (recorder || transcribing) return;
+    closePanel();
+  };
+}
+
+function closePanel() {
+  cardPanel = null;
+  cardNoteId = null;
+  cardNoteText = "";
+  renderMaybe();
 }
 
 function app_query(sel) {
@@ -1666,6 +1723,7 @@ async function sendShot(shotId, file) {
 function startCardRetake(itemId) {
   if (DEMO) {
     cardPanel = {item: itemId, action: "retake"};
+    panelFresh = true;
     renderMaybe();
     return;
   }
@@ -1742,12 +1800,15 @@ async function sheetSnap(itemId) {
 function cardSnap(itemId, file) {
   const shot = shotForCard(itemId);
   if (!shot) return;
+  let settled = false;
   const btn = document.getElementById("cardFixed");
   if (btn) btn.disabled = true;
   const remove = () => {
-    retakePhotos[itemId] = null;
-    const i = cardOrder.indexOf(itemId);
-    if (i >= 0) cardOrder.splice(i, 1);
+    if (!settled) retakePhotos[itemId] = null;
+    if (itemId in retakePhotos) {
+      const i = cardOrder.indexOf(itemId);
+      if (i >= 0) cardOrder.splice(i, 1);
+    }
     cardPanel = null;
     renderMaybe();
   };
@@ -1766,10 +1827,12 @@ function cardSnap(itemId, file) {
     try {
       const res = await apiUpload(`/api/runs/${encodeURIComponent(RUN)}/photos`,
         {method: "POST", body: form});
+      settled = true;
       retakePhotos[itemId] = res.photo_id;
       photoError = "";
       await refresh();
     } catch (e) {
+      settled = true;
       delete retakePhotos[itemId];
       if (cardOrder.indexOf(itemId) < 0) cardOrder.unshift(itemId);
       photoError = e.name === "AbortError" ? T().notSent
