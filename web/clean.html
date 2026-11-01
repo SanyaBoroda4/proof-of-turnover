@@ -17,8 +17,8 @@
   .progress { color: var(--grey); font-size: 15px; }
   .instruction { font-size: 26px; line-height: 1.35; margin: 4px 0 20px; font-weight: 600; }
   .btn { display: block; width: 100%; padding: 16px; margin: 10px 0; font-size: 20px;
-         border: none; border-radius: 10px; background: var(--green); color: #fff;
-         cursor: pointer; text-align: center; }
+         min-height: 48px; border: none; border-radius: 10px; background: var(--green);
+         color: #fff; cursor: pointer; text-align: center; }
   .btn.secondary { background: #e5e5e5; color: #1f2328; }
   .btn.saved { outline: 3px solid #0969da; outline-offset: 2px; }
   .btn:disabled { opacity: 0.5; }
@@ -29,18 +29,44 @@
   .result.ok { background: #dafbe1; }
   .result.bad { background: #ffebe9; }
   .result.wait { background: #fff8c5; }
-  .result button { font-size: 16px; padding: 8px 14px; margin-top: 6px; }
-  .pending { border-top: 1px solid #ddd; margin-top: 24px; padding-top: 8px; }
-  .pending li { margin: 12px 0; }
-  .pending button, .open button { font-size: 16px; padding: 8px 14px; margin-left: 8px; }
-  .open li { margin: 12px 0; }
   select, input[type=text] { font-size: 18px; padding: 10px; width: 100%; margin: 6px 0; }
   .error { background: #ffebe9; border-radius: 10px; padding: 14px; margin: 12px 0; }
   .small { font-size: 15px; color: var(--grey); }
+  .link { background: none; border: none; color: #0969da; font-size: 16px;
+          cursor: pointer; padding: 10px 0; }
+  .thumbs { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+  .thumb { position: relative; width: 76px; }
+  .thumb img { width: 76px; height: 76px; object-fit: cover; border-radius: 8px; }
+  .thumb .sent { position: absolute; right: -4px; bottom: -4px; background: var(--green);
+                 color: #fff; border-radius: 50%; width: 26px; height: 26px;
+                 font-size: 17px; line-height: 26px; text-align: center; }
+  .thumb button { font-size: 13px; padding: 6px 8px; margin-top: 4px; width: 100%; }
+  .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin: 14px 0; }
+  .card.slide { animation: slidein 250ms ease-out; }
+  @keyframes slidein {
+    from { transform: translateX(40px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card.slide { animation: none; }
+  }
+  .card img.photo { width: 100%; border-radius: 8px; cursor: zoom-in; }
+  .card .head { color: var(--grey); font-size: 16px; margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { border: 1px solid #999; border-radius: 20px; background: #fff;
+          font-size: 16px; padding: 10px 16px; min-height: 48px; cursor: pointer; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+           background: var(--green); color: #fff; font-size: 20px; font-weight: 600;
+           border-radius: 10px; padding: 14px 22px; z-index: 20; }
+  #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+             cursor: zoom-out; z-index: 10; text-align: center; padding: 24px; }
+  #overlay img { max-width: 95%; max-height: 95%; }
+  .counts li { margin: 8px 0; font-size: 19px; }
 </style>
 </head>
 <body>
 <div id="app"><p>Cargando…</p></div>
+<div id="overlay"><img id="big" alt=""></div>
 <input type="file" id="snapFile" accept="image/*" capture="environment" hidden>
 <script>
 "use strict";
@@ -49,13 +75,20 @@ const CODE = params.get("code") || "";
 const DEMO = params.get("demo") === "1";
 let RUN = params.get("run") || "";
 let LANG = "es", langPicked = false, LANGS = null, modePicked = "";
-let tour = null, takenSet = new Set(), status = null, demoPhotos = null;
+let tour = null, tourRun = "", takenSet = new Set(), status = null, demoPhotos = null;
 let overrideShot = null, selectedDemo = "", photoError = "", lastKey = null;
-let pollTimer = null, pendingShot = null;
-let prevShotId = null, seenReqIds = null;
-let recorder = null, recStream = null, recChunks = [], recRoom = null;
-let recStart = 0, recSeconds = 0, recTimer = null;
+let pollTimer = null, pendingShot = null, pendingCard = null;
+let prevShotId = null;
+let recorder = null, recStream = null, recChunks = [], recRoom = null, recItem = null;
+let recOnDone = null, recStart = 0, recSeconds = 0, recTimer = null;
 let transcribing = false, noteMsg = "", noteMsgTimer = null;
+let optimistic = new Map();
+let cardOrder = [], retakePhotos = {}, spokenCard = null, lastShownCard = null;
+let photosDoneSaid = false, saidFinal = false;
+let cardPanel = null, cardNoteId = null, cardNoteText = "";
+let toast = null, toastTimer = null;
+
+const REASONS = ["broken", "before", "supplies", "wont_clean", "other"];
 
 const I18N = {
   es: {
@@ -70,17 +103,25 @@ const I18N = {
     hello: "Empezamos",
     progress: (room, rooms, taken, total) =>
       `Habitación ${room} de ${rooms} · Foto ${taken} de ${total}`,
-    checkingMove: "Revisando la foto… puedes seguir.",
     checking: "Revisando…",
+    checkingPhotos: (done, total) => `Revisando tus fotos: ${done} de ${total}`,
+    photosDone: "Fotos listas ✓",
     repeat: "Repetir",
     take: "Fotografiar",
-    retake: "Repetir foto",
-    next: "Siguiente",
-    ready: "✓ Listo",
+    retakeLast: "↺ Repetir la última foto",
+    notSent: "Foto no enviada – toca para enviarla de nuevo",
     doneAll: "✓ Todo listo",
-    finished: "Turno terminado",
-    open: n => new Intl.PluralRules("es").select(n) === "one"
-      ? "Queda 1 tema" : `Quedan ${n} temas`,
+    proven: n => `Verificados: ${n}`,
+    fixedByYou: n => `Arreglados por ti: ${n}`,
+    reported: n => `Reportados: ${n}`,
+    fixed: "Listo – nueva foto",
+    cantFix: "No se puede",
+    itsFine: "Está bien así",
+    later: "Más tarde",
+    reasons: ["Roto o dañado", "Ya estaba así", "Faltan suministros", "No sale", "Otro"],
+    confirm: "Confirmar",
+    sendToHost: "Enviar al anfitrión",
+    fixedToast: "✓ arreglado",
     oldPhoto: "Foto antigua: esta foto es de antes de empezar. Toma una nueva.",
     authError: "Este enlace no tiene código. Pide el enlace completo.",
     noVoice: "Este teléfono no tiene voz en español; solo se muestra el texto.",
@@ -107,17 +148,25 @@ const I18N = {
     hello: "Let's go",
     progress: (room, rooms, taken, total) =>
       `Room ${room} of ${rooms} · Photo ${taken} of ${total}`,
-    checkingMove: "Checking the photo… keep going.",
     checking: "Checking…",
+    checkingPhotos: (done, total) => `Checking your photos: ${done} of ${total}`,
+    photosDone: "Photos done ✓",
     repeat: "Repeat",
     take: "Take photo",
-    retake: "Retake photo",
-    next: "Next",
-    ready: "✓ Done",
+    retakeLast: "↺ Retake last photo",
+    notSent: "Photo not sent – tap to send again",
     doneAll: "✓ All done",
-    finished: "Turnover finished",
-    open: n => new Intl.PluralRules("en").select(n) === "one"
-      ? "1 thing left" : `${n} things left`,
+    proven: n => `Proven: ${n}`,
+    fixedByYou: n => `Fixed by you: ${n}`,
+    reported: n => `Reported: ${n}`,
+    fixed: "Fixed – new photo",
+    cantFix: "Can't fix",
+    itsFine: "It's fine",
+    later: "Later",
+    reasons: ["Broken or damaged", "Was like this before", "Out of supplies", "Won't come clean", "Other"],
+    confirm: "Confirm",
+    sendToHost: "Send to host",
+    fixedToast: "✓ fixed",
     oldPhoto: "Old photo: this photo is from before the start. Take a new one.",
     authError: "This link has no code. Ask for the full link.",
     noVoice: "This phone has no English voice; text only.",
@@ -144,21 +193,25 @@ const I18N = {
     hello: "Начинаем",
     progress: (room, rooms, taken, total) =>
       `Комната ${room} из ${rooms} · Фото ${taken} из ${total}`,
-    checkingMove: "Проверяем фото… продолжайте.",
     checking: "Проверяем…",
+    checkingPhotos: (done, total) => `Проверяем ваши фото: ${done} из ${total}`,
+    photosDone: "Фото готовы ✓",
     repeat: "Повторить",
     take: "Сфотографировать",
-    retake: "Переснять фото",
-    next: "Далее",
-    ready: "✓ Готово",
+    retakeLast: "↺ Переснять последнее фото",
+    notSent: "Фото не отправлено – нажмите, чтобы отправить снова",
     doneAll: "✓ Всё готово",
-    finished: "Уборка завершена",
-    open: n => {
-      const form = new Intl.PluralRules("ru").select(n);
-      if (form === "one") return `Осталась ${n} тема`;
-      if (form === "few") return `Остались ${n} темы`;
-      return `Осталось ${n} тем`;
-    },
+    proven: n => `Подтверждено: ${n}`,
+    fixedByYou: n => `Исправлено вами: ${n}`,
+    reported: n => `Сообщено: ${n}`,
+    fixed: "Исправлено – новое фото",
+    cantFix: "Не получается",
+    itsFine: "Всё в порядке",
+    later: "Позже",
+    reasons: ["Сломано", "Так было до меня", "Закончились расходники", "Не отмывается", "Другое"],
+    confirm: "Подтвердить",
+    sendToHost: "Отправить хозяину",
+    fixedToast: "✓ исправлено",
     oldPhoto: "Старое фото: оно сделано до начала. Сделайте новое.",
     authError: "В этой ссылке нет кода. Попросите полную ссылку.",
     noVoice: "На этом телефоне нет русского голоса; только текст.",
@@ -259,6 +312,30 @@ function repeatSay(text) {
   say(text);
 }
 
+let audioCtx = null;
+function chime() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = audioCtx || new AC();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const t = audioCtx.currentTime;
+    [660, 880].forEach((freq, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = freq;
+      o.type = "sine";
+      const at = t + i * 0.12;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.2, at + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.25);
+      o.connect(g);
+      g.connect(audioCtx.destination);
+      o.start(at);
+      o.stop(at + 0.3);
+    });
+  } catch (e) {}
+}
+
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -296,19 +373,64 @@ function itemsById() {
   return map;
 }
 
-function currentShot() {
+function shortName(shot) {
+  const s = tourText(shot, "short") || roomHeading(shot);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function roundCurrent() {
   if (overrideShot) {
     const s = tour.shots.find(x => x.shot_id === overrideShot);
     if (s) return s;
     overrideShot = null;
   }
-  return status.current_shot;
+  return tour.shots.find(s =>
+    !takenSet.has(s.shot_id) &&
+    (!optimistic.has(s.shot_id) || optimistic.get(s.shot_id).state !== "sending")
+  ) || null;
+}
+
+function allTaken() {
+  return tour.shots.length > 0 &&
+    tour.shots.every(s => takenSet.has(s.shot_id));
+}
+
+function shotForCard(itemId) {
+  const direct = shotOfItem(itemId);
+  if (direct) return direct;
+  const roomId = itemId.split(".")[0];
+  return tour.shots.find(s => s.room_id === roomId) || null;
+}
+
+function cardPhotoUrl(item) {
+  if (item.has_evidence) {
+    return `/api/runs/${encodeURIComponent(RUN)}/evidence/${encodeURIComponent(item.id)}?v=${encodeURIComponent(item.photo_id)}`;
+  }
+  if (item.photo_id) {
+    return `/api/runs/${encodeURIComponent(RUN)}/photos/${encodeURIComponent(item.photo_id)}/overview`;
+  }
+  return "";
+}
+
+function cardText(item) {
+  if (item.request && item.request.cleaner) return item.request.cleaner;
+  const shot = shotOfItem(item.id);
+  return shot ? instruction(shot) : item.label;
+}
+
+function shownCard() {
+  for (const id of cardOrder) {
+    if (!(id in retakePhotos)) return id;
+  }
+  return null;
 }
 
 function renderMaybe() {
   const key = JSON.stringify(
     [LANG, langPicked, modePicked, tour, status, overrideShot, selectedDemo,
-     photoError, !!recorder, transcribing, noteMsg]);
+     photoError, !!recorder, transcribing, noteMsg,
+     Array.from(optimistic, ([k, v]) => [k, v.state]),
+     cardOrder, retakePhotos, cardPanel, cardNoteId, cardNoteText, toast]);
   if (key === lastKey) return;
   lastKey = key;
   render();
@@ -320,10 +442,9 @@ function render() {
   const app = document.getElementById("app");
   if (!RUN) return renderStart(app);
   if (!tour || !status) { app.innerHTML = `<p>${esc(T().loading)}</p>`; return; }
-  if (!status.current_shot && !status.checking.length && !overrideShot) {
-    return renderDone(app);
-  }
-  return renderShot(app);
+  if (status.finished_at) return renderFinal(app);
+  if (!allTaken()) return renderRound(app);
+  return renderCards(app);
 }
 
 async function renderStart(app) {
@@ -397,6 +518,34 @@ async function renderLanguage(app) {
   });
 }
 
+function resetRunState() {
+  for (const entry of optimistic.values()) {
+    try { URL.revokeObjectURL(entry.url); } catch (e) {}
+  }
+  tour = null;
+  tourRun = "";
+  takenSet = new Set();
+  status = null;
+  overrideShot = null;
+  photoError = "";
+  pendingShot = null;
+  pendingCard = null;
+  prevShotId = null;
+  noteMsg = "";
+  optimistic = new Map();
+  cardOrder = [];
+  retakePhotos = {};
+  spokenCard = null;
+  lastShownCard = null;
+  photosDoneSaid = false;
+  saidFinal = false;
+  cardPanel = null;
+  cardNoteId = null;
+  cardNoteText = "";
+  toast = null;
+  lastKey = null;
+}
+
 async function startTour() {
   say(T().hello);
   const app = document.getElementById("app");
@@ -409,12 +558,13 @@ async function startTour() {
       body: JSON.stringify({property: property, demo: DEMO, language: LANG}),
     });
     RUN = created.run_id;
+    resetRunState();
     const url = new URL(location.href);
     url.searchParams.set("run", RUN);
     history.replaceState(null, "", url);
     await refresh();
     startPoll();
-    const shot = currentShot();
+    const shot = roundCurrent();
     if (shot) {
       prevShotId = shot.shot_id;
       say(roomHeading(shot) + ". " + instruction(shot));
@@ -432,20 +582,6 @@ function progressHtml() {
     <div class="bar"><div style="width:${pct}%"></div></div>`;
 }
 
-function shotState(shot) {
-  const byId = itemsById();
-  const items = (shot.item_ids || []).map(id => byId[id]).filter(Boolean);
-  const critical = items.filter(i => i.critical);
-  if (critical.length && critical.every(i => i.status === "proven")) return "done";
-  if (critical.some(i => i.request)) return "failed";
-  return "wait";
-}
-
-function shortName(shot) {
-  const s = tourText(shot, "short") || roomHeading(shot);
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 function micReady() {
   return !!window.isSecureContext && "MediaRecorder" in window &&
     !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -456,142 +592,265 @@ function fmtTime(seconds) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function micHtml() {
+function micHtml(stopId, startId) {
   if (recorder) {
-    return `<button class="btn secondary" id="micStop">${esc(T().stop)} (${esc(fmtTime(recSeconds))})</button>`;
+    return `<button class="btn secondary" id="${stopId}">${esc(T().stop)} (${esc(fmtTime(recSeconds))})</button>`;
   }
   if (transcribing) {
     return `<div class="result wait">${esc(T().transcribing)}</div>`;
   }
   if (micReady()) {
-    return `<button class="btn secondary" id="micStart">${esc(T().mic)}</button>`;
+    return `<button class="btn secondary" id="${startId}">${esc(T().mic)}</button>`;
   }
   return `<p class="small">${esc(T().insecure)}</p>`;
 }
 
-function noteRoomName(note) {
-  for (const s of tour.shots) {
-    if (s.room_id === note.room_id) {
-      const name = tourText(s, "room_name");
-      if (name) return name;
-    }
-  }
-  return note.room_name;
-}
-
-function notesHtml() {
-  const notes = (status.voice_notes || []).slice(0, 3);
-  if (!notes.length) return "";
-  return `<div>` + notes.map(n =>
-    `<div class="result ok">${esc(T().note)} · ${esc(noteRoomName(n))}: ${esc(n.text)}</div>`
-  ).join("") + `</div>`;
-}
-
-function cameraHtml(label) {
+function cameraHtml(label, pickId, snapId) {
   if (DEMO) {
     const options = (demoPhotos || []).map(p => {
       const sel = p.url === selectedDemo ? " selected" : "";
       return `<option value="${esc(p.url)}"${sel}>${esc(p.name)}</option>`;
     }).join("");
-    return `<label class="small" for="demoPick">${esc(T().demoPhoto)}</label>
-      <select id="demoPick">${options}</select>
-      <button class="btn" id="snapDemo">${esc(label)}</button>`;
+    return `<label class="small" for="${pickId}">${esc(T().demoPhoto)}</label>
+      <select id="${pickId}">${options}</select>
+      <button class="btn" id="${snapId}">${esc(label)}</button>`;
   }
-  return `<button class="camera" id="snapCam">${esc(label)}</button>`;
+  return `<button class="camera" id="${snapId}">${esc(label)}</button>`;
 }
 
-function recentHtml(current) {
-  const ids = [];
-  if (current && takenSet.has(current.shot_id)) ids.push(current.shot_id);
-  for (const entry of (status.recent || [])) {
-    if (ids.indexOf(entry.shot_id) < 0) ids.push(entry.shot_id);
-  }
-  const list = ids.slice(0, 5);
-  if (!list.length) return "";
-  const byId = itemsById();
-  const shotById = {};
-  tour.shots.forEach(s => { shotById[s.shot_id] = s; });
-  const rows = list.map(shotId => {
-    const shot = shotById[shotId];
-    if (!shot) return "";
-    const room = esc(roomHeading(shot));
-    const short = esc(shortName(shot));
-    const items = (shot.item_ids || []).map(id => byId[id]).filter(Boolean);
-    const critical = items.filter(i => i.critical);
-    if (critical.length && critical.every(i => i.status === "proven")) {
-      return `<div class="result ok">✓ ${room}: ${short}</div>`;
+function sendingHtml() {
+  if (!optimistic.size) return "";
+  const rows = Array.from(optimistic, ([shotId, entry]) => {
+    if (entry.state === "failed") {
+      return `<div class="thumb"><img src="${esc(entry.url)}" alt="">
+        <button data-retry="${esc(shotId)}">${esc(T().notSent)}</button></div>`;
     }
-    const failed = critical.filter(i => i.request);
-    if (failed.length) {
-      return `<div class="result bad">${failed.map(i => `<p>${esc(i.request.cleaner)}</p>`).join("")}<button data-retake="${esc(shot.shot_id)}">${esc(T().retake)}</button></div>`;
-    }
-    return `<div class="result wait">${room}: ${esc(T().checking)}</div>`;
+    return `<div class="thumb"><img src="${esc(entry.url)}" alt=""><span class="sent">✓</span></div>`;
   }).join("");
-  return rows ? `<div>${rows}</div>` : "";
+  return `<div class="thumbs">${rows}</div>`;
 }
 
-function renderShot(app) {
-  const shot = currentShot();
-  let html = `<h1>${esc(T().title)}</h1>` + progressHtml();
-  if (status.checking.length) html += `<div class="result wait">${esc(T().checkingMove)}</div>`;
+function lastTakenShot() {
+  const taken = tour.shots.filter(s => takenSet.has(s.shot_id));
+  return taken.length ? taken[taken.length - 1] : null;
+}
+
+function renderRound(app) {
+  const shot = roundCurrent();
+  let html = `<h1>${esc(T().title)}</h1>` + progressHtml() + sendingHtml();
   if (shot) {
     html += `<h2 class="room">${esc(roomHeading(shot))}</h2>
       <div class="instruction">${esc(instruction(shot))}</div>`;
     if (voiceMissing()) html += `<p class="small">${esc(T().noVoice)}</p>`;
     html += `<button class="btn secondary" id="repeat">${esc(T().repeat)}</button>`;
-    if (!takenSet.has(shot.shot_id)) {
-      html += cameraHtml(T().take);
-    } else if (shotState(shot) === "done") {
-      html += `<div class="result ok">${esc(T().ready)}</div>
-        <button class="btn" id="next">${esc(T().next)}</button>`;
-    } else if (status.checking.length) {
-      html += `<div class="result wait">${esc(T().checking)}</div>`;
-    }
-    html += micHtml();
+    html += cameraHtml(T().take, "demoPick", "snapCam");
+    html += micHtml("micStop", "micStart");
     if (noteMsg) html += `<div class="result wait">${esc(noteMsg)}</div>`;
-    html += recentHtml(shot);
-    html += notesHtml();
+  } else {
+    html += `<div class="result wait">${esc(T().checking)}</div>`;
   }
+  const last = lastTakenShot();
+  if (last) html += `<button class="link" id="retakeLast">${esc(T().retakeLast)}</button>`;
   if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
   app.innerHTML = html;
   if (shot) {
     document.getElementById("repeat").onclick = () =>
       repeatSay(roomHeading(shot) + ". " + instruction(shot));
-    const next = document.getElementById("next");
-    if (next) next.onclick = () => { overrideShot = null; renderMaybe(); };
-    wireCamera(shot);
+    wireDemo("demoPick", "snapCam", file => snapShot(shot, file));
+    const cam = document.getElementById("snapCam");
+    if (cam) cam.onclick = () => openCamera(shot.shot_id);
     const micStart = document.getElementById("micStart");
-    if (micStart) micStart.onclick = () => startRec(shot);
+    if (micStart) micStart.onclick = () => startRec(shot.room_id, null, null);
     const micStop = document.getElementById("micStop");
     if (micStop) micStop.onclick = stopRec;
   }
-  app.querySelectorAll("[data-retake]").forEach(b => {
+  const retryLast = document.getElementById("retakeLast");
+  if (retryLast) retryLast.onclick = () => { overrideShot = last.shot_id; renderMaybe(); };
+  app.querySelectorAll("[data-retry]").forEach(b => {
     b.onclick = () => {
-      overrideShot = b.getAttribute("data-retake");
-      renderMaybe();
+      const shotId = b.getAttribute("data-retry");
+      const entry = optimistic.get(shotId);
+      if (entry) {
+        entry.state = "sending";
+        renderMaybe();
+        sendShot(shotId, entry.file);
+      }
     };
   });
 }
 
-function wireCamera(shot) {
-  const pick = document.getElementById("demoPick");
-  if (pick) {
-    if (!selectedDemo && demoPhotos && demoPhotos.length) selectedDemo = demoPhotos[0].url;
-    pick.value = selectedDemo;
-    pick.onchange = () => { selectedDemo = pick.value; };
-    const snap = document.getElementById("snapDemo");
-    if (snap) snap.onclick = async () => {
-      const blob = await (await fetch(selectedDemo)).blob();
-      upload(shot, new File([blob], "demo.jpg", {type: "image/jpeg"}));
-    };
-    return;
+function panelHtml(itemId) {
+  if (!cardPanel || cardPanel.item !== itemId) return "";
+  let html = "";
+  if (cardNoteId) {
+    html += `<div class="result ok">✓ ${esc(cardNoteText)}</div>`;
   }
-  const cam = document.getElementById("snapCam");
-  if (cam) cam.onclick = () => openCamera(shot.shot_id);
+  if (!recorder && !transcribing && !cardNoteId) {
+    if (micReady()) {
+      html += `<button class="btn secondary" id="cardMic">${esc(T().mic)}</button>`;
+    } else {
+      html += `<p class="small">${esc(T().insecure)}</p>`;
+    }
+  }
+  if (recorder) {
+    html += `<button class="btn secondary" id="cardMicStop">${esc(T().stop)} (${esc(fmtTime(recSeconds))})</button>`;
+  }
+  if (transcribing) {
+    html += `<div class="result wait">${esc(T().transcribing)}</div>`;
+  }
+  if (noteMsg) html += `<div class="result wait">${esc(noteMsg)}</div>`;
+  if (cardPanel.action === "cant_fix") {
+    html += `<div class="chips">` + T().reasons.map((label, i) =>
+      `<button class="chip" data-reason="${esc(REASONS[i])}">${esc(label)}</button>`
+    ).join("") + `</div>`;
+  } else if (cardPanel.action === "its_fine") {
+    html += `<button class="btn" id="cardConfirm">${esc(T().confirm)}</button>`;
+  } else if (cardPanel.action === "retake") {
+    html += cameraHtml(T().fixed, "demoPickCard", "snapDemoCard");
+  }
+  return html;
+}
+
+function cardHtml(item, animate) {
+  const shot = shotOfItem(item.id);
+  const head = shot
+    ? `${esc(roomHeading(shot))} · ${esc(shortName(shot))}`
+    : esc(roomName(item.id.split(".")[0]));
+  const url = cardPhotoUrl(item);
+  const img = url
+    ? `<img class="photo" src="${url}" data-full="${url}" alt="">` : "";
+  const fixed = shotForCard(item.id)
+    ? `<button class="btn" id="cardFixed">${esc(T().fixed)}</button>` : "";
+  return `<div class="card${animate ? " slide" : ""}">
+    <div class="head">${head}</div>
+    ${img}
+    <div class="instruction">${esc(cardText(item))}</div>
+    ${fixed}
+    <button class="btn secondary" id="cardCant">${esc(T().cantFix)}</button>
+    <button class="btn secondary" id="cardFine">${esc(T().itsFine)}</button>
+    ${panelHtml(item.id)}
+    <button class="link" id="cardLater">${esc(T().later)}</button>
+  </div>`;
+}
+
+function renderCards(app) {
+  const byId = itemsById();
+  let html = `<h1>${esc(T().title)}</h1>` + progressHtml();
+  html += `<div class="result ok">${esc(T().photosDone)}</div>`;
+  const total = status.progress.photos;
+  const left = status.checking.length;
+  if (left) {
+    html += `<div class="result wait">${esc(T().checkingPhotos(total - left, total))}</div>`;
+  }
+  const shown = shownCard();
+  if (shown && byId[shown]) {
+    const animate = shown !== lastShownCard;
+    lastShownCard = shown;
+    html += cardHtml(byId[shown], animate);
+    if (cardPanel && cardPanel.action === "retake" &&
+        (!cardPanel.item || cardPanel.item !== shown)) {
+      cardPanel = null;
+    }
+  } else {
+    lastShownCard = null;
+    if (!left) html += `<button class="btn" id="finish">${esc(T().sendToHost)}</button>`;
+  }
+  if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
+  if (toast) html += `<div class="toast">${esc(toast)}</div>`;
+  app.innerHTML = html;
+  if (shown && byId[shown]) wireCard(byId[shown]);
+  const finish = document.getElementById("finish");
+  if (finish) finish.onclick = finishRun;
+  app.querySelectorAll("[data-full]").forEach(img => {
+    img.onclick = () => {
+      document.getElementById("big").src = img.getAttribute("data-full");
+      document.getElementById("overlay").style.display = "block";
+    };
+  });
+}
+
+function wireCard(item) {
+  const fixed = document.getElementById("cardFixed");
+  if (fixed) fixed.onclick = () => startCardRetake(item.id);
+  document.getElementById("cardCant").onclick = () => {
+    cardPanel = {item: item.id, action: "cant_fix"};
+    cardNoteId = null;
+    cardNoteText = "";
+    renderMaybe();
+  };
+  document.getElementById("cardFine").onclick = () => {
+    cardPanel = {item: item.id, action: "its_fine"};
+    cardNoteId = null;
+    cardNoteText = "";
+    renderMaybe();
+  };
+  document.getElementById("cardLater").onclick = () => {
+    const i = cardOrder.indexOf(item.id);
+    if (i >= 0) cardOrder.push(cardOrder.splice(i, 1)[0]);
+    renderMaybe();
+  };
+  const mic = document.getElementById("cardMic");
+  if (mic) mic.onclick = () => startRec(item.id.split(".")[0], item.id, note => {
+    cardNoteId = note.id;
+    cardNoteText = note.text;
+    renderMaybe();
+  });
+  const micStop = document.getElementById("cardMicStop");
+  if (micStop) micStop.onclick = stopRec;
+  app_query("[data-reason]").forEach(b => {
+    b.onclick = () => resolveCard(item.id, "cant_fix", b.getAttribute("data-reason"));
+  });
+  const confirm = document.getElementById("cardConfirm");
+  if (confirm) confirm.onclick = () => resolveCard(item.id, "its_fine", null);
+  wireDemo("demoPickCard", "snapDemoCard", file => cardSnap(item.id, file));
+}
+
+function app_query(sel) {
+  return document.getElementById("app").querySelectorAll(sel);
+}
+
+function renderFinal(app) {
+  let proven = 0, fixed = 0, reported = 0;
+  for (const room of status.rooms) for (const item of room.items) {
+    if (!item.critical) continue;
+    if (item.status === "proven") proven++;
+    if (item.has_before) fixed++;
+    if (item.resolution) reported++;
+  }
+  app.innerHTML = `<h1>${esc(T().title)}</h1>
+    <div class="result ok">${esc(T().doneAll)}</div>
+    <ul class="counts">
+      <li>${esc(T().proven(proven))}</li>
+      <li>${esc(T().fixedByYou(fixed))}</li>
+      <li>${esc(T().reported(reported))}</li>
+    </ul>
+    ${toast ? `<div class="toast">${esc(toast)}</div>` : ""}`;
+}
+
+function fail(app, e) {
+  if (e.message === "auth") {
+    app.innerHTML = `<div class="error">${esc(T().authError)}</div>`;
+  } else {
+    app.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
+function wireDemo(pickId, snapId, onFile) {
+  const pick = document.getElementById(pickId);
+  if (!pick) return;
+  if (!selectedDemo && demoPhotos && demoPhotos.length) selectedDemo = demoPhotos[0].url;
+  pick.value = selectedDemo;
+  pick.onchange = () => { selectedDemo = pick.value; };
+  const snap = document.getElementById(snapId);
+  if (snap) snap.onclick = async () => {
+    const blob = await (await fetch(selectedDemo)).blob();
+    onFile(new File([blob], "demo.jpg", {type: "image/jpeg"}));
+  };
 }
 
 function openCamera(shotId) {
   pendingShot = shotId;
+  pendingCard = null;
   document.getElementById("snapFile").click();
 }
 
@@ -609,14 +868,18 @@ function pickMime() {
 
 function tickRec() {
   recSeconds = Math.floor((Date.now() - recStart) / 1000);
-  const b = document.getElementById("micStop");
-  if (b) b.textContent = `${T().stop} (${fmtTime(recSeconds)})`;
+  for (const id of ["micStop", "cardMicStop"]) {
+    const b = document.getElementById(id);
+    if (b) b.textContent = `${T().stop} (${fmtTime(recSeconds)})`;
+  }
   if (recSeconds >= 60) stopRec();
 }
 
-async function startRec(shot) {
+async function startRec(roomId, itemId, onDone) {
   noteMsg = "";
-  recRoom = shot.room_id;
+  recRoom = roomId;
+  recItem = itemId || null;
+  recOnDone = onDone || null;
   try {
     recStream = await navigator.mediaDevices.getUserMedia({audio: true});
   } catch (e) {
@@ -678,6 +941,7 @@ async function sendRec() {
   const ext = mime.indexOf("mp4") >= 0 ? "mp4" : "webm";
   const form = new FormData();
   form.append("room_id", recRoom);
+  if (recItem) form.append("item_id", recItem);
   form.append("audio", new Blob(chunks, {type: mime || "audio/webm"}), `note.${ext}`);
   try {
     const res = await api(`/api/runs/${encodeURIComponent(RUN)}/notes`,
@@ -686,6 +950,9 @@ async function sendRec() {
     if (res.status === "no_speech") {
       noteMsg = T().noSpeech;
       scheduleNoteClear();
+    } else if (recOnDone) {
+      noteMsg = "";
+      recOnDone(res.note);
     } else {
       noteMsg = "";
       await refresh();
@@ -699,78 +966,190 @@ async function sendRec() {
   }
 }
 
-async function upload(shot, file) {
+function snapShot(shot, file) {
+  const url = URL.createObjectURL(file);
+  optimistic.set(shot.shot_id, {file: file, url: url, state: "sending"});
+  if (overrideShot === shot.shot_id) overrideShot = null;
+  const next = roundCurrent();
+  if (next && next.shot_id !== shot.shot_id) {
+    prevShotId = next.shot_id;
+    say(roomHeading(next) + ". " + instruction(next));
+  }
+  renderMaybe();
+  sendShot(shot.shot_id, file);
+}
+
+async function sendShot(shotId, file) {
   const form = new FormData();
-  form.append("shot_id", shot.shot_id);
+  form.append("shot_id", shotId);
   form.append("image", file);
   try {
     await api(`/api/runs/${encodeURIComponent(RUN)}/photos`, {method: "POST", body: form});
+    const entry = optimistic.get(shotId);
+    if (entry) {
+      try { URL.revokeObjectURL(entry.url); } catch (e) {}
+      optimistic.delete(shotId);
+    }
     photoError = "";
-    overrideShot = null;
     await refresh();
-    renderMaybe();
   } catch (e) {
-    photoError = e.message.indexOf("foto antigua") >= 0 ? T().oldPhoto : e.message;
+    if (e.message.indexOf("foto antigua") >= 0) {
+      const entry = optimistic.get(shotId);
+      if (entry) {
+        try { URL.revokeObjectURL(entry.url); } catch (err) {}
+        optimistic.delete(shotId);
+      }
+      photoError = T().oldPhoto;
+    } else {
+      const entry = optimistic.get(shotId);
+      if (entry) {
+        entry.state = "failed";
+      } else {
+        optimistic.set(shotId, {
+          file: file, url: URL.createObjectURL(file), state: "failed",
+        });
+      }
+    }
+  }
+  renderMaybe();
+}
+
+function startCardRetake(itemId) {
+  if (DEMO) {
+    cardPanel = {item: itemId, action: "retake"};
     renderMaybe();
+    return;
   }
+  pendingCard = itemId;
+  pendingShot = null;
+  document.getElementById("snapFile").click();
 }
 
-function renderDone(app) {
-  const byId = itemsById();
-  let html = `<h1>${esc(T().finished)}</h1>` + progressHtml();
-  if (!status.open.length) {
-    html += `<div class="result ok">${esc(T().doneAll)}</div>`;
-  } else {
-    const head = T().open(status.open.length);
-    html += `<p>${esc(head)}:</p><ul class="open">` + status.open.map(id => {
-      const item = byId[id];
-      const text = item.request ? item.request.cleaner : item.label;
-      const s = shotOfItem(id);
-      const btn = s ? ` <button data-shot="${esc(s.shot_id)}">${esc(T().take)}</button>` : "";
-      return `<li>${esc(text)}${btn}</li>`;
-    }).join("") + `</ul>`;
-  }
-  app.innerHTML = html;
-  app.querySelectorAll("[data-shot]").forEach(b => {
-    b.onclick = () => { overrideShot = b.getAttribute("data-shot"); renderMaybe(); };
-  });
+function cardSnap(itemId, file) {
+  const shot = shotForCard(itemId);
+  if (!shot) return;
+  retakePhotos[itemId] = null;
+  const i = cardOrder.indexOf(itemId);
+  if (i >= 0) cardOrder.splice(i, 1);
+  cardPanel = null;
+  renderMaybe();
+  (async () => {
+    const form = new FormData();
+    form.append("shot_id", shot.shot_id);
+    form.append("image", file);
+    try {
+      const res = await api(`/api/runs/${encodeURIComponent(RUN)}/photos`,
+        {method: "POST", body: form});
+      retakePhotos[itemId] = res.photo_id;
+      photoError = "";
+      await refresh();
+    } catch (e) {
+      delete retakePhotos[itemId];
+      if (cardOrder.indexOf(itemId) < 0) cardOrder.unshift(itemId);
+      photoError = e.message.indexOf("foto antigua") >= 0 ? T().oldPhoto : e.message;
+    }
+    renderMaybe();
+  })();
 }
 
-function fail(app, e) {
-  if (e.message === "auth") {
-    app.innerHTML = `<div class="error">${esc(T().authError)}</div>`;
-  } else {
-    app.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+async function resolveCard(itemId, action, reason) {
+  try {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/items/${encodeURIComponent(itemId)}/resolve`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({action: action, reason: reason, note_id: cardNoteId}),
+    });
+    cardPanel = null;
+    cardNoteId = null;
+    cardNoteText = "";
+    photoError = "";
+    await refresh();
+  } catch (e) {
+    photoError = e.message;
+  }
+  renderMaybe();
+}
+
+async function finishRun() {
+  try {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/finish`, {method: "POST"});
+    photoError = "";
+    await refresh();
+  } catch (e) {
+    photoError = e.message;
+  }
+  renderMaybe();
+}
+
+function showToast(text) {
+  toast = text;
+  chime();
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toastTimer = null;
+    toast = null;
+    renderMaybe();
+  }, 3500);
+  renderMaybe();
+}
+
+function reconcileCards() {
+  const server = status.cards || [];
+  for (const id of Object.keys(retakePhotos)) {
+    const pid = retakePhotos[id];
+    const done = !!pid && (status.checking || []).indexOf(pid) < 0;
+    if (!done) continue;
+    delete retakePhotos[id];
+    if (server.indexOf(id) < 0) {
+      showToast(T().fixedToast);
+    } else if (cardOrder.indexOf(id) < 0) {
+      cardOrder.push(id);
+    }
+  }
+  for (let i = cardOrder.length - 1; i >= 0; i--) {
+    if (server.indexOf(cardOrder[i]) < 0) cardOrder.splice(i, 1);
+  }
+  for (const id of server) {
+    if (cardOrder.indexOf(id) < 0) cardOrder.push(id);
   }
 }
 
 function announce() {
-  const cur = currentShot();
-  const curId = cur ? cur.shot_id : null;
-  if (prevShotId !== null && curId && curId !== prevShotId) {
-    say(roomHeading(cur) + ". " + instruction(cur));
-  }
-  if (curId) prevShotId = curId;
-  const byId = itemsById();
-  const current = new Set();
-  for (const id of status.open) {
-    const item = byId[id];
-    if (item && item.request) {
-      current.add(id);
-      if (seenReqIds && !seenReqIds.has(id)) say(item.request.cleaner);
+  if (!status || !tour) return;
+  if (!allTaken()) {
+    const cur = roundCurrent();
+    const curId = cur ? cur.shot_id : null;
+    if (prevShotId !== null && curId && curId !== prevShotId) {
+      say(roomHeading(cur) + ". " + instruction(cur));
     }
+    if (curId) prevShotId = curId;
+    return;
   }
-  seenReqIds = current;
+  if (!photosDoneSaid) {
+    photosDoneSaid = true;
+    say(T().photosDone);
+  }
+  const byId = itemsById();
+  const shown = shownCard();
+  if (shown && shown !== spokenCard && byId[shown]) {
+    spokenCard = shown;
+    say(cardText(byId[shown]));
+  }
+  if (status.finished_at && !saidFinal) {
+    saidFinal = true;
+    say(T().doneAll);
+  }
 }
 
 async function refresh() {
-  const [t, s] = await Promise.all([
-    api(`/api/runs/${encodeURIComponent(RUN)}/tour`),
-    api(`/api/runs/${encodeURIComponent(RUN)}/status`),
-  ]);
-  tour = {shots: t.shots};
-  takenSet = new Set(t.taken);
+  if (!tour || tourRun !== RUN) {
+    const t = await api(`/api/runs/${encodeURIComponent(RUN)}/tour`);
+    tour = {shots: t.shots};
+    tourRun = RUN;
+  }
+  const s = await api(`/api/runs/${encodeURIComponent(RUN)}/status`);
   status = s;
+  takenSet = new Set((s.recent || []).map(e => e.shot_id));
+  reconcileCards();
   if (s.language && I18N[s.language]) {
     if (LANG !== s.language) { LANG = s.language; pickVoice(); }
     langPicked = true;
@@ -784,22 +1163,42 @@ async function refresh() {
 
 function startPoll() {
   if (pollTimer) return;
-  pollTimer = setInterval(async () => {
+  const tick = async () => {
+    pollTimer = null;
     try { await refresh(); renderMaybe(); } catch (e) {}
-  }, 2000);
+    if (!RUN) return;
+    let busy = false;
+    for (const entry of optimistic.values()) {
+      if (entry.state === "sending") { busy = true; break; }
+    }
+    if (!busy && status && status.checking && status.checking.length) busy = true;
+    pollTimer = setTimeout(tick, busy ? 500 : 2000);
+  };
+  pollTimer = setTimeout(tick, 2000);
 }
 
 async function boot() {
   document.getElementById("snapFile").onchange = ev => {
     const input = ev.target;
-    if (input.files.length && pendingShot) {
-      const shot = tour.shots.find(x => x.shot_id === pendingShot);
-      const file = input.files[0];
-      input.value = "";
-      if (shot) upload(shot, file);
-    } else {
-      input.value = "";
+    const file = input.files.length ? input.files[0] : null;
+    input.value = "";
+    if (!file || !tour) {
+      pendingShot = null;
+      pendingCard = null;
+      return;
     }
+    if (pendingCard) {
+      const id = pendingCard;
+      pendingCard = null;
+      cardSnap(id, file);
+    } else if (pendingShot) {
+      const shot = tour.shots.find(x => x.shot_id === pendingShot);
+      pendingShot = null;
+      if (shot) snapShot(shot, file);
+    }
+  };
+  document.getElementById("overlay").onclick = () => {
+    document.getElementById("overlay").style.display = "none";
   };
   document.addEventListener("visibilitychange", async () => {
     if (!document.hidden && RUN) {
@@ -809,6 +1208,7 @@ async function boot() {
   const app = document.getElementById("app");
   try {
     if (RUN) {
+      resetRunState();
       await refresh();
       startPoll();
     }

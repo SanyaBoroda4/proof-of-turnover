@@ -103,6 +103,10 @@ class RunState:
         self.photo_seconds = {}
         self.events = []
         self.evidence = set()
+        self.resolutions = {}
+        self.finished_at = None
+        self.card_ready_items = set()
+        self.round_done_emitted = False
         self.signoff = {
             "decision": None,
             "notes": "",
@@ -177,6 +181,12 @@ class RunState:
             OtherIssue(**issue) for issue in first_data.get("other_issues", [])
         ]
         state.notes = list(first_data.get("notes", []))
+        state.resolutions = {
+            item_id: dict(entry)
+            for item_id, entry in (first_data.get("resolutions") or {}).items()
+            if item_id in state.proofs
+        }
+        state.finished_at = first_data.get("finished_at")
         state.voice_notes = [dict(note) for note in first_data.get("voice_notes", [])]
         for note in state.voice_notes:
             try:
@@ -233,6 +243,22 @@ class RunState:
                 path.name[:-len(".jpg")] for path in evidence_dir.iterdir()
                 if path.is_file() and path.suffix.lower() == ".jpg"
             }
+        timeline_path = run_dir / "timeline.jsonl"
+        if timeline_path.is_file():
+            for line in timeline_path.read_text(encoding="utf-8").splitlines():
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if event.get("event") == "card_ready" and event.get("item_id"):
+                    state.card_ready_items.add(event["item_id"])
+                elif event.get("event") == "round_done":
+                    state.round_done_emitted = True
+        if state.tour["shots"] and all(
+            shot["shot_id"] in state.photo_shot.values()
+            for shot in state.tour["shots"]
+        ):
+            state.round_done_emitted = True
         return state
 
     # -- phase (a): claim a photo number and save it, under the lock --------
@@ -298,6 +324,19 @@ class RunState:
             self.decided_seq[coverage_id] = seq
         self.checking.add(photo_id)
         self.notes.append(f"Photo {photo_id} ({photo.original_name}) added for {room_id}")
+        self._timeline_locked(
+            "photo_received", photo_id=photo_id, shot_id=shot_id, room_id=room_id
+        )
+        if (
+            self.tour["shots"]
+            and not self.round_done_emitted
+            and all(
+                shot["shot_id"] in self.photo_shot.values()
+                for shot in self.tour["shots"]
+            )
+        ):
+            self.round_done_emitted = True
+            self._timeline_locked("round_done", shots=len(self.tour["shots"]))
         self._save_locked()
         return photo, seq
 
@@ -363,6 +402,9 @@ class RunState:
                         self.sams[item_id] = fresh["sams"][item_id]
                     self.proofs[item_id] = new
                     self.decided_seq[item_id] = seq
+                    if new.status == PROVEN:
+                        # A retake that proves the item clears its resolution.
+                        self.resolutions.pop(item_id, None)
                     if new.status != current.status:
                         changes[item_id] = (current.status, new.status)
                         self._event_locked("status", item_id, new.status,
@@ -399,6 +441,14 @@ class RunState:
                 self.photo_seconds[photo_id] = elapsed
                 self.notes.append(f"Photo {photo_id} checked in {elapsed:.1f} s")
             if changes:
+                evidence_dir = self.run_dir / "evidence"
+                for item_id, (old, new) in changes.items():
+                    if old == PROBLEM and new == PROVEN:
+                        before = evidence_dir / f"{item_id}.before.jpg"
+                        current = evidence_dir / f"{item_id}.jpg"
+                        if not before.exists() and current.is_file():
+                            before.write_bytes(current.read_bytes())
+                            self.evidence.add(f"{item_id}.before")
                 saved = save_evidence(
                     self.run_dir, self.proofs, self.items_by_id, self.photos_by_id,
                     self.sams, self.problem_sams, item_ids=set(changes),
@@ -421,10 +471,58 @@ class RunState:
             and self.proofs[item_id].status != PROVEN
         ]
 
+    def _cards_locked(self):
+        """Open problem-card item ids in tour order (callers hold the lock).
+
+        One card per critical item that is not proven, not resolved, and
+        whose shots are all taken with every photo checked.
+        """
+        taken = self._taken_shots_locked()
+        busy_shots = {self.photo_shot.get(photo_id, "") for photo_id in self.checking}
+        item_shots = {}
+        for shot in self.tour["shots"]:
+            for item_id in shot.get("item_ids", []):
+                item_shots.setdefault(item_id, []).append(shot["shot_id"])
+        cards, seen = [], set()
+        for shot in self.tour["shots"]:
+            for item_id in shot.get("item_ids", []):
+                if item_id in seen:
+                    continue
+                seen.add(item_id)
+                item = self.items_by_id.get(item_id)
+                if item is None or not item.critical:
+                    continue
+                if self.proofs[item_id].status == PROVEN:
+                    continue
+                if item_id in self.resolutions:
+                    continue
+                shots = item_shots.get(item_id, [])
+                if shots and all(
+                    shot_id in taken and shot_id not in busy_shots for shot_id in shots
+                ):
+                    cards.append(item_id)
+        if taken and not self.checking:
+            for item in self.checklist:
+                if (
+                    item.id not in seen
+                    and item.critical
+                    and item.key != "coverage"
+                    and self.proofs[item.id].status != PROVEN
+                    and item.id not in self.resolutions
+                ):
+                    cards.append(item.id)
+        return cards
+
     def finish_photo(self, photo_id):
         """The photo's check, including its requests, is fully stored."""
         with self.lock:
             self.checking.discard(photo_id)
+            self._timeline_locked("photo_finished", photo_id=photo_id, outcome="ok")
+            for item_id in self._cards_locked():
+                if item_id not in self.card_ready_items:
+                    self.card_ready_items.add(item_id)
+                    self._timeline_locked("card_ready", item_id=item_id)
+            self._maybe_all_checked_locked()
             self._save_locked()
 
     def mark_failed(self, photo_id, note):
@@ -432,6 +530,8 @@ class RunState:
         with self.lock:
             self.checking.discard(photo_id)
             self.notes.append(note)
+            self._timeline_locked("photo_finished", photo_id=photo_id, outcome="failed")
+            self._maybe_all_checked_locked()
             self._save_locked()
 
     def store_requests(self, requests, notes):
@@ -455,6 +555,25 @@ class RunState:
         """Append one model-call log entry (memory side of calls.jsonl)."""
         with self.lock:
             self.calls.append(entry)
+
+    def timeline(self, event, **fields):
+        """Append one ms-timestamped event to timeline.jsonl."""
+        with self.lock:
+            self._timeline_locked(event, **fields)
+
+    def _timeline_locked(self, event, **fields):
+        """Append a timeline event; callers hold the lock."""
+        record = {
+            "time": datetime.now().isoformat(timespec="milliseconds"),
+            "event": event,
+        }
+        record.update(fields)
+        with open(self.run_dir / "timeline.jsonl", "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+
+    def _maybe_all_checked_locked(self):
+        if not self.checking:
+            self._timeline_locked("all_checked", photos=len(self.photos))
 
     def next_note_id(self):
         """Claim the next voice-note id (N01, N02, ...)."""
@@ -510,6 +629,7 @@ class RunState:
     def send_back(self, item_ids, notes):
         """Host sends items back: they go to needs-photo with the note."""
         with self.lock:
+            self.finished_at = None
             known = [i for i in item_ids if i in self.items_by_id]
             for item_id in known:
                 self.proofs[item_id] = ProofItem(
@@ -517,6 +637,7 @@ class RunState:
                 )
                 self.decided_seq[item_id] = len(self.photos)
                 self.requests.pop(item_id, None)
+                self.resolutions.pop(item_id, None)
                 self.evidence.discard(item_id)
                 self._event_locked("status", item_id, NEEDS_PROOF, "",
                                    notes or "Host asked for a new photo")
@@ -539,6 +660,37 @@ class RunState:
             self._save_locked()
             return dict(self.signoff)
 
+    # -- problem cards: cleaner resolutions + finish ------------------------
+
+    def resolve_item(self, item_id, action, reason, note_id):
+        """Resolve one open critical item as reported or disputed."""
+        with self.lock:
+            self.resolutions[item_id] = {
+                "action": action,  # cant_fix | its_fine
+                "reason": reason,  # broken | before | supplies | wont_clean | other | None
+                "note_id": note_id,
+                "time": datetime.now().isoformat(timespec="seconds"),
+            }
+            if action == "cant_fix":
+                text = f"Cleaner reported {item_id} ({reason or 'no reason'})"
+            else:
+                text = f"Cleaner says {item_id} is fine"
+            self.notes.append(text)
+            self._event_locked("resolution", item_id, action,
+                               self.proofs[item_id].photo_id, text)
+            self._timeline_locked("card_resolved", item_id=item_id, action=action)
+            self._save_locked()
+            return dict(self.resolutions[item_id])
+
+    def finish(self):
+        """Cleaner sends the turnover: all checked, all critical proven/resolved."""
+        with self.lock:
+            self.finished_at = datetime.now().isoformat(timespec="seconds")
+            self.notes.append("Cleaner finished the turnover")
+            self._event_locked("finish", text="Cleaner finished the turnover")
+            self._save_locked()
+            return self.finished_at
+
     # -- reads (all from memory, never from files) --------------------------
 
     def agent_state(self):
@@ -550,7 +702,11 @@ class RunState:
 
     def _agent_state_locked(self):
         for item in self.checklist:
-            if item.critical and self.proofs[item.id].status != PROVEN:
+            if (
+                item.critical
+                and self.proofs[item.id].status != PROVEN
+                and item.id not in self.resolutions
+            ):
                 return NEEDS_INPUT
         return AWAITING_SIGNOFF
 
@@ -624,6 +780,8 @@ class RunState:
                     "worth_a_look": host_verdict.worth_a_look,
                 },
                 "open": host_verdict.problems + host_verdict.need_photo,
+                "cards": self._cards_locked(),
+                "finished_at": self.finished_at,
                 "checking": sorted(self.checking),
                 "photo_seconds": dict(self.photo_seconds),
                 "recent": recent,
@@ -659,6 +817,8 @@ class RunState:
             "reason": proof.reason,
             "photo_id": proof.photo_id,
             "has_evidence": item.id in self.evidence,
+            "has_before": f"{item.id}.before" in self.evidence,
+            "resolution": self.resolutions.get(item.id),
             "request": request,
         }
 
@@ -735,6 +895,8 @@ class RunState:
             "claims": {item_id: asdict(claim) for item_id, claim in self.claims.items()},
             "other_issues": [asdict(issue) for issue in self.other_issues],
             "notes": list(self.notes),
+            "resolutions": {item_id: dict(entry) for item_id, entry in self.resolutions.items()},
+            "finished_at": self.finished_at,
             "voice_notes": [dict(note) for note in self.voice_notes],
         }
         _write_json_atomically(self.run_dir / "first_look.json", first_data)

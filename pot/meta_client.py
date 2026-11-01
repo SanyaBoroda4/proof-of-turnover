@@ -3,7 +3,8 @@
 Every feature of the app calls the API through MetaClient, which provides:
 
 - one retry policy (up to 6 retries, exponential backoff capped at 20 s)
-  on 404, 408, 429, 5xx, connection errors, timeouts and empty answers;
+  on 404, 408, 429, 5xx, connection errors, timeouts and empty answers
+  (live photo checks: 25 s per attempt, 1 retry);
 - recording of every successful call under data/model_cache/, keyed by a
   SHA-256 hash of the (redacted) request, with cache lookup before calling;
 - replay mode (POT_REPLAY=1): no network, no API key, answers come only
@@ -33,11 +34,24 @@ MAX_RETRIES = 6
 BACKOFF_BASE_SECONDS = 1.0
 BACKOFF_MAX_SECONDS = 20.0
 DEFAULT_TIMEOUT = 300.0
-DEFAULT_MAX_CALLS = 6
+DEFAULT_MAX_CALLS = 10
+
+#: Live photo checks (first look, second looks, SAM, box pick, requests)
+#: run under call_context["live_checks"]: 25 s per attempt, 1 retry.
+#: Batch, tour planning, notes and setup calls keep the defaults above.
+LIVE_TIMEOUT = 25.0
+LIVE_MAX_RETRIES = 1
 
 #: Where the current call belongs: {"run_dir": str, "photo_id": str|None}.
 #: Workers set this so the per-run call log can route each Meta call.
+#: Live photo-check workers also set "live_checks": True for the fast
+#: timeout/retry budget (LIVE_TIMEOUT / LIVE_MAX_RETRIES).
 call_context = ContextVar("pot_call_context", default=None)
+
+
+def live_checks_active():
+    """True when the current call is a live photo check (fast budget)."""
+    return bool((call_context.get() or {}).get("live_checks"))
 
 
 def submit_with_context(pool, func, *args, **kwargs):
@@ -238,7 +252,8 @@ class MetaClient:
                     self._http_client = httpx.Client(timeout=self._timeout)
         return self._http_client
 
-    def _append_trace(self, purpose, model, started, attempts, cache, ok, usage, error=None):
+    def _append_trace(self, purpose, model, started, attempts, cache, ok, usage,
+                      error=None, status=None):
         context = call_context.get() or {}
         entry = {
             "purpose": purpose,
@@ -252,6 +267,8 @@ class MetaClient:
         }
         if error is not None:
             entry["error"] = error
+        if status is not None:
+            entry["status"] = status
         with self._lock:
             self.trace.append(entry)
             hooks = list(self._hooks)
@@ -316,13 +333,19 @@ class MetaClient:
         # One overall limit on live calls: cache hits and replay misses
         # above never wait, but the network section holds a slot, so three
         # photos in flight still send at most POT_MAX_CALLS at once.
+        if live_checks_active():
+            max_retries = LIVE_MAX_RETRIES
+        else:
+            max_retries = MAX_RETRIES
         with self._slots:
-            return self._execute_live(purpose, model, redacted, path, call, started)
+            return self._execute_live(
+                purpose, model, redacted, path, call, started, max_retries
+            )
 
-    def _execute_live(self, purpose, model, redacted, path, call, started):
+    def _execute_live(self, purpose, model, redacted, path, call, started, max_retries):
         attempts = 0
         last_error = None
-        for attempt in range(1 + MAX_RETRIES):
+        for attempt in range(1 + max_retries):
             attempts += 1
             try:
                 result, answer = call()
@@ -338,10 +361,13 @@ class MetaClient:
                         message = f"{purpose}: request failed with HTTP {status} (not retried): {exc}"
                     else:
                         message = f"{purpose}: request failed (not retried): {exc}"
-                    self._append_trace(purpose, model, started, attempts, "miss", False, None, message)
+                    self._append_trace(
+                        purpose, model, started, attempts, "miss", False, None,
+                        message, status=status,
+                    )
                     raise MetaClientError(message) from exc
                 last_error = exc
-                if attempt < MAX_RETRIES:
+                if attempt < max_retries:
                     self._wait(backoff_delay(attempt))
                 continue
             record = {"purpose": purpose, "model": model, "request": redacted, "answer": answer}
@@ -351,7 +377,10 @@ class MetaClient:
             )
             return result
         message = f"{purpose}: request failed after {attempts} attempts: {last_error}"
-        self._append_trace(purpose, model, started, attempts, "miss", False, None, message)
+        self._append_trace(
+            purpose, model, started, attempts, "miss", False, None, message,
+            status=_status_of(last_error),
+        )
         raise MetaClientError(message) from last_error
 
     def respond(
@@ -391,6 +420,8 @@ class MetaClient:
                         "schema": schema,
                     }
                 }
+            if live_checks_active():
+                kwargs["timeout"] = LIVE_TIMEOUT
             response = client.responses.create(**kwargs)
             text = getattr(response, "output_text", "") or ""
             if not text.strip():
@@ -438,9 +469,9 @@ class MetaClient:
 
         def call():
             client = self._ensure_openai(purpose)
-            response = client.responses.create(
-                model=self.sam_model,
-                input=[
+            kwargs = {
+                "model": self.sam_model,
+                "input": [
                     {
                         "role": "user",
                         "content": [
@@ -449,8 +480,11 @@ class MetaClient:
                         ],
                     }
                 ],
-                metadata={"include_confidence": "true", "mask_encoding": "one_bit"},
-            )
+                "metadata": {"include_confidence": "true", "mask_encoding": "one_bit"},
+            }
+            if live_checks_active():
+                kwargs["timeout"] = LIVE_TIMEOUT
+            response = client.responses.create(**kwargs)
             text = getattr(response, "output_text", "") or ""
             # An empty SAM answer means "nothing found", not a failure:
             # return it as-is and never retry it.

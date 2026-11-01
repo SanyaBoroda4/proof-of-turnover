@@ -19,7 +19,7 @@ from pot.meta_client import MetaClientError, submit_with_context
 from pot.proof import PROBLEM
 from pot.sam import detect
 
-MAX_WORKERS = 6
+MAX_WORKERS = 10
 SAM_MIN_CONFIDENCE = 0.5
 
 THIS_ROOM_VALUES = ("yes", "no", "unclear")

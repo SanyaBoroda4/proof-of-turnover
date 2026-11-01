@@ -362,3 +362,50 @@ def test_hooks_fire_with_photo_id_from_context(tmp_path):
         call_context.reset(token)
     assert [entry["photo_id"] for entry in seen] == ["P07"]
     assert client.trace[-1]["photo_id"] == "P07"
+
+
+def test_live_checks_use_fast_timeout_and_one_retry(tmp_path):
+    from pot.meta_client import LIVE_MAX_RETRIES, LIVE_TIMEOUT, call_context
+
+    fake = _openai_fake([_http_error(500)])
+    client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,
+                        sleep=lambda seconds: None)
+    token = call_context.set({"live_checks": True})
+    try:
+        with pytest.raises(MetaClientError):
+            client.respond("second look x P01", CONTENT)
+    finally:
+        call_context.reset(token)
+    assert client.trace[-1]["attempts"] == 1 + LIVE_MAX_RETRIES
+    assert [call["timeout"] for call in fake.responses.calls] == [LIVE_TIMEOUT] * 2
+
+
+def test_batch_calls_keep_default_budget_without_timeout_kwarg(tmp_path):
+    fake = _openai_fake([_http_error(500)])
+    client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,
+                        sleep=lambda seconds: None)
+    with pytest.raises(MetaClientError):
+        client.respond("second look x P01", CONTENT)
+    assert client.trace[-1]["attempts"] == 7
+    assert all("timeout" not in call for call in fake.responses.calls)
+
+
+def test_failed_trace_carries_http_status(tmp_path):
+    client = _client(tmp_path, [_http_error(429)])
+    with pytest.raises(MetaClientError):
+        client.respond("probe", CONTENT)
+    assert client.trace[-1]["status"] == 429
+    assert client.trace[-1]["attempts"] == 7
+    failing = _client(tmp_path, [_http_error(400, BadRequestError)])
+    with pytest.raises(MetaClientError):
+        failing.respond("probe", CONTENT)
+    assert failing.trace[-1]["status"] == 400
+
+
+def test_max_calls_default_is_ten(tmp_path, monkeypatch):
+    from pot import verifier
+    from pot.meta_client import max_calls_limit
+
+    monkeypatch.delenv("POT_MAX_CALLS", raising=False)
+    assert max_calls_limit() == 10
+    assert verifier.MAX_WORKERS == 10

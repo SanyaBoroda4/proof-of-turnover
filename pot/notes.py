@@ -129,7 +129,8 @@ def _remove(path):
         pass
 
 
-def add_voice_note(client, state, audio_bytes, filename, room_id, effort=None):
+def add_voice_note(client, state, audio_bytes, filename, room_id, effort=None,
+                   item_id=None):
     """Store one voice note; returns {"status": ...}.
 
     "stored" carries the note record; "no_speech" (empty transcript)
@@ -177,6 +178,7 @@ def add_voice_note(client, state, audio_bytes, filename, room_id, effort=None):
         "language": state.language,
         "text": text,
         "audio": wav_name,
+        "item_id": item_id,
         **fields,
     }
     state.store_voice_note(record, notes)

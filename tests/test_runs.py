@@ -389,3 +389,167 @@ def test_load_roundtrip_restores_state(tmp_path):
     assert loaded.status()["progress"]["photos"] == 1
     # Arrival order survives the restart: an older result stays ignored.
     assert loaded.decided_seq[item] == 0
+
+
+def _timeline(state):
+    path = state.run_dir / "timeline.jsonl"
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def _status_item(status, item_id):
+    for room in status["rooms"]:
+        for item in room["items"]:
+            if item["id"] == item_id:
+                return item
+    raise AssertionError(f"no {item_id} in status")
+
+
+def test_timeline_records_round_from_receive_to_all_checked(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_done(photo.id, [item]))
+    state.finish_photo(photo.id)
+    second, _ = state.claim_photo(str(_photo_file(tmp_path / "u2", "b.jpg")), "bath-1")
+    state.merge_result(second.id, _fresh_done(second.id, [_bath_item(state)]))
+    state.finish_photo(second.id)
+    events = _timeline(state)
+    kinds = [entry["event"] for entry in events]
+    assert kinds.count("photo_received") == 2
+    assert kinds.count("photo_finished") == 2
+    assert kinds.index("round_done") > kinds.index("photo_received")
+    assert kinds[-1] == "all_checked"
+    assert any(entry["event"] == "card_ready" for entry in events)
+    assert all("." in entry["time"] for entry in events)  # ms timestamps
+    assert events[0]["photo_id"] == "P01"
+    assert events[0]["shot_id"] == "bed-1"
+
+
+def test_cards_open_critical_items_in_tour_order(tmp_path):
+    state = _state(tmp_path)
+    assert state.status()["cards"] == []
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_done(photo.id, [item]))
+    assert state.status()["cards"] == []  # shot still checking
+    state.finish_photo(photo.id)
+    bed_shot = next(s for s in state.tour["shots"] if s["shot_id"] == "bed-1")
+    expected = [
+        item_id for item_id in bed_shot["item_ids"]
+        if item_id != item and state.items_by_id[item_id].critical
+    ]
+    assert state.status()["cards"] == expected
+    assert expected  # the tour really has other critical bed items
+
+
+def test_resolve_item_stores_and_counts_for_agent_state(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item, "mess"))
+    state.finish_photo(photo.id)
+    assert state.agent_state() == "needs_input"
+    resolution = state.resolve_item(item, "cant_fix", "supplies", None)
+    assert resolution["action"] == "cant_fix"
+    assert resolution["reason"] == "supplies"
+    assert _status_item(state.status(), item)["resolution"] == resolution
+    assert item not in state.status()["cards"]
+    for other in state.checklist:
+        if other.critical and state.proofs[other.id].status != PROVEN:
+            state.resolve_item(other.id, "its_fine", None, None)
+    assert state.agent_state() == "awaiting_signoff"
+    assert [entry["event"] for entry in _timeline(state)].count("card_resolved") >= 1
+
+
+def test_retake_proving_item_clears_resolution(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item, "mess"))
+    state.finish_photo(photo.id)
+    state.resolve_item(item, "cant_fix", "broken", None)
+    second, _ = state.claim_photo(str(_photo_file(tmp_path / "u2", "b.jpg")), "bed-1")
+    state.merge_result(second.id, _fresh_done(second.id, [item]))
+    state.finish_photo(second.id)
+    assert state.proofs[item].status == PROVEN
+    assert item not in state.resolutions
+    assert _status_item(state.status(), item)["resolution"] is None
+
+
+def test_before_image_kept_once_on_problem_to_proven(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item, "mess"))
+    state.finish_photo(photo.id)
+    before_path = state.run_dir / "evidence" / f"{item}.before.jpg"
+    assert not before_path.exists()
+    second, _ = state.claim_photo(str(_photo_file(tmp_path / "u2", "b.jpg")), "bed-1")
+    state.merge_result(second.id, _fresh_done(second.id, [item]))
+    state.finish_photo(second.id)
+    assert state.proofs[item].status == PROVEN
+    first_bytes = before_path.read_bytes()
+    assert _status_item(state.status(), item)["has_before"] is True
+    third, _ = state.claim_photo(str(_photo_file(tmp_path / "u3", "c.jpg")), "bed-1")
+    state.merge_result(third.id, _fresh_problem(third.id, item, "mess again"))
+    state.finish_photo(third.id)
+    fourth, _ = state.claim_photo(str(_photo_file(tmp_path / "u4", "d.jpg")), "bed-1")
+    state.merge_result(fourth.id, _fresh_done(fourth.id, [item]))
+    state.finish_photo(fourth.id)
+    assert before_path.read_bytes() == first_bytes  # never overwritten
+
+
+def test_shot_without_critical_items_finishes(tmp_path):
+    state = _state(tmp_path)
+    state.tour["shots"].append(
+        {"shot_id": "extra-1", "room_id": "bed", "item_ids": []}
+    )
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u", "a.jpg")), "extra-1")
+    empty = {
+        "claims": {}, "seconds": {}, "sams": {}, "problem_sams": {},
+        "issues": [], "notes": [], "fresh_ids": [], "decisions": {},
+    }
+    state.merge_result(photo.id, empty)
+    state.finish_photo(photo.id)
+    assert state.status()["checking"] == []
+    assert state.status()["cards"] == []
+    assert state.finish()
+
+
+def test_resolutions_and_finish_survive_reload(tmp_path):
+    from pot.checklist import load_property
+    from pot.tour import load_tour
+
+    property = load_property("demo-house")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    state = RunState(run_dir, property, build_checklist(property),
+                     tour={"shots": load_tour("demo-house")})
+    item = "master-bedroom.beds_made"
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u", "a.jpg")), "master-bedroom-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item, "mess"))
+    state.finish_photo(photo.id)
+    state.resolve_item(item, "cant_fix", "broken", None)
+    finished_at = state.finish()
+    loaded = RunState.load(state.run_dir)
+    assert loaded.resolutions[item]["action"] == "cant_fix"
+    assert loaded.finished_at == finished_at
+    assert loaded.status()["finished_at"] == finished_at
+    assert loaded.card_ready_items  # seeded from timeline.jsonl
+    assert loaded.agent_state() == "needs_input"
+
+
+def test_send_back_clears_resolution_and_reopens_run(tmp_path):
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item, "mess"))
+    state.finish_photo(photo.id)
+    state.resolve_item(item, "its_fine", None, None)
+    state.finish()
+    state.send_back([item], "Try again")
+    assert item not in state.resolutions
+    assert state.finished_at is None
+    assert state.status()["finished_at"] is None
+    assert state.agent_state() == "needs_input"

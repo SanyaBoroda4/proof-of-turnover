@@ -97,6 +97,9 @@ def _wait_idle(test, code, run_id, timeout=15):
 def test_access_code_required_on_every_route():
     test, code = _client()
     assert test.post("/api/runs", json={"property": "demo-house"}).status_code == 401
+    assert test.post("/api/runs/nope/items/x/resolve",
+                     json={"action": "its_fine"}).status_code == 401
+    assert test.post("/api/runs/nope/finish").status_code == 401
     assert test.get("/api/server-ip").status_code == 401
     assert test.get("/api/qr?text=x").status_code == 401
     assert test.get("/api/runs/nope/status").status_code == 401
@@ -497,3 +500,191 @@ def test_notes_endpoint_no_speech_and_bad_room(tmp_path):
     assert response.json() == {"status": "no_speech", "detail": "no speech heard"}
     status = quiet.get(f"/api/runs/{run_id}/status?code={hush}").json()
     assert status["voice_notes"] == []
+
+
+def _problem_run():
+    test, code = _client(inspector=_problem, verifier=_not_done)
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    return test, code, run_id
+
+
+def _status_item(status, item_id):
+    for room in status["rooms"]:
+        for item in room["items"]:
+            if item["id"] == item_id:
+                return item
+    raise AssertionError(f"no {item_id} in status")
+
+
+def _resolve(test, code, run_id, item_id, action="cant_fix", reason="supplies",
+             note_id=None):
+    return test.post(
+        f"/api/runs/{run_id}/items/{item_id}/resolve?code={code}",
+        json={"action": action, "reason": reason, "note_id": note_id},
+    )
+
+
+def test_resolve_validates_item_action_reason_and_note():
+    test, code, run_id = _problem_run()
+    _wait_idle(test, code, run_id)
+    assert _resolve(test, code, run_id, "nope.nothing").status_code == 404
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    optional = next(
+        item["id"] for room in status["rooms"] for item in room["items"]
+        if not item["critical"]
+    )
+    assert _resolve(test, code, run_id, optional).status_code == 400
+    assert _resolve(test, code, run_id, "master-bedroom.coverage").status_code == 400
+    open_id = status["cards"][0]
+    assert _resolve(test, code, run_id, open_id, action="later").status_code == 400
+    assert _resolve(test, code, run_id, open_id, reason="tired").status_code == 400
+    assert _resolve(test, code, run_id, open_id, note_id="N99").status_code == 400
+
+
+def test_resolve_stores_and_finish_gates_on_open_items():
+    test, code, run_id = _problem_run()
+    status = _wait_idle(test, code, run_id)
+    assert status["cards"]
+    open_id = status["cards"][0]
+    response = _resolve(test, code, run_id, open_id)
+    assert response.status_code == 200, response.text
+    assert response.json()["resolution"]["action"] == "cant_fix"
+    assert response.json()["agent_state"] == "needs_input"
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert _status_item(status, open_id)["resolution"]["reason"] == "supplies"
+    assert open_id not in status["cards"]
+    assert status["news"][0]["kind"] == "resolution"
+    refused = test.post(f"/api/runs/{run_id}/finish?code={code}")
+    assert refused.status_code == 400
+    assert "still open" in refused.json()["detail"]
+    for room in status["rooms"]:
+        for item in room["items"]:
+            if (item["critical"] and item["status"] != "proven"
+                    and item["resolution"] is None):
+                assert _resolve(test, code, run_id, item["id"],
+                                action="its_fine", reason=None).status_code == 200
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["agent_state"] == "awaiting_signoff"
+    done = test.post(f"/api/runs/{run_id}/finish?code={code}")
+    assert done.status_code == 200, done.text
+    assert done.json()["finished_at"]
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["finished_at"] == done.json()["finished_at"]
+
+
+def test_finish_refused_while_photo_checking():
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow(call):
+        entered.set()
+        assert release.wait(15)
+        return _done(call)
+
+    test = TestClient(create_app(FakeSpark(inspector=slow)))
+    code = test.app.state.server.code
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    assert entered.wait(15)
+    refused = test.post(f"/api/runs/{run_id}/finish?code={code}")
+    assert refused.status_code == 400
+    assert "still checking" in refused.json()["detail"]
+    release.set()
+    _wait_idle(test, code, run_id)
+
+
+def test_full_tour_proves_and_finishes():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    tour = test.get(f"/api/runs/{run_id}/tour?code={code}").json()
+    assert len(tour["shots"]) == 11
+    for shot in tour["shots"]:
+        assert _upload(test, code, run_id, shot["shot_id"]).status_code == 200
+    status = _wait_idle(test, code, run_id, timeout=60)
+    assert status["agent_state"] == "awaiting_signoff", status["open"]
+    assert status["cards"] == []
+    done = test.post(f"/api/runs/{run_id}/finish?code={code}")
+    assert done.status_code == 200, done.text
+
+
+def test_before_image_served_after_fix():
+    test, code, run_id = _problem_run()
+    _wait_idle(test, code, run_id)
+    item_id = "master-bedroom.beds_made"
+    fake = test.app.state.server.client
+    fake._inspector = _done
+    fake._verifier = lambda call: {
+        "this_room": "yes", "verdict": "done", "count_seen": 5,
+        "reason": "looks good", "problem_object": "",
+    }
+    assert _upload(test, code, run_id, "master-bedroom-1").status_code == 200
+    status = _wait_idle(test, code, run_id)
+    item = _status_item(status, item_id)
+    assert item["status"] == "proven"
+    assert item["has_before"] is True
+    before = test.get(f"/api/runs/{run_id}/evidence/{item_id}.before?code={code}")
+    assert before.status_code == 200
+    assert before.headers["content-type"] == "image/jpeg"
+    after = test.get(f"/api/runs/{run_id}/evidence/{item_id}?code={code}")
+    assert after.status_code == 200
+    assert after.content != before.content
+
+
+def test_timeline_and_call_log_written_for_live_photo():
+    from pot import config
+
+    test, code = _client()
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    run_dir = config.RUNS_DIR / run_id
+    kinds = [
+        json.loads(line)["event"]
+        for line in (run_dir / "timeline.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    for event in ("photo_received", "checks_started", "checks_done",
+                  "requests_done", "photo_finished"):
+        assert event in kinds
+    calls = [
+        json.loads(line)
+        for line in (run_dir / "calls.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert calls
+    first = calls[0]
+    assert "." in first["time"]  # milliseconds
+    assert first["seconds"] == round(first["seconds"], 2)
+    assert "usage" not in first and "status" not in first  # fake ok call
+
+
+def test_notes_endpoint_links_item_id(tmp_path):
+    from tests.fakes import tone_clip
+
+    test, code = _client()
+    run_id = _create_run(test, code)
+    blob = tone_clip(tmp_path / "note.webm").read_bytes()
+    bad = test.post(
+        f"/api/runs/{run_id}/notes?code={code}",
+        data={"room_id": "master-bedroom", "item_id": "nope.nothing"},
+        files={"audio": ("note.webm", blob, "audio/webm")},
+    )
+    assert bad.status_code == 400
+    good = test.post(
+        f"/api/runs/{run_id}/notes?code={code}",
+        data={"room_id": "master-bedroom",
+              "item_id": "master-bedroom.beds_made"},
+        files={"audio": ("note.webm", blob, "audio/webm")},
+    )
+    assert good.status_code == 200, good.text
+    note = good.json()["note"]
+    assert note["item_id"] == "master-bedroom.beds_made"
+    stored = test.post(
+        f"/api/runs/{run_id}/items/master-bedroom.beds_made/resolve?code={code}",
+        json={"action": "cant_fix", "reason": "broken", "note_id": note["id"]},
+    )
+    assert stored.status_code == 200, stored.text
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    item = _status_item(status, "master-bedroom.beds_made")
+    assert item["resolution"]["note_id"] == note["id"]

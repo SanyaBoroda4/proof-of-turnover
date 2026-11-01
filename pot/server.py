@@ -33,6 +33,7 @@ from pot.meta_client import MetaClient, MetaClientError, call_context
 from pot import setup as setup_mod
 from pot.notes import MAX_NOTE_BYTES, NotesError, add_voice_note
 from pot.photos import new_run_dir
+from pot.proof import PROVEN
 from pot.recheck import run_photo_checks
 from pot.requests import write_requests
 from pot.runs import OldPhotoError, RunState
@@ -113,6 +114,16 @@ class SignoffBody(BaseModel):
     item_ids: list = []
 
 
+class ResolveBody(BaseModel):
+    action: str
+    reason: str | None = None
+    note_id: str | None = None
+
+
+RESOLVE_ACTIONS = ("cant_fix", "its_fine")
+RESOLVE_REASONS = ("broken", "before", "supplies", "wont_clean", "other")
+
+
 class SetupCreate(BaseModel):
     name: str
     floors: int = 1
@@ -187,14 +198,19 @@ class ServerState:
         else:
             source = "failed"
         record = {
-            "time": datetime.now().isoformat(timespec="seconds"),
+            "time": datetime.now().isoformat(timespec="milliseconds"),
             "model": entry.get("model"),
             "purpose": entry.get("purpose"),
             "photo_id": entry.get("photo_id"),
-            "seconds": round(entry.get("seconds", 0.0), 1),
+            "seconds": round(entry.get("seconds", 0.0), 2),
             "attempts": entry.get("attempts", 0),
             "source": source,
         }
+        usage = _usage_summary(entry.get("usage"))
+        if usage is not None:
+            record["usage"] = usage
+        if entry.get("status") is not None:
+            record["status"] = entry["status"]
         with self.calls_lock:
             with open(Path(run_dir) / "calls.jsonl", "a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record) + "\n")
@@ -204,9 +220,33 @@ class ServerState:
             state.record_call(record)
 
 
+def _usage_summary(usage):
+    """Token usage as {input, cached, reasoning, output}, or None."""
+    if not isinstance(usage, dict):
+        return None
+    details_in = usage.get("input_tokens_details") or {}
+    if not isinstance(details_in, dict):
+        details_in = {}
+    details_out = usage.get("output_tokens_details") or {}
+    if not isinstance(details_out, dict):
+        details_out = {}
+    summary = {}
+    for key, value in [
+        ("input", usage.get("input_tokens")),
+        ("cached", details_in.get("cached_tokens")),
+        ("reasoning", details_out.get("reasoning_tokens")),
+        ("output", usage.get("output_tokens")),
+    ]:
+        if isinstance(value, int):
+            summary[key] = value
+    return summary or None
+
+
 def _check_worker(server, state, photo_id):
     """Background check for one uploaded photo (parallel tour mode)."""
-    token = call_context.set({"run_dir": str(state.run_dir), "photo_id": photo_id})
+    token = call_context.set({
+        "run_dir": str(state.run_dir), "photo_id": photo_id, "live_checks": True,
+    })
     started = time.monotonic()
     try:
         with state.lock:
@@ -221,12 +261,15 @@ def _check_worker(server, state, photo_id):
                 and state.items_by_id[item_id].key != "coverage"
                 and state.proofs[item_id].status != "proven"
             ]
+        state.timeline("checks_started", photo_id=photo_id)
         fresh = run_photo_checks(
             server.client, state, photo_id, items,
             parallel=True, effort=prompts.RECHECK_EFFORT,
         )
+        state.timeline("checks_done", photo_id=photo_id)
         fresh["elapsed_seconds"] = round(time.monotonic() - started, 1)
         merged = state.merge_result(photo_id, fresh)
+        count = 0
         if merged["failed"]:
             requests, notes = write_requests(
                 server.client, state.property, state.checklist, state.proofs,
@@ -234,6 +277,8 @@ def _check_worker(server, state, photo_id):
                 language=state.language,
             )
             state.store_requests(requests, notes)
+            count = len(requests)
+        state.timeline("requests_done", photo_id=photo_id, items=count)
         state.finish_photo(photo_id)
     except Exception as exc:  # noqa: BLE001 - a photo check never kills the server
         state.mark_failed(photo_id, f"Photo {photo_id}: check failed: {exc}")
@@ -375,16 +420,21 @@ def create_app(client=None):
         return Response(blob, media_type="image/jpeg", headers=dict(LONG_CACHE))
 
     @app.post("/api/runs/{run_id}/notes")
-    def _add_note(run_id: str, room_id: str = Form(...), audio: UploadFile = File(...)):
+    def _add_note(run_id: str, room_id: str = Form(...), audio: UploadFile = File(...),
+                  item_id: str | None = Form(default=None)):
         state = need_state(run_id)
         _checked_id(room_id, "room")
+        if item_id is not None:
+            _checked_id(item_id, "item")
+            if item_id not in state.items_by_id:
+                raise HTTPException(400, f"Unknown item '{item_id}'")
         blob = audio.file.read(MAX_NOTE_BYTES + 1)
         token = call_context.set({"run_dir": str(state.run_dir), "photo_id": None})
         try:
             try:
                 return add_voice_note(
                     server.client, state, blob, audio.filename or "note",
-                    room_id, effort=prompts.RECHECK_EFFORT,
+                    room_id, effort=prompts.RECHECK_EFFORT, item_id=item_id,
                 )
             except NotesError as exc:
                 raise HTTPException(400, str(exc))
@@ -423,6 +473,52 @@ def create_app(client=None):
         else:
             raise HTTPException(400, f"Unknown decision {body.decision!r}")
         return {"signoff": signoff, "agent_state": state.agent_state()}
+
+    @app.post("/api/runs/{run_id}/items/{item_id}/resolve")
+    def _resolve_item(run_id: str, item_id: str, body: ResolveBody):
+        state = need_state(run_id)
+        _checked_id(item_id, "item")
+        item = state.items_by_id.get(item_id)
+        if item is None:
+            raise HTTPException(404, f"Unknown item '{item_id}'")
+        if not item.critical:
+            raise HTTPException(400, f"Item '{item_id}' is not critical")
+        if state.proofs[item_id].status == PROVEN:
+            raise HTTPException(400, f"Item '{item_id}' is already proven")
+        if body.action not in RESOLVE_ACTIONS:
+            raise HTTPException(400, f"Unknown action {body.action!r}")
+        if body.reason is not None and body.reason not in RESOLVE_REASONS:
+            raise HTTPException(400, f"Unknown reason {body.reason!r}")
+        if body.note_id is not None:
+            _checked_id(body.note_id, "note")
+            if all(note["id"] != body.note_id for note in state.voice_notes):
+                raise HTTPException(400, f"Unknown note '{body.note_id}'")
+        resolution = state.resolve_item(
+            item_id, body.action, body.reason, body.note_id
+        )
+        return {"resolution": resolution, "agent_state": state.agent_state()}
+
+    @app.post("/api/runs/{run_id}/finish")
+    def _finish_run(run_id: str):
+        state = need_state(run_id)
+        with state.lock:
+            checking = sorted(state.checking)
+            open_items = [
+                item.id for item in state.checklist
+                if item.critical
+                and state.proofs[item.id].status != PROVEN
+                and item.id not in state.resolutions
+            ]
+        if checking:
+            raise HTTPException(
+                400, f"{len(checking)} photos still checking: "
+                + ", ".join(checking))
+        if open_items:
+            raise HTTPException(
+                400, f"{len(open_items)} items still open: "
+                + ", ".join(open_items))
+        finished_at = state.finish()
+        return {"finished_at": finished_at, "agent_state": state.agent_state()}
 
     @app.get("/api/qr")
     def _qr(text: str = Query(max_length=2000)):

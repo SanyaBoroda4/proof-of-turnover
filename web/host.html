@@ -34,6 +34,9 @@
   .pill.supplies { background: #0969da; }
   .pill.other { background: #57606a; }
   .news .card audio { width: 100%; margin-top: 6px; }
+  .duo { display: flex; gap: 8px; }
+  .duo figure { margin: 6px 0 0; flex: 1 1 0; }
+  .duo img { width: 100%; border-radius: 4px; }
   .thumb { width: 120px; cursor: zoom-in; border-radius: 6px; }
   #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8);
              cursor: zoom-out; z-index: 10; text-align: center; padding: 24px; }
@@ -85,8 +88,16 @@ function esc(s) {
 
 const STATE_TEXT = {
   needs_input: "Waiting for photos",
-  awaiting_signoff: "Every critical item proven — ready to review",
+  awaiting_signoff: "Ready to review — every critical item proven or reported",
   done: "Approved",
+};
+
+const REASON_TEXT = {
+  broken: "Broken or damaged",
+  before: "Was like this before",
+  supplies: "Out of supplies",
+  wont_clean: "Won't come clean",
+  other: "Other",
 };
 
 function overviewUrl(photoId) {
@@ -99,6 +110,60 @@ function evidenceUrl(item) {
   }
   if (item.photo_id) return overviewUrl(item.photo_id);
   return "";
+}
+
+function beforeUrl(item) {
+  return `/api/runs/${encodeURIComponent(RUN)}/evidence/${encodeURIComponent(item.id + ".before")}?v=${encodeURIComponent(item.photo_id)}`;
+}
+
+function noteById(noteId) {
+  return (status.voice_notes || []).find(n => n.id === noteId) || null;
+}
+
+function allItems() {
+  const out = [];
+  for (const room of status.rooms) {
+    for (const item of room.items) out.push({room: room, item: item});
+  }
+  return out;
+}
+
+function needsDecisionHtml() {
+  const rows = allItems().filter(({item}) => item.resolution);
+  if (!rows.length) return "";
+  const cards = rows.map(({room, item}) => {
+    const res = item.resolution;
+    const kind = res.action === "cant_fix" ? "reported" : "disputed";
+    const reason = res.reason ? (REASON_TEXT[res.reason] || res.reason) : "No reason given";
+    const url = evidenceUrl(item);
+    const img = url ? `<img src="${url}" data-full="${url}" class="thumb" alt="evidence" loading="lazy">` : "";
+    const note = res.note_id ? noteById(res.note_id) : null;
+    const noteHtml = note
+      ? `<div>${esc(note.english)}</div>
+         <div class="small">Original (${esc(note.language)}): ${esc(note.text)}</div>
+         ${note.audio_url ? `<div><audio controls preload="none" src="${esc(note.audio_url)}"></audio></div>` : ""}`
+      : "";
+    return `<div class="card"><div><span class="pill ${kind === "reported" ? "missing" : "other"}">${kind}</span>
+      <span class="small">${esc(room.name)}</span></div>
+      <div><strong>${esc(item.label)}</strong></div>
+      <div class="small">${esc(reason)}</div>${img}${noteHtml}</div>`;
+  }).join("");
+  return `<h2>Needs your decision</h2><div class="news">${cards}</div>`;
+}
+
+function fixedByCleanerHtml() {
+  const rows = allItems().filter(({item}) => item.has_before);
+  if (!rows.length) return "";
+  const cards = rows.map(({room, item}) => {
+    const before = `<img src="${beforeUrl(item)}" data-full="${beforeUrl(item)}" alt="before" loading="lazy">`;
+    const url = evidenceUrl(item);
+    const after = url ? `<img src="${url}" data-full="${url}" alt="after" loading="lazy">` : "";
+    return `<div class="card"><div class="small">${esc(room.name)}</div>
+      <div><strong>${esc(item.label)}</strong></div>
+      <div class="duo"><figure><figcaption class="small">Before</figcaption>${before}</figure>
+      <figure><figcaption class="small">After</figcaption>${after}</figure></div></div>`;
+  }).join("");
+  return `<h2>Fixed by cleaner</h2><div class="news">${cards}</div>`;
 }
 
 function newsHtml() {
@@ -179,6 +244,9 @@ function renderStatus(app) {
     <h1>Turnover ${esc(status.run_id)}</h1>
     <div class="banner ${esc(status.agent_state)}">${esc(STATE_TEXT[status.agent_state] || status.agent_state)}</div>
     ${status.language ? `<div class="small">Cleaner language: ${esc(langNames[status.language] || status.language)}</div>` : ""}
+    ${status.finished_at ? `<div class="small">Cleaner finished at ${esc(status.finished_at.slice(11, 19))}</div>` : ""}
+    ${needsDecisionHtml()}
+    ${fixedByCleanerHtml()}
     ${newsHtml()}
     ${voiceNotesHtml()}
     <div class="row">
@@ -229,7 +297,7 @@ function renderStatus(app) {
       document.getElementById("signMsg").textContent = e.message;
     }
   };
-  app.querySelectorAll(".thumb").forEach(img => {
+  app.querySelectorAll("[data-full]").forEach(img => {
     img.onclick = () => {
       document.getElementById("big").src = img.getAttribute("data-full");
       document.getElementById("overlay").style.display = "block";
