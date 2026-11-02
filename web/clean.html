@@ -390,9 +390,9 @@ const I18N = {
     retrying: "Reintentando…",
     exit: "Salir",
     exitConfirm: "¿Salir de este turno? Tus fotos están guardadas.",
-    finishEarly: "Terminar fotos ahora (prueba)",
+    finishEarly: "Terminar fotos ahora",
     finishEarlyConfirm: "¿Terminar las fotos ahora? Las fotos no tomadas se omitirán.",
-    skipTest: "Omitir (prueba)",
+    skipTest: "Saltar área",
   },
   en: {
     title: "Cleaning turnover",
@@ -458,9 +458,9 @@ const I18N = {
     retrying: "Retrying…",
     exit: "Exit",
     exitConfirm: "Leave this turnover? Your photos are saved.",
-    finishEarly: "Finish photos now (test)",
+    finishEarly: "Finish photos now",
     finishEarlyConfirm: "Finish photos now? Shots not taken will be skipped.",
-    skipTest: "Skip (test)",
+    skipTest: "Skip area",
   },
   ru: {
     title: "Уборка",
@@ -526,9 +526,9 @@ const I18N = {
     retrying: "Повторяем…",
     exit: "Выйти",
     exitConfirm: "Покинуть эту уборку? Ваши фото сохранены.",
-    finishEarly: "Закончить фото сейчас (тест)",
+    finishEarly: "Закончить фото сейчас",
     finishEarlyConfirm: "Закончить фото сейчас? Неснятые кадры будут пропущены.",
-    skipTest: "Пропустить (тест)",
+    skipTest: "Пропустить зону",
   },
 };
 function T() { return I18N[LANG] || I18N.en; }
@@ -2057,11 +2057,12 @@ async function endRound() {
 }
 
 async function skipShot(shotId) {
+  const shot = tour.shots.find(x => x.shot_id === shotId);
   try {
-    await api(`/api/runs/${encodeURIComponent(RUN)}/skip-shot`, {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/skip-room`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({shot_id: shotId}),
+      body: JSON.stringify({room_id: shot ? shot.room_id : ""}),
     });
     photoError = "";
     await refresh();

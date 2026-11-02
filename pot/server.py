@@ -144,6 +144,10 @@ class SkipShotBody(BaseModel):
     shot_id: str
 
 
+class SkipRoomBody(BaseModel):
+    room_id: str
+
+
 RESOLVE_ACTIONS = ("cant_fix", "its_fine")
 RESOLVE_REASONS = ("broken", "before", "supplies", "wont_clean", "other")
 
@@ -581,6 +585,16 @@ def create_app(client=None):
         except ValueError as exc:
             raise HTTPException(400, str(exc))
         return {"skipped": body.shot_id, "skipped_shots": skipped}
+
+    @app.post("/api/runs/{run_id}/skip-room")
+    def _skip_room(run_id: str, body: SkipRoomBody):
+        state = need_state(run_id)
+        _checked_id(body.room_id, "room")
+        try:
+            skipped = state.skip_room(body.room_id)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        return {"skipped": skipped}
 
     @app.post("/api/runs/{run_id}/finish")
     def _finish_run(run_id: str):

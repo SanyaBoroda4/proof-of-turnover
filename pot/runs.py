@@ -585,6 +585,26 @@ class RunState:
             self._save_locked()
             return list(self.skipped_shots)
 
+    def skip_room(self, room_id):
+        """Test/demo skip: every unphotographed shot of one room is skipped."""
+        with self.lock:
+            rooms = {room["id"] for room in self.property["rooms"]}
+            if room_id not in rooms:
+                raise ValueError(f"Unknown room '{room_id}'")
+            taken = self._taken_shots_locked()
+            skipped = []
+            for shot in self.tour["shots"]:
+                shot_id = shot["shot_id"]
+                if shot.get("room_id") != room_id:
+                    continue
+                if shot_id in taken or shot_id in self.skipped_shots:
+                    continue
+                self.skipped_shots.append(shot_id)
+                self._timeline_locked("shot_skipped", shot_id=shot_id)
+                skipped.append(shot_id)
+            self._save_locked()
+            return skipped
+
     def _cards_locked(self):
         """Open problem-card item ids in tour order (callers hold the lock).
 

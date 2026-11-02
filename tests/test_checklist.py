@@ -20,8 +20,13 @@ def _by_id(items):
 def test_rental_1_v6_checklist():
     prop = load_property("rental-1")
     items = _by_id(build_checklist(prop))
-    assert len(items) == 82
+    assert len(items) == 83
     assert items["kitchen.coffee_beans"].critical is True
+    assert items["kitchen.trash"].min_count == 1
+    assert items["kitchen.trash"].label == "Trash bin emptied, new liner"
+    assert items["kitchen.recycling"].min_count == 1
+    assert items["kitchen.recycling"].critical is True
+    assert items["kitchen.recycling"].label == "Recycling bin emptied, new liner"
     assert items["kitchen.coffee_machine_clean"].critical is False
     assert items["kitchen.paper_towels"].min_count == 1
     assert items["kitchen.fridge"].critical is True

@@ -243,10 +243,10 @@
     {
       "room": "kitchen",
       "key": "trash",
-      "label": "Trash bins emptied, new liners",
-      "requirement": "Both trash bins are empty and each has a new liner bag; no residue inside",
+      "label": "Trash bin emptied, new liner",
+      "requirement": "The trash bin is empty and has a new liner bag; no residue inside",
       "sam_prompt": "trash bag",
-      "min_count": 2,
+      "min_count": 1,
       "critical": true
     },
     {
@@ -498,6 +498,15 @@
       "sam_prompt": null,
       "min_count": null,
       "critical": false
+    },
+    {
+      "room": "kitchen",
+      "key": "recycling",
+      "label": "Recycling bin emptied, new liner",
+      "requirement": "The recycling bin is empty and has a new liner bag; no residue inside",
+      "sam_prompt": "trash bag",
+      "min_count": 1,
+      "critical": true
     }
   ]
 }

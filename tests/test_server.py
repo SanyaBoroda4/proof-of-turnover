@@ -968,3 +968,40 @@ def test_skip_shot_skips_cards_and_finish_allows_them():
     assert status["agent_state"] == "awaiting_signoff"
     done = test.post(f"/api/runs/{run_id}/finish?code={code}")
     assert done.status_code == 200, done.text
+
+
+def test_skip_room_skips_every_untaken_shot_of_the_room():
+    test, code = _client(inspector=_problem, verifier=_not_done)
+    run_id = _create_run(test, code)
+    assert test.post(
+        f"/api/runs/{run_id}/skip-room?code={code}",
+        json={"room_id": "nope-nothing"},
+    ).status_code == 400
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id)
+    assert len(status["cards"]) == 3
+    skipped = test.post(
+        f"/api/runs/{run_id}/skip-room?code={code}",
+        json={"room_id": "master-bathroom"},
+    )
+    assert skipped.status_code == 200, skipped.text
+    assert sorted(skipped.json()["skipped"]) == [
+        "master-bathroom-1", "master-bathroom-2", "master-bathroom-3"]
+    taken = test.post(
+        f"/api/runs/{run_id}/skip-room?code={code}",
+        json={"room_id": "master-bedroom"},
+    )
+    assert taken.status_code == 200
+    assert taken.json()["skipped"] == []
+    repeat = test.post(
+        f"/api/runs/{run_id}/skip-room?code={code}",
+        json={"room_id": "master-bathroom"},
+    )
+    assert repeat.status_code == 200
+    assert repeat.json()["skipped"] == []
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert len(status["cards"]) == 3
+    for shot_id in ("master-bathroom-1", "master-bathroom-2",
+                    "master-bathroom-3"):
+        assert shot_id in status["skipped_shots"]
+    assert "master-bedroom-1" not in status["skipped_shots"]
