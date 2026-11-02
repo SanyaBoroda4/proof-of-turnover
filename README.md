@@ -73,7 +73,7 @@ cp .env.example .env          # then set MODEL_API_KEY in .env
 .venv/bin/python -m pot.server
 ```
 
-The server prints “Meta API: OK” (or why the key was rejected), a host link, and a cleaner link, each with the access code (`POT_ACCESS_CODE` in `.env`, or a random one made at startup). Opening a link with `?code=...` once sets a cookie.
+The server prints “Meta API: OK” (or why the key was rejected), a host link with the host code (`POT_HOST_CODE` in `.env`, or a random one made at startup) and a cleaner link with the cleaner code (`POT_ACCESS_CODE`, also random when unset). The host page’s QR code carries the cleaner code. Opening a link with `?code=...` once sets a cookie.
 
 For the phone, keep the server on `127.0.0.1` and run:
 
@@ -85,7 +85,7 @@ Open `https://<tunnel-url>/host?code=<access-code>` on the laptop, then scan the
 
 ## Set up your own house
 
-Open `/setup` (linked from the cleaner's start screen, “Set up a new house”). Answer the house questions, then for each room: add photos of the clean room, type or speak your rules, let the app draft the checklist (“Make checklist”), edit it if needed, and move on. “Save house” writes the house and plans its tour; “Start turnover” opens the cleaner page with the new house.
+Open `/setup` from the “Set up a new house” link on the host page (it needs the host code; a phone that arrived from the cleaner QR code does not see a setup tile). Answer the house questions, then for each room: add photos of the clean room, type or speak your rules, let the app draft the checklist (“Make checklist”), edit it if needed, and move on. “Save house” writes the house and plans its tour; “Start turnover” opens the cleaner page with the new house.
 
 ## Under the hood
 
@@ -117,7 +117,7 @@ Open `/setup` (linked from the cleaner's start screen, “Set up a new house”)
 ## Privacy and safety
 
 - The app runs locally and only ever sends the host's own house photos and voice notes to the models. In contributor mode, content sent to the Meta models may be used by Meta.
-- Every page and API route sits behind one access code. Known limits today: that one code is shared by the host and cleaner pages (the cleaner link is a QR code), and the “Skip area” / “Finish photos now” links that exist for tests and demos are shown only with `?test=1` or `?demo=1` in the link.
+- Every page and API route sits behind an access code, and there are two: the host code (`POT_HOST_CODE`) gates sign-off, house setup and run administration, while the cleaner code (`POT_ACCESS_CODE`) covers the tour, photos, notes and voice; the host page’s QR code carries only the cleaner code. The “Skip area” / “Finish photos now” actions for tests and demos work only on runs started in test or demo mode — the server enforces this, not just the page.
 - Test data and samples in this repository never show people, door codes, Wi-Fi passwords, or personal documents.
 
 ## Tests
@@ -126,7 +126,7 @@ Open `/setup` (linked from the cleaner's start screen, “Set up a new house”)
 python -m pytest -q
 ```
 
-The suite (313 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
+The suite (319 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
 
 ## Built with
 

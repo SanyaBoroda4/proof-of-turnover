@@ -347,6 +347,10 @@ def test_cleaner_code_cannot_use_host_routes():
     assert test.get(f"/api/cleaner-code?code={code}").status_code == 401
     assert test.get(f"/api/cleaner-code?code={host}").json() == {"code": code}
     assert test.get(f"/host?code={host}").status_code == 200
+    assert test.get(f"/api/role?code={code}").json() == {"role": "cleaner"}
+    assert test.get(f"/api/role?code={host}").json() == {"role": "host"}
+    assert test.get(f"/setup?code={code}").status_code == 401
+    assert test.get(f"/setup?code={host}").status_code == 200
 
 
 def test_pages_need_code_and_serve_html():

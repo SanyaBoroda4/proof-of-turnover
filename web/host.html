@@ -293,6 +293,7 @@ function renderStatus(app) {
 
   app.innerHTML = `
     <h1>Turnover ${esc(status.run_id)}</h1>
+    <p><a class="small" href="/setup?code=${esc(CODE)}">Set up a new house</a></p>
     <div class="banner ${esc(status.agent_state)}">${esc(STATE_TEXT[status.agent_state] || status.agent_state)}</div>
     ${status.api_status && !status.api_status.ok ? `<div class="banner api-down">AI checks are failing: ${esc(status.api_status.message)}</div>` : ""}
     ${status.language ? `<div class="small">Cleaner language: ${esc(langNames[status.language] || status.language)}</div>` : ""}

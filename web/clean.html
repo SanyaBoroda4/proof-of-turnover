@@ -318,6 +318,7 @@ let recOnDone = null, recStart = 0, recSeconds = 0, recTimer = null;
 let transcribing = false, noteMsg = "", noteMsgTimer = null;
 let optimistic = new Map();
 let cardOrder = [], retakePhotos = {}, spokenCard = null, lastShownCard = null;
+let role = null;
 let cardsTotal = 0;
 let photosDoneSaid = false, saidFinal = false;
 let cardPanel = null, cardNoteId = null, cardNoteText = "";
@@ -1515,7 +1516,7 @@ function renderChoice(app) {
   app.innerHTML = `<div class="wrap">
     <div class="brand">${ICONS.home}<div class="wordmark">Proof of Turnover</div></div>
     <button class="btn tile" id="goTurnover">${esc(T().startTurnover)}</button>
-    <button class="btn secondary tile" id="goSetup">${esc(T().setupHouse)}</button>
+    ${role === "host" ? `<button class="btn secondary tile" id="goSetup">${esc(T().setupHouse)}</button>` : ""}
     <p class="langline"><a href="#" id="changeLang" class="link">Idioma · Language · Язык</a></p>
   </div>`;
   document.getElementById("goTurnover").onclick = () => {
@@ -1524,7 +1525,8 @@ function renderChoice(app) {
     lastKey = null;
     renderMaybe();
   };
-  document.getElementById("goSetup").onclick = () => {
+  const setupBtn = document.getElementById("goSetup");
+  if (setupBtn) setupBtn.onclick = () => {
     location.href = setupHref();
   };
   document.getElementById("changeLang").onclick = ev => {
@@ -1548,6 +1550,7 @@ async function renderLanguage(app) {
     try { LANGS = (await api("/api/languages")).languages; }
     catch (e) { return fail(app, e); }
   }
+  try { role = (await api(`/api/role?code=${encodeURIComponent(CODE)}`)).role; } catch (e) { role = null; }
   const saved = loadSavedLang();
   const buttons = LANGS.map(l =>
     `<button class="btn${l.code === saved ? " saved" : ""}" data-lang="${esc(l.code)}">${esc(l.name)}</button>`

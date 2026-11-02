@@ -923,6 +923,12 @@ def create_app(client=None):
     def _cleaner_code():
         return {"code": server.code}
 
+    @app.get("/api/role")
+    def _role(request: Request):
+        presented = (request.query_params.get("code")
+                     or request.cookies.get(COOKIE_NAME))
+        return {"role": "host" if presented == server.host_code else "cleaner"}
+
     @app.get("/api/server-ip")
     def _server_ip():
         return {"ip": local_ip()}
