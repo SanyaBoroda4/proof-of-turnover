@@ -322,14 +322,6 @@ function navReplace() {
   const at = currentNav();
   history.replaceState({pot: "setup", screen: at.screen, idx: at.idx}, "");
 }
-function goBack(fallback) {
-  if (navDepth > 0) {
-    navDepth--;
-    history.back();
-  } else {
-    fallback();
-  }
-}
 function applyNavState(state) {
   if (!state || state.pot !== "setup") return;
   editing = null;
@@ -598,12 +590,11 @@ function renderRoom(app) {
   if (draftBtn) draftBtn.onclick = () => makeDraft(room);
   wireDraft(app, room, draft);
   document.getElementById("rback").onclick = () => {
-    goBack(() => {
-      editing = null; err = "";
-      if (roomIdx > 0) { roomIdx--; }
-      else { screen = "review"; }
-      render();
-    });
+    editing = null; err = "";
+    if (roomIdx > 0) { roomIdx--; }
+    else { screen = "review"; }
+    navPush();
+    render();
   };
   document.getElementById("rskip").onclick = async () => {
     await putRoom(room, {skipped: room.status !== "skipped"});

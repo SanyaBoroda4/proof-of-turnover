@@ -1316,14 +1316,6 @@ function navReplace(name, url) {
   if (url === undefined) history.replaceState({pot: name}, "");
   else history.replaceState({pot: name}, "", url);
 }
-function goBack(fallback) {
-  if (navDepth > 0) {
-    navDepth--;
-    history.back();
-  } else {
-    fallback();
-  }
-}
 function applyNavState(name) {
   if (name !== "language" && name !== "choice" && name !== "houses") return;
   if (RUN) {
@@ -1512,11 +1504,10 @@ async function renderStart(app) {
   document.getElementById("start").onclick = startTour;
   document.getElementById("toChoice").onclick = ev => {
     ev.preventDefault();
-    goBack(() => {
-      modePicked = "";
-      lastKey = null;
-      renderMaybe();
-    });
+    modePicked = "";
+    navPush("choice");
+    lastKey = null;
+    renderMaybe();
   };
 }
 
@@ -1538,11 +1529,10 @@ function renderChoice(app) {
   };
   document.getElementById("changeLang").onclick = ev => {
     ev.preventDefault();
-    goBack(() => {
-      langPicked = false;
-      lastKey = null;
-      renderMaybe();
-    });
+    langPicked = false;
+    navPush("language");
+    lastKey = null;
+    renderMaybe();
   };
 }
 

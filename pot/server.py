@@ -710,7 +710,9 @@ def create_app(client=None):
             signoff = state.approve()
             for shot in state.tour["shots"]:
                 if examples_mod.has_example(
-                        state.property["id"], shot["shot_id"]):
+                        state.property["id"], shot["shot_id"]) and not (
+                        examples_mod.is_temporary(
+                            state.property["id"], shot["shot_id"])):
                     continue
                 photo = examples_mod.proving_photo_for_shot(state, shot)
                 if photo is not None:
@@ -718,6 +720,8 @@ def create_app(client=None):
                         state.property["id"], shot["shot_id"],
                         photo.overview_path,
                     )
+                    examples_mod.set_temporary(
+                        state.property["id"], shot["shot_id"], False)
         elif body.decision == "sendback":
             if not body.item_ids:
                 raise HTTPException(400, "Tick at least one item to send back")

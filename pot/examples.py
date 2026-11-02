@@ -29,6 +29,29 @@ def has_example(property_id, shot_id):
     return example_path(property_id, shot_id).is_file()
 
 
+def temporary_path(property_id, shot_id):
+    """Filesystem path of the shot's temporary-example marker."""
+    return Path(config.EXAMPLES_DIR) / property_id / f"{shot_id}.temporary"
+
+
+def is_temporary(property_id, shot_id):
+    """True when the shot's example is a stand-in that Approve may replace."""
+    return temporary_path(property_id, shot_id).is_file()
+
+
+def set_temporary(property_id, shot_id, temporary):
+    """Write or remove the temporary-example marker for one shot."""
+    path = temporary_path(property_id, shot_id)
+    if temporary:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+    else:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def save_example(property_id, shot_id, source):
     """Store source (path or bytes) as the shot's example; returns the path."""
     if isinstance(source, (bytes, bytearray)):

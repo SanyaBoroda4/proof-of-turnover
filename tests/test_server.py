@@ -950,6 +950,31 @@ def test_voice_endpoint_returns_mp3(monkeypatch):
     assert resp.content == b"ID3fake"
 
 
+def test_approve_replaces_temporary_example_and_clears_marker():
+    from pot import config, examples as examples_mod
+
+    test, code = _client()
+    run_id = _create_run(test, code)
+    examples_mod.save_example(
+        "demo-house", "master-bedroom-1", _example_jpeg("red"))
+    examples_mod.set_temporary("demo-house", "master-bedroom-1", True)
+    before = (
+        config.EXAMPLES_DIR / "demo-house" / "master-bedroom-1.jpg"
+    ).read_bytes()
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    approved = test.post(
+        f"/api/runs/{run_id}/signoff?code={code}",
+        json={"decision": "approve", "notes": "", "item_ids": []},
+    )
+    assert approved.status_code == 200, approved.text
+    after = (
+        config.EXAMPLES_DIR / "demo-house" / "master-bedroom-1.jpg"
+    ).read_bytes()
+    assert after != before
+    assert not examples_mod.is_temporary("demo-house", "master-bedroom-1")
+
+
 def test_voice_prefetch_endpoint(monkeypatch):
     calls = []
 

@@ -3,8 +3,11 @@
 For each shot with a "file", the photo is stored with
 pot.examples.save_example("rental-1", shot_id, ...). When an entry has
 "crop": [left, top, right, bottom] (fractions of width and height), the
-crop is applied (after EXIF transpose) before saving. Only the shots the
-map names are written; nothing is ever deleted.
+crop is applied (after EXIF transpose) before saving. An entry with
+"temporary": true also gets a <shot>.temporary marker next to the
+example (removed again for entries without it), so Approve knows the
+stand-in may be replaced by the first real clean photo. Only the shots
+the map names are written; no example photo is ever deleted.
 
 Run from the project root:
 
@@ -20,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image, ImageOps  # noqa: E402
 
-from pot.examples import save_example  # noqa: E402
+from pot.examples import save_example, set_temporary  # noqa: E402
 
 MAP = os.path.join("data", "inputs", "examples_map.json")
 PROPERTY = "rental-1"
@@ -48,6 +51,7 @@ def main():
             continue
         source = cropped_bytes(entry) if entry.get("crop") else entry["file"]
         print(f"{shot_id}: {save_example(PROPERTY, shot_id, source)}")
+        set_temporary(PROPERTY, shot_id, bool(entry.get("temporary")))
 
 
 if __name__ == "__main__":
