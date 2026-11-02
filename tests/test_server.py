@@ -1085,6 +1085,20 @@ def test_run_photo_upload_over_25mb_is_413():
     assert status["progress"]["shots_taken"] == 0
 
 
+def test_oversized_upload_leaves_no_temp_file():
+    import tempfile
+    from pathlib import Path
+
+    test, code = _client()
+    run_id = _create_run(test, code)
+    temp_dir = Path(tempfile.gettempdir())
+    before = set(temp_dir.glob("tmp*.jpg"))
+    response = _upload(test, code, run_id, "master-bedroom-1",
+                       payload=b"x" * (25 * 1024 * 1024 + 1))
+    assert response.status_code == 413
+    assert set(temp_dir.glob("tmp*.jpg")) <= before
+
+
 def test_skip_routes_reject_non_test_runs():
     test, code = _client()
     run_id = _create_run(test, code)

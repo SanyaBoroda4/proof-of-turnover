@@ -697,6 +697,10 @@ def create_app(client=None):
             raise HTTPException(400, str(exc))
         finally:
             try:
+                tmp.close()
+            except Exception:
+                pass
+            try:
                 os.unlink(tmp.name)
             except OSError:
                 pass
