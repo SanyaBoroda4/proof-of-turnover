@@ -738,14 +738,17 @@ class RunState:
         """True when the photo's calls since `before` hit an API failure.
 
         Failed box-pick calls do not count: the pick falls back to keeping
-        all boxes, so the photo was still judged.
+        all boxes, so the photo was still judged. Failed second opinions
+        do not count either: they run in the background after the photo
+        was judged and never change its proof.
         """
         with self.lock:
             return any(
                 record.get("photo_id") == photo_id
                 and api_failure(record)
                 and not (record.get("purpose") or "").startswith(
-                    ("pick problem boxes", "pick problem area"))
+                    ("pick problem boxes", "pick problem area",
+                     "second opinion"))
                 for record in self.calls[before:]
             )
 

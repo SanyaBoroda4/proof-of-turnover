@@ -188,7 +188,6 @@ def _wonder_job(server, state, item_id, snapshot):
     token = call_context.set({
         "run_dir": str(state.run_dir),
         "photo_id": snapshot["photo_id"],
-        "live_checks": True,
     })
     try:
         raw = Path(snapshot["overview_path"]).read_bytes()

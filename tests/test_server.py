@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from PIL.Image import Exif
 
-from pot.meta_client import MetaClientError
+from pot.meta_client import MetaClientError, call_context
 from pot.server import api_startup_line, create_app
 from tests.fakes import FakeSpark, photo_ids_in
 
@@ -833,6 +833,42 @@ def test_second_opinion_for_its_fine_uses_wonder_model():
              if (c.get("purpose") or "").startswith("second opinion")]
     assert len(calls) == 1
     assert calls[0]["model"] == "muse-wonder-1.0"
+
+
+class _ContextSpark(FakeSpark):
+    """Captures the call context seen by second-opinion calls."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.contexts = []
+
+    def respond(self, purpose, content, instructions=None, schema=None,
+                max_output_tokens=16000, effort="medium", model=None):
+        if schema and "opinion" in (schema.get("properties") or {}):
+            self.contexts.append(dict(call_context.get() or {}))
+        return super().respond(
+            purpose, content, instructions, schema,
+            max_output_tokens, effort, model,
+        )
+
+
+def test_second_opinion_runs_without_live_check_budget():
+    fake = _ContextSpark(inspector=_problem, verifier=_not_done)
+    test = TestClient(create_app(fake))
+    code = test.app.state.server.code
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    item_id = "master-bedroom.beds_made"
+    assert _resolve(test, code, run_id, item_id,
+                    action="its_fine", reason=None).status_code == 200
+    wonder = _await_wonder(test, code, run_id, item_id)
+    assert wonder.get("status") == "done"
+    assert len(fake.contexts) == 1
+    context = fake.contexts[0]
+    assert "live_checks" not in context
+    assert context.get("photo_id")
+    assert context.get("run_dir", "").endswith(run_id)
 
 
 def test_second_opinion_skipped_for_cant_fix_supplies():

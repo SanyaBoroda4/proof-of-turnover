@@ -613,7 +613,16 @@ const speechQueue = [];
 let speaking = false;
 let speechTimer = null;
 const voiceCache = new Map();
-let voiceOk = null, voiceUnlocked = false;
+let voiceOk = null, voiceUnlocked = false, voiceRetryAt = 0;
+
+function neuralPaused() {
+  return Date.now() < voiceRetryAt;
+}
+
+function pauseNeuralVoice() {
+  voiceOk = false;
+  voiceRetryAt = Date.now() + 120000;
+}
 
 function audioEl() {
   return document.getElementById("voiceAudio");
@@ -621,6 +630,7 @@ function audioEl() {
 
 async function neuralUrl(text) {
   if (voiceCache.has(text)) return voiceCache.get(text);
+  if (neuralPaused()) throw new Error("neural voice paused");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 5000);
   try {
@@ -634,6 +644,7 @@ async function neuralUrl(text) {
     const url = URL.createObjectURL(await r.blob());
     voiceCache.set(text, url);
     voiceOk = true;
+    voiceRetryAt = 0;
     return url;
   } finally {
     clearTimeout(timer);
@@ -644,6 +655,12 @@ function pumpSpeech() {
   if (speaking || !speechQueue.length) return;
   speaking = true;
   const text = speechQueue[0];
+  if (!voiceCache.has(text) && neuralPaused()) {
+    speechQueue.shift();
+    speaking = false;
+    speakWithPhone(text);
+    return;
+  }
   neuralUrl(text).then(url => {
     const el = audioEl();
     const done = () => {
@@ -654,6 +671,7 @@ function pumpSpeech() {
     };
     const fail = () => {
       el.onended = el.onerror = null;
+      pauseNeuralVoice();
       speechQueue.shift();
       speaking = false;
       speakWithPhone(text);
@@ -664,7 +682,7 @@ function pumpSpeech() {
     const playing = el.play();
     if (playing && playing.catch) playing.catch(fail);
   }).catch(() => {
-    voiceOk = false;
+    if (!neuralPaused()) pauseNeuralVoice();
     speechQueue.shift();
     speaking = false;
     speakWithPhone(text);
@@ -712,7 +730,11 @@ function prefetchSpeech() {
     }
   }
   for (const text of texts) {
-    if (text) neuralUrl(text).catch(() => {});
+    if (text) {
+      neuralUrl(text).catch(() => {
+        if (!neuralPaused()) pauseNeuralVoice();
+      });
+    }
   }
 }
 

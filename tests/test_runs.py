@@ -602,6 +602,7 @@ def test_pick_failures_do_not_make_photo_unchecked(tmp_path):
     assert not state.photo_had_api_failure(photo.id, 0)
     state.record_call(failed("pick problem boxes bed.beds_made P01 (shoe)"))
     state.record_call(failed("pick problem area bed.floor_clear P01"))
+    state.record_call(failed("second opinion bed.beds_made P01"))
     assert not state.photo_had_api_failure(photo.id, 0)
     state.record_call(failed("second look bed.beds_made P01"))
     assert state.photo_had_api_failure(photo.id, 0)
