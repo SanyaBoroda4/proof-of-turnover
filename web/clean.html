@@ -1623,7 +1623,7 @@ async function startTour() {
   try {
     const created = await api("/api/runs", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({property: property, demo: DEMO, language: LANG}),
+      body: JSON.stringify({property: property, demo: DEMO, test: TEST || DEMO, language: LANG}),
     });
     RUN = created.run_id;
     resetRunState();

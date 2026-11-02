@@ -98,7 +98,7 @@ class RunState:
     """One turnover run: in-memory proofs, requests and progress."""
 
     def __init__(self, run_dir, property, checklist, tour=None, started_at=None,
-                 demo=False, language=None):
+                 demo=False, language=None, test=False):
         self.run_dir = Path(run_dir)
         self.property = property
         self.language = language or property.get("cleaner_language", "es")
@@ -107,6 +107,7 @@ class RunState:
         self.rooms = {room["id"]: room for room in property["rooms"]}
         self.tour = tour or {"shots": []}
         self.demo = demo
+        self.test = bool(test or demo)
         self.started_at = started_at or datetime.now()
         self.lock = threading.Lock()
         self.photos = []
@@ -152,13 +153,14 @@ class RunState:
         }
 
     @classmethod
-    def create(cls, run_dir, property_id, tour=None, demo=False, language=None):
+    def create(cls, run_dir, property_id, tour=None, demo=False, language=None,
+               test=False):
         """Start a fresh run: seed state and write the initial files."""
         run_dir = Path(run_dir)
         run_dir.mkdir(parents=True, exist_ok=True)
         property = load_property(property_id)
         state = cls(run_dir, property, build_checklist(property), tour=tour,
-                     demo=demo, language=language)
+                     demo=demo, language=language, test=test)
         with state.lock:
             state._save_locked()
         return state
@@ -186,6 +188,7 @@ class RunState:
             started_at=datetime.fromisoformat(started_at) if started_at else None,
             demo=bool(first_data.get("demo", False)),
             language=first_data.get("language"),
+            test=bool(first_data.get("test", first_data.get("demo", False))),
         )
         for entry in first_data.get("photos", []):
             photo = Photo(
@@ -1135,6 +1138,7 @@ class RunState:
             "property": self.property["id"],
             "started_at": self.started_at.isoformat(timespec="seconds"),
             "demo": self.demo,
+            "test": self.test,
             "language": self.language,
             "tour": self.tour,
             "photos": [

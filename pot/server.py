@@ -274,6 +274,7 @@ def local_ip():
 class RunCreate(BaseModel):
     property: str
     demo: bool = False
+    test: bool = False
     language: str | None = None
 
 
@@ -567,7 +568,7 @@ def create_app(client=None):
             raise HTTPException(400, f"Unsupported language {language!r}")
         state = RunState.create(
             new_run_dir(), body.property, tour={"shots": shots}, demo=body.demo,
-            language=language,
+            test=body.test, language=language,
         )
         server.remember(state)
         return {
@@ -806,12 +807,16 @@ def create_app(client=None):
     @app.post("/api/runs/{run_id}/end-round")
     def _end_round(run_id: str):
         state = need_state(run_id)
+        if not state.test:
+            raise HTTPException(400, "skipping is only available in test mode")
         skipped = state.end_round()
         return {"round_ended": True, "skipped": skipped}
 
     @app.post("/api/runs/{run_id}/skip-shot")
     def _skip_shot(run_id: str, body: SkipShotBody):
         state = need_state(run_id)
+        if not state.test:
+            raise HTTPException(400, "skipping is only available in test mode")
         _checked_id(body.shot_id, "shot")
         try:
             skipped = state.skip_shot(body.shot_id)
@@ -822,6 +827,8 @@ def create_app(client=None):
     @app.post("/api/runs/{run_id}/skip-room")
     def _skip_room(run_id: str, body: SkipRoomBody):
         state = need_state(run_id)
+        if not state.test:
+            raise HTTPException(400, "skipping is only available in test mode")
         _checked_id(body.room_id, "room")
         try:
             skipped = state.skip_room(body.room_id)

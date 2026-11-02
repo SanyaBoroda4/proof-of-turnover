@@ -110,8 +110,9 @@ def _host(test):
     return test.app.state.server.host_code
 
 
-def _create_run(test, code, property="demo-house", demo=False, language=None):
-    body = {"property": property, "demo": demo}
+def _create_run(test, code, property="demo-house", demo=False, language=None,
+                test_mode=False):
+    body = {"property": property, "demo": demo, "test": test_mode}
     if language is not None:
         body["language"] = language
     response = test.post(f"/api/runs?code={code}", json=body)
@@ -1050,9 +1051,23 @@ def test_recheck_unchecked_retries_and_clears():
     assert again.json()["rechecking"] == []
 
 
+def test_skip_routes_reject_non_test_runs():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    assert test.post(f"/api/runs/{run_id}/end-round?code={code}").status_code == 400
+    assert test.post(
+        f"/api/runs/{run_id}/skip-shot?code={code}",
+        json={"shot_id": "master-bedroom-1"},
+    ).status_code == 400
+    assert test.post(
+        f"/api/runs/{run_id}/skip-room?code={code}",
+        json={"room_id": "master-bedroom"},
+    ).status_code == 400
+
+
 def test_end_round_skips_untaken_shots_and_finish_allows_them():
     test, code = _client(inspector=_problem, verifier=_not_done)
-    run_id = _create_run(test, code)
+    run_id = _create_run(test, code, test_mode=True)
     _upload(test, code, run_id, "master-bedroom-1")
     status = _wait_idle(test, code, run_id)
     taken_cards = [
@@ -1182,7 +1197,7 @@ def test_approve_never_overwrites_existing_examples():
 
 def test_progress_counts_skipped_shots_as_done():
     test, code = _client()
-    run_id = _create_run(test, code)
+    run_id = _create_run(test, code, test_mode=True)
     _upload(test, code, run_id, "master-bedroom-1")
     status = _wait_idle(test, code, run_id)
     assert status["progress"]["shots_taken"] == 1
@@ -1198,7 +1213,7 @@ def test_progress_counts_skipped_shots_as_done():
 
 def test_skip_shot_skips_cards_and_finish_allows_them():
     test, code = _client(inspector=_problem, verifier=_not_done)
-    run_id = _create_run(test, code)
+    run_id = _create_run(test, code, test_mode=True)
     _upload(test, code, run_id, "master-bedroom-1")
     status = _wait_idle(test, code, run_id)
     assert len(status["cards"]) == 3
@@ -1233,7 +1248,7 @@ def test_skip_shot_skips_cards_and_finish_allows_them():
 
 def test_skip_room_skips_every_untaken_shot_of_the_room():
     test, code = _client(inspector=_problem, verifier=_not_done)
-    run_id = _create_run(test, code)
+    run_id = _create_run(test, code, test_mode=True)
     assert test.post(
         f"/api/runs/{run_id}/skip-room?code={code}",
         json={"room_id": "nope-nothing"},
