@@ -286,6 +286,7 @@ class SignoffBody(BaseModel):
     decision: str
     notes: str = ""
     item_ids: list = []
+    force: bool = False
 
 
 class ResolveBody(BaseModel):
@@ -735,6 +736,24 @@ def create_app(client=None):
     @app.post("/api/runs/{run_id}/signoff")
     def _signoff(run_id: str, body: SignoffBody):
         state = need_state(run_id)
+        if body.decision == "approve" and not body.force:
+            agent_state = state.agent_state()
+            if agent_state != "awaiting_signoff":
+                with state.lock:
+                    open_count = len([
+                        item for item in state.checklist
+                        if item.critical
+                        and state.proofs[item.id].status != PROVEN
+                        and item.id not in state.resolutions
+                        and item.id not in state._skipped_only_locked()
+                    ])
+                    checking_count = len(state.checking)
+                raise HTTPException(
+                    400,
+                    f"Run is not ready to approve ({agent_state}): "
+                    f"{open_count} items open, {checking_count} photos "
+                    "checking. Confirm and approve with force to override.",
+                )
         if body.decision == "approve":
             signoff = state.approve()
             for shot in state.tour["shots"]:

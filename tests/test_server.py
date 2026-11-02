@@ -270,7 +270,7 @@ def test_signoff_approve_marks_done():
     _upload(test, code, run_id, "master-bedroom-1")
     _wait_idle(test, code, run_id)
     response = test.post(f"/api/runs/{run_id}/signoff?code={_host(test)}",
-                         json={"decision": "approve"})
+                         json={"decision": "approve", "force": True})
     assert response.status_code == 200
     assert response.json()["agent_state"] == "done"
     status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
@@ -310,6 +310,26 @@ def test_qr_returns_png():
     assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_approve_rejected_until_ready_unless_forced():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id)
+    assert status["agent_state"] != "awaiting_signoff"
+    rejected = test.post(
+        f"/api/runs/{run_id}/signoff?code={_host(test)}",
+        json={"decision": "approve", "notes": "", "item_ids": []},
+    )
+    assert rejected.status_code == 400
+    assert "items open" in rejected.json()["detail"]
+    assert "photos" in rejected.json()["detail"]
+    forced = test.post(
+        f"/api/runs/{run_id}/signoff?code={_host(test)}",
+        json={"decision": "approve", "force": True, "notes": "", "item_ids": []},
+    )
+    assert forced.status_code == 200, forced.text
+
+
 def test_cleaner_code_cannot_use_host_routes():
     test, code = _client()
     host = _host(test)
@@ -319,7 +339,7 @@ def test_cleaner_code_cannot_use_host_routes():
     assert test.get(f"/host?code={code}").status_code == 401
     assert test.post(
         f"/api/runs/{run_id}/signoff?code={code}",
-        json={"decision": "approve", "notes": "", "item_ids": []},
+        json={"decision": "approve", "force": True, "notes": "", "item_ids": []},
     ).status_code == 401
     assert test.post(
         f"/api/setups?code={code}", json={"name": "X"},
@@ -464,7 +484,7 @@ def test_status_news_covers_problem_request_and_signoff():
     assert kinds[0] == "request"
     assert "status" in kinds
     assert status["news"][0]["photo_id"] == "P01"
-    test.post(f"/api/runs/{run_id}/signoff?code={_host(test)}", json={"decision": "approve"})
+    test.post(f"/api/runs/{run_id}/signoff?code={_host(test)}", json={"decision": "approve", "force": True})
     status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
     assert status["news"][0]["kind"] == "signoff"
 
@@ -994,7 +1014,7 @@ def test_approve_replaces_temporary_example_and_clears_marker():
     _wait_idle(test, code, run_id)
     approved = test.post(
         f"/api/runs/{run_id}/signoff?code={_host(test)}",
-        json={"decision": "approve", "notes": "", "item_ids": []},
+        json={"decision": "approve", "force": True, "notes": "", "item_ids": []},
     )
     assert approved.status_code == 200, approved.text
     after = (
@@ -1161,7 +1181,7 @@ def test_approve_learns_missing_examples_from_proving_photos():
     _wait_idle(test, code, run_id)
     approved = test.post(
         f"/api/runs/{run_id}/signoff?code={_host(test)}",
-        json={"decision": "approve", "notes": "", "item_ids": []},
+        json={"decision": "approve", "force": True, "notes": "", "item_ids": []},
     )
     assert approved.status_code == 200, approved.text
     learned = config.EXAMPLES_DIR / "demo-house" / "master-bedroom-1.jpg"
@@ -1186,7 +1206,7 @@ def test_approve_never_overwrites_existing_examples():
     _wait_idle(test, code, run_id)
     approved = test.post(
         f"/api/runs/{run_id}/signoff?code={_host(test)}",
-        json={"decision": "approve", "notes": "", "item_ids": []},
+        json={"decision": "approve", "force": True, "notes": "", "item_ids": []},
     )
     assert approved.status_code == 200, approved.text
     after = (

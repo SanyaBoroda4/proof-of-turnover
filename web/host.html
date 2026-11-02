@@ -326,11 +326,22 @@ function renderStatus(app) {
     <table class="calls"><tr><th>Time</th><th>Model</th><th>Checked</th><th>Photo</th><th>Sec</th><th>Live/recorded</th></tr>${callRows}</table>`;
 
   document.getElementById("approve").onclick = async () => {
-    await api(`/api/runs/${encodeURIComponent(RUN)}/signoff`, {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({decision: "approve"}),
-    });
-    document.getElementById("signMsg").textContent = "Approved.";
+    let force = false;
+    if (status && status.agent_state !== "awaiting_signoff") {
+      const open = (status.open || []).length;
+      const checking = (status.checking || []).length;
+      if (!confirm(`Approve anyway? ${open} items open, ${checking} photos checking.`)) return;
+      force = true;
+    }
+    try {
+      await api(`/api/runs/${encodeURIComponent(RUN)}/signoff`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({decision: "approve", force: force}),
+      });
+      document.getElementById("signMsg").textContent = "Approved.";
+    } catch (e) {
+      document.getElementById("signMsg").textContent = e.message;
+    }
     await refresh();
     renderMaybe(true);
   };
