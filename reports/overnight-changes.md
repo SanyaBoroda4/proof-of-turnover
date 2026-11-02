@@ -1,9 +1,10 @@
-# Overnight changes (branch `overnight`, not merged)
+# Overnight changes (branch `overnight`; merged into main in Step 49)
 
 Base: `a1e2b3b` (Step 47a on main). No live API calls were made in
 Part 2; every item has fake-client tests and the full suite ran after
-each item (final count below). Nothing here is on `main`, and
-`properties/rental-1`, `data/`, and the page design are untouched.
+each item (final count below). At the time of writing nothing here was on `main` yet (Step 49
+below merged it), and `properties/rental-1`, `data/`, and the page
+design are untouched.
 
 ## Speed analysis (item 0, report only)
 
@@ -95,8 +96,14 @@ changes when cards appear during the round).
   file on Windows (new test); Russian setup pages get their
   “??????? ? ????-????” heading instead of “undefined”.
 
-Final state after Step 48: full suite **319 passed** (run with the
-main folder's venv, from this worktree). The branch is ready to
-merge into main after filming; nothing was merged or pushed to
-main.
+## Step 49: merged into main, Overnight 2 re-applied
 
+The overnight branch was fast-forwarded into `main` on Nov 2, and
+the Step 48a revert was itself reverted (`32b25eb`), so the
+cited-only checks from Overnight 2 (`cae106f`) are live on main
+after all, at Alex's request: all results are revealed after the
+last photo, so per-photo speed matters less than fewer calls, and
+the verdicts are unchanged. The Step 48a slowdown note above stays
+as the recorded trade-off.
+
+Final state on main after the merge: full suite **320 passed**.
