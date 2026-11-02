@@ -141,6 +141,7 @@ const I18N = {
     addRoom: "+ Agrega un cuarto", roomType: "Tipo",
     saveHouse: "Guardar casa", planning: "Planeando el tour de fotos…",
     retryTour: "Reintentar tour",
+    tourNotes: "Notas del tour",
     done: (name, r, i, p) => `✓ ${name} está lista: ${r}, ${i}, ${p}`,
     startTurnover: "Empezar turno", startOver: "Empezar de nuevo",
     authError: "Este enlace no tiene código. Pide el enlace completo.",
@@ -197,6 +198,7 @@ const I18N = {
     addRoom: "+ Add a room", roomType: "Type",
     saveHouse: "Save house", planning: "Planning the photo tour…",
     retryTour: "Retry photo tour",
+    tourNotes: "Photo tour notes",
     done: (name, r, i, p) => `✓ ${name} is ready: ${r}, ${i}, ${p}`,
     startTurnover: "Start turnover", startOver: "Start over",
     authError: "This link has no code. Ask for the full link.",
@@ -854,10 +856,19 @@ async function makeDraft(room) {
   render();
 }
 
+
+function tourNotesHtml() {
+  const notes = (setup.save_result || {}).tour_notes || [];
+  if (!notes.length) return "";
+  return `<h2>${esc(T().tourNotes)}</h2><ul>` +
+    notes.map(n => `<li>${esc(n)}</li>`).join("") + `</ul>`;
+}
+
 function renderReview(app) {
   const t = T();
   let html = homeHtml() + `<h1>${esc(t.review)}: ${esc(setup.name)}</h1>`;
   if (err) html += `<div class="error">${esc(err)}</div>`;
+  html += tourNotesHtml();
   setup.rooms.forEach((room, idx) => {
     const checks = room.draft ? t.checks(room.draft.items.length) : "";
     const status = room.status === "ready" && room.stale
@@ -949,6 +960,7 @@ function renderDone(app) {
   let html = homeHtml() + `<h1>${esc(t.title)}</h1>`;
   if (err) html += `<div class="error">${esc(err)}</div>`;
   html += `<div class="result ok">${esc(summary)}</div>`;
+  html += tourNotesHtml();
   if (res.tour_error !== undefined && res.shots === undefined) {
     html += `<div class="result bad">${esc(res.tour_error || "")}</div>
       <button class="btn secondary" id="retryBtn">${esc(t.retryTour)}</button>`;

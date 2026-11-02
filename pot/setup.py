@@ -763,7 +763,7 @@ def _save_now(client, setup_id):
         }
     # The tour call runs without the lock; reads and edits keep working.
     try:
-        shots, _notes = generate_tour(client, property, checklist)
+        shots, notes = generate_tour(client, property, checklist)
     except PropertyError as exc:
         with _lock_for(setup_id):
             setup = load_setup(setup_id)
@@ -772,6 +772,7 @@ def _save_now(client, setup_id):
             _save_locked(setup)
         return dict(result, tour_error=str(exc))
     result["shots"] = len(shots)
+    result["tour_notes"] = notes
     _save_setup_examples(setup_id, property_id, shots)
     with _lock_for(setup_id):
         setup = load_setup(setup_id)
@@ -821,14 +822,16 @@ def _retry_tour_now(client, setup_id):
             raise SetupError("Save the house before planning its tour")
     property = load_property(property_id)
     try:
-        shots, _notes = generate_tour(client, property, build_checklist(property))
+        shots, notes = generate_tour(client, property, build_checklist(property))
     except PropertyError as exc:
         return {"property_id": property_id, "tour_error": str(exc)}
     with _lock_for(setup_id):
         setup = load_setup(setup_id)
         result = dict(setup.get("save_result") or {}, property_id=property_id)
         result["shots"] = len(shots)
+        result["tour_notes"] = notes
         result.pop("tour_error", None)
         setup["save_result"] = result
         _save_locked(setup)
-    return {"property_id": property_id, "shots": len(shots)}
+    return {"property_id": property_id, "shots": len(shots),
+            "tour_notes": notes}

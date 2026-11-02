@@ -391,6 +391,7 @@ def test_save_writes_property_and_tour(dirs):
     body = saved.json()
     assert body["property_id"] == "setup-test"
     assert body["rooms"] == 7 and body["items"] > 7 and body["shots"] > 0
+    assert isinstance(body["tour_notes"], list) and body["tour_notes"]
     prop_path = dirs / "properties" / "setup-test" / "property.json"
     assert prop_path.is_file()
     assert (dirs / "properties" / "setup-test" / "tour.json").is_file()
@@ -485,7 +486,7 @@ def test_tour_failure_keeps_property_and_retries(dirs):
     assert not (dirs / "properties" / "setup-test" / "tour.json").exists()
     test.app.state.server.client._tour = lambda call: {"shots": []}
     retried = test.post(f"/api/setups/{sid}/tour?code={code}").json()
-    assert retried == {"property_id": "setup-test", "shots": retried["shots"]}
+    assert retried["property_id"] == "setup-test" and isinstance(retried["tour_notes"], list)
     assert retried["shots"] > 0
     assert (dirs / "properties" / "setup-test" / "tour.json").is_file()
 
