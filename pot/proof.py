@@ -108,10 +108,12 @@ def prove_item(item, claim, second, sam, photo_unknown, coverage, first_room_pho
                 f"No '{item.sam_prompt}' found in the photo", claim.photo_id,
             )
         if item.min_count is not None:
-            best = max(
-                [sam.count if sam is not None else 0]
-                + [second.count_seen if second.count_seen is not None else 0]
-            )
+            if item.sam_prompt is not None:
+                # Countable with a SAM prompt: SAM itself must find
+                # enough; the second look's count cannot substitute.
+                best = sam.count if sam is not None else 0
+            else:
+                best = second.count_seen if second.count_seen is not None else 0
             if best < item.min_count:
                 return ProofItem(
                     item.id, NEEDS_PROOF,

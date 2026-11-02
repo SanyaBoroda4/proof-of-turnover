@@ -135,10 +135,11 @@ def test_done_sam_missing_needs_proof():
     assert _prove(sam=None).status == NEEDS_PROOF
 
 
-def test_done_count_reached_by_second_look_when_sam_merges():
+def test_done_sam_below_count_needs_proof_despite_second_look():
     item = _item(min_count=4)
     proof = _prove(item=item, sam=_sam(count=1), second=_second(count_seen=4))
-    assert proof.status == PROVEN
+    assert proof.status == NEEDS_PROOF
+    assert "1 of at least 4" in proof.reason
 
 
 def test_done_count_reached_by_sam():
@@ -151,7 +152,7 @@ def test_done_count_too_low_needs_proof():
     item = _item(min_count=4)
     proof = _prove(item=item, sam=_sam(count=1), second=_second(count_seen=2))
     assert proof.status == NEEDS_PROOF
-    assert "2 of at least 4" in proof.reason
+    assert "1 of at least 4" in proof.reason
 
 
 def test_done_count_without_sam_uses_second_look():

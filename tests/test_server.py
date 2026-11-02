@@ -12,7 +12,7 @@ from PIL.Image import Exif
 
 from pot.meta_client import MetaClientError, call_context
 from pot.server import api_startup_line, create_app
-from tests.fakes import FakeSpark, photo_ids_in
+from tests.fakes import SAM_FIXTURE, FakeSpark, photo_ids_in
 
 
 class _ApiDownSpark(FakeSpark):
@@ -659,7 +659,12 @@ def test_finish_refused_while_photo_checking():
 
 
 def test_full_tour_proves_and_finishes():
-    test, code = _client()
+    # SAM must find 4 towels itself now (the second look cannot lend
+    # its count): clone one fixture object so the fake finds 4.
+    extra = "," + "3" + SAM_FIXTURE[
+        SAM_FIXTURE.index("1<|box") + 1:SAM_FIXTURE.index(",2<|box")]
+    extra += ",4" + SAM_FIXTURE[SAM_FIXTURE.index(",2<|box") + 3:].rstrip()
+    test, code = _client(sam=lambda call: SAM_FIXTURE.rstrip() + extra)
     run_id = _create_run(test, code)
     tour = test.get(f"/api/runs/{run_id}/tour?code={code}").json()
     assert len(tour["shots"]) == 11
