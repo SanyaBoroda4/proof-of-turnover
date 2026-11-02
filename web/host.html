@@ -94,6 +94,7 @@ const TEST = params.get("test") === "1";
 const FOLLOW = !params.get("run");
 let RUN = params.get("run") || "";
 let status = null, calls = [], runsList = [], lastKey = null, cleanerUrl = "";
+let cleanerCode = CODE;
 let langNames = {};
 
 async function api(path, opts) {
@@ -375,7 +376,8 @@ async function resolveCleanerUrl() {
       hostPart = ip + (location.port ? ":" + location.port : "");
     } catch (e) {}
   }
-  cleanerUrl = `${location.protocol}//${hostPart}/clean?code=${encodeURIComponent(CODE)}`
+  try { cleanerCode = (await api("/api/cleaner-code")).code || cleanerCode; } catch (e) {}
+  cleanerUrl = `${location.protocol}//${hostPart}/clean?code=${encodeURIComponent(cleanerCode)}`
     + (DEMO ? "&demo=1" : "") + (TEST ? "&test=1" : "");
   paintQr();
 }

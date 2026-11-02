@@ -22,7 +22,7 @@ def dirs(tmp_path, monkeypatch):
 @pytest.fixture
 def client():
     test = TestClient(create_app(FakeSpark()))
-    return test, test.app.state.server.code
+    return test, test.app.state.server.host_code
 
 
 def _jpeg(color="green"):
@@ -206,7 +206,7 @@ def test_photos_capped_and_non_images_refused(dirs, client):
 
 def test_draft_needs_a_photo_and_stores_fixup(dirs, client):
     test = TestClient(create_app(FakeSpark(drafter=lambda call: _draft_answer())))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _create(test, code)["setup_id"]
     assert test.post(
         f"/api/setups/{sid}/rooms/kitchen/draft?code={code}").status_code == 400
@@ -226,7 +226,7 @@ def test_draft_uses_configured_model_and_effort(dirs, monkeypatch):
     monkeypatch.setattr(config, "SETUP_MODEL", "muse-wonder-1.0")
     monkeypatch.setattr(config, "SETUP_EFFORT", "minimal")
     test = TestClient(create_app(FakeSpark(drafter=lambda call: _draft_answer())))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _create(test, code)["setup_id"]
     assert _photo(test, code, sid, "kitchen").status_code == 200
     draft = test.post(f"/api/setups/{sid}/rooms/kitchen/draft?code={code}")
@@ -310,7 +310,7 @@ def test_voice_no_speech_english_and_spanish(dirs, tmp_path, client):
 
     quiet = TestClient(create_app(FakeSpark(
         transcript=lambda call: {"transcript": "", "turns": []})))
-    hush = quiet.app.state.server.code
+    hush = quiet.app.state.server.host_code
     qid = _create(quiet, hush)["setup_id"]
     silent = quiet.post(
         f"/api/setups/{qid}/rooms/kitchen/voice?code={hush}",
@@ -330,7 +330,7 @@ def test_voice_no_speech_english_and_spanish(dirs, tmp_path, client):
     assert fake.calls == []
 
     spanish = TestClient(create_app(FakeSpark()))
-    scode = spanish.app.state.server.code
+    scode = spanish.app.state.server.host_code
     esid = _create(spanish, scode, dict(ANSWERS, language="es"))["setup_id"]
     translated = spanish.post(
         f"/api/setups/{esid}/rooms/kitchen/voice?code={scode}",
@@ -373,7 +373,7 @@ def test_save_writes_property_and_tour(dirs):
     from pot.checklist import build_checklist, load_property
 
     test = TestClient(create_app(_drafting_client()))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _ready_setup(test, code, skip=("laundry",))
     saved = test.post(f"/api/setups/{sid}/save?code={code}")
     assert saved.status_code == 200, saved.text
@@ -399,7 +399,7 @@ def test_save_writes_room_photo_as_shot_examples(dirs):
     from pot import config
 
     test = TestClient(create_app(_drafting_client()))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     setup_id = _ready_setup(test, code)
     saved = test.post(f"/api/setups/{setup_id}/save?code={code}")
     assert saved.status_code == 200, saved.text
@@ -417,7 +417,7 @@ def test_save_writes_room_photo_as_shot_examples(dirs):
 
 def test_save_needs_ready_rooms_and_unique_id(dirs):
     test = TestClient(create_app(_drafting_client()))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _create(test, code)["setup_id"]
     response = test.post(f"/api/setups/{sid}/save?code={code}")
     assert response.status_code == 400
@@ -442,7 +442,7 @@ def test_standard_key_replaces_standard_item(dirs):
 
     test = TestClient(create_app(
         FakeSpark(drafter=draft_toilet, tour=lambda call: {"shots": []})))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _create(test, code, dict(
         ANSWERS, name="Toilet house", bedrooms=0, full_baths=0, half_baths=1,
         kitchen=False, living_room=False, laundry=False, back_porch=False,
@@ -465,7 +465,7 @@ def test_tour_failure_keeps_property_and_retries(dirs):
 
     test = TestClient(create_app(FakeSpark(
         drafter=lambda call: _draft_answer(), tour=boom)))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _ready_setup(test, code)
     saved = test.post(f"/api/setups/{sid}/save?code={code}").json()
     assert saved["property_id"] == "setup-test"
@@ -487,7 +487,7 @@ def _kitchen(test, code, sid):
 
 def test_rules_change_marks_stale_and_blocks_save(dirs):
     test = TestClient(create_app(_drafting_client()))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _ready_setup(test, code)
     assert _kitchen(test, code, sid)["stale"] is False
     put = test.put(
@@ -508,7 +508,7 @@ def test_rules_change_marks_stale_and_blocks_save(dirs):
 
 def test_same_rules_and_photo_tweaks_set_stale(dirs):
     test = TestClient(create_app(_drafting_client()))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _create(test, code)["setup_id"]
     assert _photo(test, code, sid, "kitchen").status_code == 200
     test.put(f"/api/setups/{sid}/rooms/kitchen?code={code}", json={"rules": "Same."})
@@ -528,7 +528,7 @@ def test_same_rules_and_photo_tweaks_set_stale(dirs):
 
 def test_save_twice_reuses_property_id(dirs):
     test = TestClient(create_app(_drafting_client()))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _ready_setup(test, code)
     first = test.post(f"/api/setups/{sid}/save?code={code}").json()
     second = test.post(f"/api/setups/{sid}/save?code={code}").json()
@@ -550,7 +550,7 @@ def test_second_save_while_saving_returns_409(dirs):
 
     test = TestClient(create_app(FakeSpark(
         drafter=lambda call: _draft_answer(), tour=slow_tour)))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _ready_setup(test, code)
     outcome = {}
 
@@ -582,7 +582,7 @@ def test_get_answers_while_draft_is_blocked(dirs):
     entered = threading.Event()
     release = threading.Event()
     test = TestClient(_blocking_draft_client(entered, release))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _create(test, code)["setup_id"]
     assert _photo(test, code, sid, "kitchen").status_code == 200
     outcome = {}
@@ -608,7 +608,7 @@ def test_mid_draft_room_delete_drops_result(dirs):
     entered = threading.Event()
     release = threading.Event()
     test = TestClient(_blocking_draft_client(entered, release))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _create(test, code)["setup_id"]
     assert _photo(test, code, sid, "kitchen").status_code == 200
     outcome = {}
@@ -638,7 +638,7 @@ def test_mid_draft_rule_change_marks_stale(dirs):
     entered = threading.Event()
     release = threading.Event()
     test = TestClient(_blocking_draft_client(entered, release))
-    code = test.app.state.server.code
+    code = test.app.state.server.host_code
     sid = _create(test, code)["setup_id"]
     assert _photo(test, code, sid, "kitchen").status_code == 200
     outcome = {}

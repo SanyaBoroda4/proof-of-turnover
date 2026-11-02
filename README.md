@@ -89,7 +89,7 @@ Open `/setup` (linked from the cleaner's start screen, “Set up a new house”)
 
 ## Under the hood
 
-- **Server:** one FastAPI app in `pot/server.py`; it serves three single-file pages from `web/` (`clean.html` for the cleaner, `setup.html` for house setup, `host.html` for the host) and a JSON API behind one access code.
+- **Server:** one FastAPI app in `pot/server.py`; it serves three single-file pages from `web/` (`clean.html` for the cleaner, `setup.html` for house setup, `host.html` for the host) and a JSON API behind separate host and cleaner access codes.
 - **`pot/` modules:**
   - `checklist.py` — house-plan loading and checklist generation
   - `config.py` — shared configuration (models, folders, languages)

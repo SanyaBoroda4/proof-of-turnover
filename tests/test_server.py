@@ -106,6 +106,10 @@ def _client(inspector=_done, **kwargs):
     return test, code
 
 
+def _host(test):
+    return test.app.state.server.host_code
+
+
 def _create_run(test, code, property="demo-house", demo=False, language=None):
     body = {"property": property, "demo": demo}
     if language is not None:
@@ -146,7 +150,7 @@ def test_access_code_required_on_every_route():
     assert test.get("/api/runs/nope/status").status_code == 401
     assert test.post("/api/tour", json={"property": "demo-house"}).status_code == 401
     # ?code= once works and sets a cookie for later calls.
-    response = test.get(f"/api/server-ip?code={code}")
+    response = test.get(f"/api/server-ip?code={_host(test)}")
     assert response.status_code == 200
     assert response.json()["ip"]
     assert test.get("/api/server-ip").status_code == 200
@@ -187,7 +191,7 @@ def test_upload_flow_proves_and_tracks_progress(tmp_path):
     assert all(i["status"] == "not yet" for i in bath["items"]
                if i["id"] != "guest-bedroom.coverage")
     assert all(i["request"] is None for i in bath["items"])
-    calls = test.get(f"/api/runs/{run_id}/calls?code={code}").json()["calls"]
+    calls = test.get(f"/api/runs/{run_id}/calls?code={_host(test)}").json()["calls"]
     assert calls
     assert all(c["photo_id"] == "P01" for c in calls)
     assert {c["model"] for c in calls} == {"test-spark", "test-sam"}
@@ -264,7 +268,7 @@ def test_signoff_approve_marks_done():
     run_id = _create_run(test, code)
     _upload(test, code, run_id, "master-bedroom-1")
     _wait_idle(test, code, run_id)
-    response = test.post(f"/api/runs/{run_id}/signoff?code={code}",
+    response = test.post(f"/api/runs/{run_id}/signoff?code={_host(test)}",
                          json={"decision": "approve"})
     assert response.status_code == 200
     assert response.json()["agent_state"] == "done"
@@ -279,7 +283,7 @@ def test_signoff_sendback_reopens_items_with_spanish_request():
     _upload(test, code, run_id, "master-bedroom-1")
     _wait_idle(test, code, run_id)
     response = test.post(
-        f"/api/runs/{run_id}/signoff?code={code}",
+        f"/api/runs/{run_id}/signoff?code={_host(test)}",
         json={"decision": "sendback", "notes": "Haz la cama otra vez",
               "item_ids": ["master-bedroom.beds_made"]},
     )
@@ -291,18 +295,37 @@ def test_signoff_sendback_reopens_items_with_spanish_request():
     assert item["status"] == "needs photo"
     assert item["reason"] == "Haz la cama otra vez"
     assert item["request"]["cleaner"]
-    assert test.post(f"/api/runs/{run_id}/signoff?code={code}",
+    assert test.post(f"/api/runs/{run_id}/signoff?code={_host(test)}",
                      json={"decision": "sendback", "item_ids": []}).status_code == 400
-    assert test.post(f"/api/runs/{run_id}/signoff?code={code}",
+    assert test.post(f"/api/runs/{run_id}/signoff?code={_host(test)}",
                      json={"decision": "maybe"}).status_code == 400
 
 
 def test_qr_returns_png():
     test, code = _client()
-    response = test.get(f"/api/qr?code={code}&text=http://example/clean?code={code}")
+    response = test.get(f"/api/qr?code={_host(test)}&text=http://example/clean?code={code}")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_cleaner_code_cannot_use_host_routes():
+    test, code = _client()
+    host = _host(test)
+    assert host and host != code
+    run_id = _create_run(test, code)
+    assert test.get(f"/api/runs/{run_id}/status?code={code}").status_code == 200
+    assert test.get(f"/host?code={code}").status_code == 401
+    assert test.post(
+        f"/api/runs/{run_id}/signoff?code={code}",
+        json={"decision": "approve", "notes": "", "item_ids": []},
+    ).status_code == 401
+    assert test.post(
+        f"/api/setups?code={code}", json={"name": "X"},
+    ).status_code == 401
+    assert test.get(f"/api/cleaner-code?code={code}").status_code == 401
+    assert test.get(f"/api/cleaner-code?code={host}").json() == {"code": code}
+    assert test.get(f"/host?code={host}").status_code == 200
 
 
 def test_pages_need_code_and_serve_html():
@@ -312,7 +335,7 @@ def test_pages_need_code_and_serve_html():
     clean = test.get(f"/clean?code={code}")
     assert clean.status_code == 200
     assert "Turno de limpieza" in clean.text
-    host = test.get(f"/host?code={code}")
+    host = test.get(f"/host?code={_host(test)}")
     assert host.status_code == 200
     assert "Turnover" in host.text
     index = test.get(f"/?code={code}", follow_redirects=False)
@@ -325,9 +348,9 @@ def test_properties_and_runs_lists():
     props = test.get(f"/api/properties?code={code}").json()["properties"]
     ids = {p["id"] for p in props}
     assert {"demo-house", "rental-1"} <= ids
-    assert test.get(f"/api/runs?code={code}").json() == {"runs": []}
+    assert test.get(f"/api/runs?code={_host(test)}").json() == {"runs": []}
     run_id = _create_run(test, code)
-    runs = test.get(f"/api/runs?code={code}").json()["runs"]
+    runs = test.get(f"/api/runs?code={_host(test)}").json()["runs"]
     assert [r["run_id"] for r in runs] == [run_id]
     assert runs[0]["property"] == "demo-house"
     assert runs[0]["agent_state"] == "needs_input"
@@ -386,7 +409,7 @@ def test_latest_run_without_loading(tmp_path):
     # Lexicographic max would be the _2 suffixed older run; time wins.
     assert latest_run_id() == "run-20261031-101242"
     test, code = _client()
-    assert test.get(f"/api/runs/latest?code={code}").json() == {
+    assert test.get(f"/api/runs/latest?code={_host(test)}").json() == {
         "run_id": "run-20261031-101242"}
 
 
@@ -440,7 +463,7 @@ def test_status_news_covers_problem_request_and_signoff():
     assert kinds[0] == "request"
     assert "status" in kinds
     assert status["news"][0]["photo_id"] == "P01"
-    test.post(f"/api/runs/{run_id}/signoff?code={code}", json={"decision": "approve"})
+    test.post(f"/api/runs/{run_id}/signoff?code={_host(test)}", json={"decision": "approve"})
     status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
     assert status["news"][0]["kind"] == "signoff"
 
@@ -461,7 +484,7 @@ def test_generate_tour_endpoint(tmp_path, monkeypatch):
         }]}
     test = TestClient(create_app(FakeSpark(tour=tour)))
     code = test.app.state.server.code
-    response = test.post(f"/api/tour?code={code}", json={"property": "demo-house"})
+    response = test.post(f"/api/tour?code={_host(test)}", json={"property": "demo-house"})
     assert response.status_code == 200
     shots = response.json()["shots"]
     assert shots[0]["shot_id"] == "bed-1"
@@ -535,13 +558,13 @@ def test_notes_endpoint_stores_and_serves_audio(tmp_path):
     status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
     assert [n["id"] for n in status["voice_notes"]] == ["N01"]
     assert status["news"][0]["kind"] == "note"
-    audio = test.get(f"/api/runs/{run_id}/notes/N01/audio?code={code}")
+    audio = test.get(f"/api/runs/{run_id}/notes/N01/audio?code={_host(test)}")
     assert audio.status_code == 200
     assert audio.headers["content-type"] == "audio/wav"
     assert audio.content[:4] == b"RIFF"
-    assert test.get(f"/api/runs/{run_id}/notes/N99/audio?code={code}").status_code == 404
+    assert test.get(f"/api/runs/{run_id}/notes/N99/audio?code={_host(test)}").status_code == 404
     purposes = [c["purpose"] for c in
-                test.get(f"/api/runs/{run_id}/calls?code={code}").json()["calls"]]
+                test.get(f"/api/runs/{run_id}/calls?code={_host(test)}").json()["calls"]]
     assert any(p.startswith("transcribe voice note") for p in purposes)
     assert any(p.startswith("translate voice note") for p in purposes)
 
@@ -969,7 +992,7 @@ def test_approve_replaces_temporary_example_and_clears_marker():
     _upload(test, code, run_id, "master-bedroom-1")
     _wait_idle(test, code, run_id)
     approved = test.post(
-        f"/api/runs/{run_id}/signoff?code={code}",
+        f"/api/runs/{run_id}/signoff?code={_host(test)}",
         json={"decision": "approve", "notes": "", "item_ids": []},
     )
     assert approved.status_code == 200, approved.text
@@ -1122,7 +1145,7 @@ def test_approve_learns_missing_examples_from_proving_photos():
     _upload(test, code, run_id, "master-bedroom-1")
     _wait_idle(test, code, run_id)
     approved = test.post(
-        f"/api/runs/{run_id}/signoff?code={code}",
+        f"/api/runs/{run_id}/signoff?code={_host(test)}",
         json={"decision": "approve", "notes": "", "item_ids": []},
     )
     assert approved.status_code == 200, approved.text
@@ -1147,7 +1170,7 @@ def test_approve_never_overwrites_existing_examples():
     _upload(test, code, run_id, "master-bedroom-1")
     _wait_idle(test, code, run_id)
     approved = test.post(
-        f"/api/runs/{run_id}/signoff?code={code}",
+        f"/api/runs/{run_id}/signoff?code={_host(test)}",
         json={"decision": "approve", "notes": "", "item_ids": []},
     )
     assert approved.status_code == 200, approved.text

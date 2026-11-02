@@ -71,10 +71,10 @@ def latest_run_id():
     return best
 
 
-def startup_lines(port, code):
+def startup_lines(port, code, host_code=None):
     """What main() prints: host/cleaner links plus the tunnel recipe."""
     return [
-        f"Host:    http://127.0.0.1:{port}/host?code={code}",
+        f"Host:    http://127.0.0.1:{port}/host?code={host_code or code}",
         f"Cleaner: http://{local_ip()}:{port}/clean?code={code} "
         f"(start with --host 0.0.0.0, same Wi-Fi as the phone)",
         f"Or keep 127.0.0.1 and run: cloudflared tunnel --url http://localhost:{port}",
@@ -83,8 +83,13 @@ def startup_lines(port, code):
 
 
 def access_code():
-    """The access code: POT_ACCESS_CODE, or a random one at startup."""
+    """The cleaner access code: POT_ACCESS_CODE, or random at startup."""
     return os.environ.get("POT_ACCESS_CODE", "") or secrets.token_urlsafe(9)
+
+
+def host_access_code():
+    """The host access code: POT_HOST_CODE, or random at startup."""
+    return os.environ.get("POT_HOST_CODE", "") or secrets.token_urlsafe(9)
 
 
 def api_startup_line(client=None, data=None, error=None):
@@ -344,9 +349,10 @@ class RoomAdd(BaseModel):
 class ServerState:
     """One server's runs, client and background workers."""
 
-    def __init__(self, client, code):
+    def __init__(self, client, code, host_code=None):
         self.client = client
         self.code = code
+        self.host_code = host_code or host_access_code()
         self.wonder = True
         self.runs = {}
         self.registry_lock = threading.Lock()
@@ -490,7 +496,7 @@ def _check_worker(server, state, photo_id):
 
 def create_app(client=None):
     """Build the FastAPI app (pass a fake client in tests)."""
-    server = ServerState(client or MetaClient(), access_code())
+    server = ServerState(client or MetaClient(), access_code(), host_access_code())
     app = FastAPI(title="Proof of Turnover")
     app.state.server = server
 
@@ -501,13 +507,35 @@ def create_app(client=None):
             raise HTTPException(404, f"Unknown run '{run_id}'")
         return state
 
+    def _host_only(request):
+        """Routes only the host code may use (cleaner code is rejected)."""
+        path = request.url.path
+        if path in ("/host", "/setup", "/api/qr", "/api/server-ip",
+                    "/api/cleaner-code", "/api/tour", "/api/runs/latest"):
+            return True
+        if path.startswith("/api/setups"):
+            return True
+        if path == "/api/runs" and request.method == "GET":
+            return True
+        parts = [part for part in path.split("/") if part]
+        if len(parts) >= 4 and parts[:2] == ["api", "runs"]:
+            if parts[3] in ("signoff", "calls"):
+                return True
+            if len(parts) == 6 and parts[3] == "notes" and parts[5] == "audio":
+                return True
+        return False
+
     @app.middleware("http")
     async def _auth(request, call_next):
-        if request.cookies.get(COOKIE_NAME) == server.code:
-            return await call_next(request)
-        if request.query_params.get("code") == server.code:
+        presented = (request.query_params.get("code")
+                     or request.cookies.get(COOKIE_NAME))
+        allowed = ((server.host_code,) if _host_only(request)
+                   else (server.code, server.host_code))
+        if presented and presented in allowed:
             response = await call_next(request)
-            response.set_cookie(COOKIE_NAME, server.code, httponly=True, samesite="lax")
+            if request.query_params.get("code"):
+                response.set_cookie(COOKIE_NAME, presented,
+                                    httponly=True, samesite="lax")
             return response
         if request.url.path.startswith("/api/"):
             return JSONResponse(
@@ -838,6 +866,10 @@ def create_app(client=None):
         return Response(buffer.getvalue(), media_type="image/png",
                         headers=dict(LONG_CACHE))
 
+    @app.get("/api/cleaner-code")
+    def _cleaner_code():
+        return {"code": server.code}
+
     @app.get("/api/server-ip")
     def _server_ip():
         return {"ip": local_ip()}
@@ -1107,7 +1139,7 @@ def main(argv=None):
         print(wonder_line, flush=True)
         app.state.server.wonder = wonder_ok
         print(voice_start_line(), flush=True)
-    for line in startup_lines(args.port, code):
+    for line in startup_lines(args.port, code, app.state.server.host_code):
         print(line, flush=True)
     import uvicorn
 
