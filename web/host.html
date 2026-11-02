@@ -299,6 +299,7 @@ function renderStatus(app) {
     ${status.language ? `<div class="small">Cleaner language: ${esc(langNames[status.language] || status.language)}</div>` : ""}
     ${status.finished_at ? `<div class="small">Cleaner finished at ${esc(status.finished_at.slice(11, 19))}</div>` : ""}
     ${status.round_ended ? `<div class="small">Ended early: ${status.skipped_shots.length} shots skipped</div>` : ""}
+    ${(status.skipped_areas || []).length ? `<div class="small">Skipped by cleaner: ${esc(status.skipped_areas.map(a => a.room_name).join(", "))}</div>` : ""}
     ${needsDecisionHtml()}
     ${fixedByCleanerHtml()}
     ${newsHtml()}

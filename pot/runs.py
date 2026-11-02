@@ -615,6 +615,29 @@ class RunState:
             self._save_locked()
             return skipped
 
+    def unskip_room(self, room_id):
+        """Put a skipped room's unphotographed shots back into the tour."""
+        with self.lock:
+            rooms = {room["id"] for room in self.property["rooms"]}
+            if room_id not in rooms:
+                raise ValueError(f"Unknown room '{room_id}'")
+            taken = self._taken_shots_locked()
+            restored = [
+                shot["shot_id"] for shot in self.tour["shots"]
+                if shot.get("room_id") == room_id
+                and shot["shot_id"] in self.skipped_shots
+                and shot["shot_id"] not in taken
+            ]
+            restored_set = set(restored)
+            self.skipped_shots = [
+                shot_id for shot_id in self.skipped_shots
+                if shot_id not in restored_set
+            ]
+            self._timeline_locked("room_unskipped", room_id=room_id,
+                                  shots=len(restored))
+            self._save_locked()
+            return restored
+
     def _cards_locked(self):
         """Open problem-card item ids in tour order (callers hold the lock).
 
@@ -954,6 +977,26 @@ class RunState:
     def _taken_shots_locked(self):
         return {self.photo_shot[photo_id] for photo_id in self.photo_shot}
 
+
+    def _skipped_areas_locked(self, skipped):
+        """Skipped shots grouped into areas, in tour order."""
+        names = {room["id"]: room["name"] for room in self.property["rooms"]}
+        areas = []
+        by_room = {}
+        for shot in self.tour["shots"]:
+            if shot["shot_id"] not in skipped:
+                continue
+            room_id = shot.get("room_id", "")
+            if room_id not in by_room:
+                by_room[room_id] = {
+                    "room_id": room_id,
+                    "room_name": names.get(room_id, room_id),
+                    "shots": 0,
+                }
+                areas.append(by_room[room_id])
+            by_room[room_id]["shots"] += 1
+        return areas
+
     def status(self):
         """Everything both pages need, built from memory under the lock."""
         with self.lock:
@@ -1035,6 +1078,7 @@ class RunState:
                 },
                 "round_ended": self.round_ended,
                 "skipped_shots": list(skipped),
+                "skipped_areas": self._skipped_areas_locked(skipped),
                 "photo_seconds": dict(self.photo_seconds),
                 "recent": recent,
                 "news": list(reversed(self.events[-8:])),

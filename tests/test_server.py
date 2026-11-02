@@ -342,14 +342,19 @@ def test_cleaner_code_cannot_use_host_routes():
         json={"decision": "approve", "force": True, "notes": "", "item_ids": []},
     ).status_code == 401
     assert test.post(
-        f"/api/setups?code={code}", json={"name": "X"},
-    ).status_code == 401
+        f"/api/setups?code={code}",
+        json={"name": "X", "bedrooms": 1},
+    ).status_code == 200
+    assert test.get(
+        f"/api/runs/{run_id}/calls?code={code}").status_code == 401
+    assert test.get(
+        f"/api/runs/{run_id}/notes/N01/audio?code={code}").status_code == 401
     assert test.get(f"/api/cleaner-code?code={code}").status_code == 401
     assert test.get(f"/api/cleaner-code?code={host}").json() == {"code": code}
     assert test.get(f"/host?code={host}").status_code == 200
     assert test.get(f"/api/role?code={code}").json() == {"role": "cleaner"}
     assert test.get(f"/api/role?code={host}").json() == {"role": "host"}
-    assert test.get(f"/setup?code={code}").status_code == 401
+    assert test.get(f"/setup?code={code}").status_code == 200
     assert test.get(f"/setup?code={host}").status_code == 200
 
 
@@ -1107,10 +1112,38 @@ def test_skip_routes_reject_non_test_runs():
         f"/api/runs/{run_id}/skip-shot?code={code}",
         json={"shot_id": "master-bedroom-1"},
     ).status_code == 400
+    skipped = test.post(
+        f"/api/runs/{run_id}/skip-room?code={code}",
+        json={"room_id": "master-bedroom"},
+    )
+    assert skipped.status_code == 200, skipped.text
+    assert skipped.json()["skipped"] == ["master-bedroom-1"]
+
+
+def test_unskip_room_restores_shots_on_normal_run():
+    test, code = _client()
+    run_id = _create_run(test, code)
     assert test.post(
         f"/api/runs/{run_id}/skip-room?code={code}",
         json={"room_id": "master-bedroom"},
-    ).status_code == 400
+    ).status_code == 200
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["skipped_shots"] == ["master-bedroom-1"]
+    assert status["skipped_areas"] == [{
+        "room_id": "master-bedroom", "room_name": "Master bedroom",
+        "shots": 1,
+    }]
+    restored = test.post(
+        f"/api/runs/{run_id}/unskip-room?code={code}",
+        json={"room_id": "master-bedroom"},
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["restored"] == ["master-bedroom-1"]
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["skipped_shots"] == []
+    assert status["skipped_areas"] == []
+    # The tour continues: the restored shot can be photographed.
+    assert _upload(test, code, run_id, "master-bedroom-1").status_code == 200
 
 
 def test_end_round_skips_untaken_shots_and_finish_allows_them():

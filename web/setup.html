@@ -21,11 +21,13 @@
          margin: 0; background: var(--linen); color: var(--ink);
          font-size: 17px; line-height: 24px; }
   #app { max-width: 640px; margin: 0 auto; padding: 16px 16px 32px; }
-  h1 { font-size: 22px; line-height: 28px; margin: 8px 0 16px; }
+  h1 { font-size: 22px; line-height: 28px; margin: 8px 0 16px; text-align: center; }
+  h1 + .small, h2.room { text-align: center; }
+  .result.ok.donetitle { text-align: center; }
   h2.room { font-size: 22px; line-height: 28px; margin: 20px 0 8px; }
   :focus-visible { outline: 3px solid var(--marsh); outline-offset: 2px; }
-  .btn { display: flex; align-items: center; justify-content: center; gap: 10px;
-         width: 100%; padding: 16px; margin: 10px 0; font-size: 18px; font-weight: 700;
+  .btn { white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 10px;
+         width: 100%; padding: 16px 12px; margin: 10px 0; font-size: 17px; font-weight: 700;
          font-family: inherit; min-height: 56px; border: none; border-radius: 20px;
          background: var(--marsh); color: var(--white); cursor: pointer; text-align: center; }
   .btn.secondary { background: var(--white); color: var(--ink);
@@ -960,7 +962,7 @@ function renderDone(app) {
     t.checks(res.items || 0), t.photosPerTurnover(res.shots || 0));
   let html = homeHtml() + `<h1>${esc(t.title)}</h1>`;
   if (err) html += `<div class="error">${esc(err)}</div>`;
-  html += `<div class="result ok">${esc(summary)}</div>`;
+  html += `<div class="result ok donetitle">${esc(summary)}</div>`;
   html += tourNotesHtml();
   if (res.tour_error !== undefined && res.shots === undefined) {
     html += `<div class="result bad">${esc(res.tour_error || "")}</div>

@@ -117,7 +117,7 @@ Open `/setup` from the “Set up a new house” link on the host page (it needs 
 ## Privacy and safety
 
 - The app runs locally and only ever sends the host's own house photos and voice notes to the models. In contributor mode, content sent to the Meta models may be used by Meta.
-- Every page and API route sits behind an access code, and there are two: the host code (`POT_HOST_CODE`) gates sign-off, house setup and run administration, while the cleaner code (`POT_ACCESS_CODE`) covers the tour, photos, notes and voice; the host page’s QR code carries only the cleaner code. The “Skip area” / “Finish photos now” actions for tests and demos work only on runs started in test or demo mode — the server enforces this, not just the page.
+- Every page and API route sits behind an access code, and there are two: the host code (`POT_HOST_CODE`) gates approving a turnover, the model-call log and voice-note audio, while the cleaner code (`POT_ACCESS_CODE`) covers the tour, photos, notes and voice; the host page’s QR code carries only the cleaner code. House setup is open to both codes for now. Any cleaner can skip an area (the host sees which areas were skipped); “Finish photos now” is test-only.
 - Test data and samples in this repository never show people, door codes, Wi-Fi passwords, or personal documents.
 
 ## Tests

@@ -21,14 +21,14 @@
          margin: 0; background: var(--linen); color: var(--ink);
          font-size: 17px; line-height: 24px; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 16px 16px 32px; }
-  h1 { font-size: 22px; line-height: 28px; margin: 8px 0 16px; }
+  h1 { font-size: 22px; line-height: 28px; margin: 8px 0 16px; text-align: center; }
   :focus-visible { outline: 3px solid var(--marsh); outline-offset: 2px; }
   .bar { height: 6px; background: var(--line); border-radius: 3px;
          overflow: hidden; margin: 8px 0 0; }
   .bar > div { height: 100%; background: var(--haint); border-radius: 3px; }
   .instruction { font-size: 26px; line-height: 31px; margin: 4px 0 12px; font-weight: 700; }
-  .btn { display: flex; align-items: center; justify-content: center; gap: 10px;
-         width: 100%; padding: 16px; margin: 10px 0; font-size: 18px; font-weight: 700;
+  .btn { white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 10px;
+         width: 100%; padding: 16px 12px; margin: 10px 0; font-size: 17px; font-weight: 700;
          font-family: inherit; min-height: 56px; border: none; border-radius: 20px;
          background: var(--marsh); color: var(--white); cursor: pointer; text-align: center; }
   .btn.secondary { background: var(--white); color: var(--ink);
@@ -103,7 +103,7 @@
            padding: max(12px, env(safe-area-inset-top)) 16px
                     calc(120px + env(safe-area-inset-bottom)); }
   .rhead { display: flex; align-items: center; gap: 12px; }
-  .rhead .room { font-size: 17px; font-weight: 700; flex: 1; }
+  .rhead .room { font-size: 17px; font-weight: 700; flex: 1; text-align: center; }
   .rhead .count { font-size: 14px; color: var(--muted); white-space: nowrap; }
   .shotcard { position: relative; background: var(--white); border-radius: 24px;
               padding: 20px 18px; margin: 12px 0; box-shadow: var(--float-shadow); }
@@ -172,12 +172,16 @@
   .testrow { display: flex; justify-content: space-between; align-items: baseline;
                margin-top: 6px; }
   .testrow .link, .testrow a { font-size: 14px; color: var(--marsh); }
+  .skiprow { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .skiprow .skipmeta { flex: 1; display: flex; flex-direction: column; }
+  .skiprow .btn { width: auto; flex: none; margin: 0; padding: 12px 16px; }
+  .centerline { text-align: center; }
   #flash { position: fixed; inset: 0; background: #fff; opacity: 0;
            pointer-events: none; z-index: 40; }
   #flash.on { opacity: 1; transition: none; }
   #flash.off { opacity: 0; transition: opacity 180ms ease-out; }
   /* Cards */
-  .cardshead { margin: 8px 0 4px; }
+  .cardshead { margin: 8px 0 4px; text-align: center; }
   .cardshead h1 { margin: 0; }
   .cardshead .left { font-size: 17px; color: var(--muted); margin: 2px 0 12px; }
   .stack { position: relative; margin: 0 0 32px; }
@@ -227,6 +231,8 @@
               font-size: 14px; font-weight: 700; }
   #sheet .widepill { position: static; transform: none; }
   .card .instruction { font-size: 22px; line-height: 28px; }
+  .shotcard .instruction, .card .instruction, .topcard .instruction { text-align: center; }
+  .psheethead h2 { flex: 1; text-align: center; }
   .cardactions { position: sticky; bottom: 0; z-index: 2; background: var(--white);
                  margin: 0 -16px; padding: 2px 16px calc(6px + env(safe-area-inset-bottom));
                  border-radius: 0 0 20px 20px;
@@ -319,6 +325,7 @@ let transcribing = false, noteMsg = "", noteMsgTimer = null;
 let optimistic = new Map();
 let cardOrder = [], retakePhotos = {}, spokenCard = null, lastShownCard = null;
 let role = null;
+let skipReminderKey = "", skipReminderSpokenKey = "";
 let cardsTotal = 0;
 let photosDoneSaid = false, saidFinal = false;
 let cardPanel = null, cardNoteId = null, cardNoteText = "";
@@ -404,7 +411,12 @@ const I18N = {
     finishEarlyConfirm: "¿Terminar las fotos ahora? Las fotos no tomadas se omitirán.",
     skipTest: "Saltar área",
     wide: "Ancho",
-    skippedLine: (taken, skipped) => `${taken} fotos tomadas · ${skipped} omitidas (prueba)`,
+    skippedLine: (taken, skipped) => `${taken} fotos tomadas · ${skipped} omitidas`,
+    skippedTitle: "Algunas áreas se omitieron",
+    skippedTakeLine: "Toma sus fotos ahora o continúa sin ellas.",
+    takePhotos: "Tomar fotos",
+    continueWithout: "Continuar sin ellas",
+    photosCount: n => n === 1 ? "1 foto" : `${n} fotos`,
   },
   en: {
     title: "Cleaning turnover",
@@ -474,7 +486,12 @@ const I18N = {
     finishEarlyConfirm: "Finish photos now? Shots not taken will be skipped.",
     skipTest: "Skip area",
     wide: "Wide",
-    skippedLine: (taken, skipped) => `${taken} photos taken · ${skipped} skipped (test)`,
+    skippedLine: (taken, skipped) => `${taken} photos taken · ${skipped} skipped`,
+    skippedTitle: "Some areas were skipped",
+    skippedTakeLine: "Take their photos now, or continue without them.",
+    takePhotos: "Take photos",
+    continueWithout: "Continue without them",
+    photosCount: n => n === 1 ? "1 photo" : `${n} photos`,
   },
   ru: {
     title: "Уборка",
@@ -544,7 +561,12 @@ const I18N = {
     finishEarlyConfirm: "Закончить фото сейчас? Неснятые кадры будут пропущены.",
     skipTest: "Пропустить зону",
     wide: "Широко",
-    skippedLine: (taken, skipped) => `${taken} фото сделано · ${skipped} пропущено (тест)`,
+    skippedLine: (taken, skipped) => `${taken} фото сделано · ${skipped} пропущено`,
+    skippedTitle: "Некоторые зоны пропущены",
+    skippedTakeLine: "Сфотографируйте их сейчас или продолжайте без них.",
+    takePhotos: "Сфотографировать",
+    continueWithout: "Продолжить без них",
+    photosCount: n => `${n} фото`,
   },
 };
 function T() { return I18N[LANG] || I18N.en; }
@@ -1350,10 +1372,50 @@ function applyNavState(name) {
   renderMaybe();
 }
 
+
+function skippedAreas() {
+  return (status && status.skipped_areas) || [];
+}
+
+function skippedKey() {
+  return skippedAreas().map(a => a.room_id).join(",");
+}
+
+function renderReminder(app) {
+  const rows = skippedAreas().map(a =>
+    `<div class="skiprow"><div class="skipmeta"><strong>${esc(a.room_name)}</strong>` +
+    `<span class="small">${esc(T().photosCount(a.shots))}</span></div>` +
+    `<button class="btn secondary" data-unskip="${esc(a.room_id)}">${esc(T().takePhotos)}</button></div>`
+  ).join("");
+  app.innerHTML = `<div class="wrap"><h1>${esc(T().skippedTitle)}</h1>` +
+    `<p class="centerline">${esc(T().skippedTakeLine)}</p>${rows}` +
+    `<button class="btn" id="skipContinue">${esc(T().continueWithout)}</button></div>`;
+  document.getElementById("skipContinue").onclick = () => {
+    skipReminderKey = skippedKey();
+    lastKey = null;
+    renderMaybe();
+  };
+  app.querySelectorAll("[data-unskip]").forEach(btn => {
+    btn.onclick = async () => {
+      stopSpeech();
+      try {
+        await api(`/api/runs/${encodeURIComponent(RUN)}/unskip-room`, {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({room_id: btn.dataset.unskip}),
+        });
+      } catch (e) { /* stay on the reminder; the poll will resync */ }
+      prevShotId = null;
+      await refresh();
+    };
+  });
+}
+
 function screenOf() {
   if (!RUN) return "start";
   if (!tour || !status) return "loading";
   if (status.finished_at) return "final";
+  if ((allTaken() || status.round_ended) && skippedAreas().length
+      && skipReminderKey !== skippedKey()) return "reminder";
   return (allTaken() || status.round_ended) ? "cards" : "round";
 }
 
@@ -1378,7 +1440,7 @@ function finalCounts() {
 
 function renderKey() {
   const screen = screenOf();
-  const base = [LANG, langPicked, modePicked, screen];
+  const base = [LANG, langPicked, modePicked, screen, skipReminderKey, skippedKey()];
   if (screen === "start") return JSON.stringify(base.concat([(LANGS || []).length]));
   if (screen === "loading") return JSON.stringify(base.concat([!!tour, !!status]));
   if (screen === "final") {
@@ -1475,6 +1537,7 @@ function render() {
   if (!tour || !status) { app.innerHTML = `<div class="wrap"><p>${esc(T().loading)}</p></div>`; return; }
   let view;
   if (status.finished_at) view = renderFinal(app);
+  else if (screen === "reminder") view = renderReminder(app);
   else if (!allTaken() && !status.round_ended) view = renderRound(app);
   else view = renderCards(app);
   prefetchSpeech();
@@ -1516,7 +1579,7 @@ function renderChoice(app) {
   app.innerHTML = `<div class="wrap">
     <div class="brand">${ICONS.home}<div class="wordmark">Proof of Turnover</div></div>
     <button class="btn tile" id="goTurnover">${esc(T().startTurnover)}</button>
-    ${role === "host" ? `<button class="btn secondary tile" id="goSetup">${esc(T().setupHouse)}</button>` : ""}
+    <button class="btn secondary tile" id="goSetup">${esc(T().setupHouse)}</button>
     <p class="langline"><a href="#" id="changeLang" class="link">Idioma · Language · Язык</a></p>
   </div>`;
   document.getElementById("goTurnover").onclick = () => {
@@ -1574,6 +1637,8 @@ async function renderLanguage(app) {
 }
 
 function resetRunState() {
+  skipReminderKey = "";
+  skipReminderSpokenKey = "";
   stopSpeech();
   voiceWarmed.clear();
   voiceTourRun = "";
@@ -1777,9 +1842,10 @@ function renderCardView(app) {
     }
   }
   const tucked = ex && !exState.big ? " tucked" : "";
+  const skipLink = shot ? `<button class="link" id="skipShot">${esc(T().skipTest)}</button>` : "";
   const testrow = (TEST || DEMO)
-    ? `<div class="testrow">${shot ? `<button class="link" id="skipShot">${esc(T().skipTest)}</button>` : ""}<a href="#" id="finishEarly" class="small">${esc(T().finishEarly)}</a></div>`
-    : "";
+    ? `<div class="testrow">${skipLink}<a href="#" id="finishEarly" class="small">${esc(T().finishEarly)}</a></div>`
+    : (skipLink ? `<div class="testrow">${skipLink}</div>` : "");
   let take = "";
   if (shot && !DEMO) {
     take = `<button class="btn" id="takePhoto">${ICONS.camera}${esc(T().take)}</button>`;
@@ -2509,6 +2575,14 @@ function reconcileCards() {
 
 function announce() {
   if (!status || !tour) return;
+  if (screenOf() === "reminder") {
+    const key = skippedKey();
+    if (key && skipReminderSpokenKey !== key) {
+      skipReminderSpokenKey = key;
+      sayNow(T().skippedTitle + ". " + T().skippedTakeLine);
+    }
+    return;
+  }
   if (!allTaken() && !status.round_ended) {
     const cur = roundCurrent();
     const curId = cur ? cur.shot_id : null;

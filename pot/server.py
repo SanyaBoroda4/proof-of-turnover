@@ -537,12 +537,15 @@ def create_app(client=None):
         return state
 
     def _host_only(request):
-        """Routes only the host code may use (cleaner code is rejected)."""
+        """Routes only the host code may use (cleaner code is rejected).
+
+        House setup ("/setup" and "/api/setups...") is open to the
+        cleaner code for now (demo): Alex plays the cleaner in the
+        demo and shows setup from the cleaner's start screen.
+        """
         path = request.url.path
-        if path in ("/host", "/setup", "/api/qr", "/api/server-ip",
+        if path in ("/host", "/api/qr", "/api/server-ip",
                     "/api/cleaner-code", "/api/tour", "/api/runs/latest"):
-            return True
-        if path.startswith("/api/setups"):
             return True
         if path == "/api/runs" and request.method == "GET":
             return True
@@ -844,6 +847,15 @@ def create_app(client=None):
         _maybe_start_wonder(server, state, item_id, body)
         return {"resolution": resolution, "agent_state": state.agent_state()}
 
+    @app.post("/api/runs/{run_id}/unskip-room")
+    def _unskip_room(run_id: str, body: SkipRoomBody):
+        state = need_state(run_id)
+        try:
+            restored = state.unskip_room(body.room_id)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        return {"restored": restored, "skipped": state.skipped_shots}
+
     @app.post("/api/runs/{run_id}/recheck-unchecked")
     def _recheck_unchecked(run_id: str):
         state = need_state(run_id)
@@ -877,8 +889,6 @@ def create_app(client=None):
     @app.post("/api/runs/{run_id}/skip-room")
     def _skip_room(run_id: str, body: SkipRoomBody):
         state = need_state(run_id)
-        if not state.test:
-            raise HTTPException(400, "skipping is only available in test mode")
         _checked_id(body.room_id, "room")
         try:
             skipped = state.skip_room(body.room_id)
