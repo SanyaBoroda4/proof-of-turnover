@@ -320,7 +320,7 @@ let retrying = false, navDepth = 0;
 let camStream = null, camStarting = false, camMode = "live", camSheet = null;
 let camWaiting = false;
 let roundView = "card";
-let exState = {shot: null, big: false, popped: false, timer: null};
+let exState = {shot: null, big: false, popAt: null, leaveAt: null, timer: null};
 let prevScreen = "";
 
 const REASONS = ["broken", "before", "supplies", "wont_clean", "other"];
@@ -1018,18 +1018,22 @@ function renderKey() {
     const shot = roundCurrent();
     const p = status.progress;
     const last = lastTakenShot();
+    const camera = roundView === "camera";
+    const failed = Array.from(optimistic)
+      .filter(([k, v]) => v.state === "failed").map(([k]) => k);
     return JSON.stringify(base.concat([
       shot ? shot.shot_id : null,
-      p.shots_taken, p.shots_total, p.rooms_done, p.rooms_total,
-      Array.from(optimistic, ([k, v]) => [k, v.state]),
-      last ? last.shot_id : null,
+      camera ? null : p.shots_taken, p.shots_total,
+      failed,
+      camera ? null : (last ? last.shot_id : null),
       photoError, !!recorder, transcribing, noteMsg,
-      selectedDemo, (demoPhotos || []).length,
+      camera ? null : selectedDemo, camera ? null : (demoPhotos || []).length,
       voiceKey(),
       (status.unchecked || []).length,
       (status.skipped_shots || []).join(","),
       camMode, camWaiting,
       roundView, roundView === "card" ? exState.big : null,
+      camera ? null : lastPhotoUrl(),
     ]));
   }
   const byId = itemsById();
@@ -1061,11 +1065,13 @@ function syncExample() {
     clearTimeout(exState.timer);
     exState.timer = null;
   }
-  exState = {shot: id, big: !!(cur && exampleUrl(cur)), popped: false, timer: null};
+  exState = {shot: id, big: !!(cur && exampleUrl(cur)), popAt: null, leaveAt: null,
+               timer: null};
   if (exState.big) {
     exState.timer = setTimeout(() => {
       const pop = document.getElementById("exPop");
       if (pop) pop.classList.add("leave");
+      exState.leaveAt = performance.now();
       exState.timer = setTimeout(() => {
         exState.timer = null;
         exState.big = false;
@@ -1198,7 +1204,7 @@ function resetRunState() {
   camWaiting = false;
   roundView = "card";
   if (exState.timer) clearTimeout(exState.timer);
-  exState = {shot: null, big: false, popped: false, timer: null};
+  exState = {shot: null, big: false, popAt: null, leaveAt: null, timer: null};
   document.getElementById("sheet").hidden = true;
   document.body.classList.remove("sheet-open");
   for (const entry of optimistic.values()) {
@@ -1375,9 +1381,17 @@ function renderCardView(app) {
   let exHtml = "";
   if (ex) {
     if (exState.big) {
-      const pop = exState.popped ? "" : " pop";
-      exState.popped = true;
-      exHtml = `<button class="expop big${pop}" id="exPop"><img src="${esc(ex)}" alt=""><span class="chip2">${esc(T().shouldLook)}</span></button>`;
+      if (exState.popAt === null) exState.popAt = performance.now();
+      const age = Math.round(performance.now() - exState.popAt);
+      const inner = `<img src="${esc(ex)}" alt=""><span class="chip2">${esc(T().shouldLook)}</span>`;
+      if (exState.leaveAt !== null) {
+        const back = Math.min(Math.round(performance.now() - exState.leaveAt), 280);
+        exHtml = `<button class="expop big leave" id="exPop" style="animation-delay:-${back}ms">${inner}</button>`;
+      } else if (age < 340) {
+        exHtml = `<button class="expop big pop" id="exPop" style="animation-delay:-${age}ms">${inner}</button>`;
+      } else {
+        exHtml = `<button class="expop big" id="exPop">${inner}</button>`;
+      }
     } else {
       exHtml = `<button class="expop small" id="exPop"><img src="${esc(ex)}" alt=""></button>`;
     }
