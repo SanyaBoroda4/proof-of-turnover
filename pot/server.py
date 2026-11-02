@@ -44,6 +44,34 @@ COOKIE_NAME = "pot_code"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
 RUN_NAME_PATTERN = re.compile(r"^run-(\d{8})-(\d{6})(?:_(\d+))?$")
 LONG_CACHE = {"Cache-Control": "public, max-age=31536000"}
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # largest accepted photo upload
+
+
+def _spool_capped(upload_file, handle):
+    """Copy an upload to a file with a hard byte cap (413 over it)."""
+    total = 0
+    while True:
+        chunk = upload_file.read(1024 * 1024)
+        if not chunk:
+            return total
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "photo is larger than 25 MB")
+        handle.write(chunk)
+
+
+def _read_capped(upload_file):
+    """Read an upload fully with a hard byte cap (413 over it)."""
+    chunks = []
+    total = 0
+    while True:
+        chunk = upload_file.read(1024 * 1024)
+        if not chunk:
+            return b"".join(chunks)
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "photo is larger than 25 MB")
+        chunks.append(chunk)
 
 
 def _checked_id(value, what):
@@ -661,7 +689,7 @@ def create_app(client=None):
         suffix = Path(image.filename or "upload.jpg").suffix.lower() or ".jpg"
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         try:
-            shutil.copyfileobj(image.file, tmp)
+            _spool_capped(image.file, tmp)
             tmp.close()
             photo, _seq = state.claim_photo(tmp.name, shot_id)
         except OldPhotoError as exc:
@@ -1024,7 +1052,8 @@ def create_app(client=None):
         _setup_room(setup_id, room_id)
         try:
             return setup_mod.add_room_photo(
-                setup_id, room_id, image.filename or "photo.jpg", image.file.read()
+                setup_id, room_id, image.filename or "photo.jpg",
+                _read_capped(image.file),
             )
         except setup_mod.SetupNotFound as exc:
             raise HTTPException(404, str(exc))

@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover - pillow-heif is a dependency
     pass
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+Image.MAX_IMAGE_PIXELS = 60_000_000  # bound against decompression bombs
 CHECK_LONG_SIDE = 1600
 OVERVIEW_LONG_SIDE = 768
 

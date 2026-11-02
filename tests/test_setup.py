@@ -180,6 +180,17 @@ def _photo(test, code, sid, room, color="green"):
     )
 
 
+def test_setup_photo_upload_over_25mb_is_413(dirs, client):
+    test, code = client
+    sid = _create(test, code)["setup_id"]
+    big = b"x" * (25 * 1024 * 1024 + 1)
+    response = test.post(
+        f"/api/setups/{sid}/rooms/kitchen/photos?code={code}",
+        files={"image": ("big.jpg", big, "image/jpeg")},
+    )
+    assert response.status_code == 413
+
+
 def test_photos_capped_and_non_images_refused(dirs, client):
     test, code = client
     sid = _create(test, code)["setup_id"]

@@ -1071,6 +1071,16 @@ def test_recheck_unchecked_retries_and_clears():
     assert again.json()["rechecking"] == []
 
 
+def test_run_photo_upload_over_25mb_is_413():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    response = _upload(test, code, run_id, "master-bedroom-1",
+                       payload=b"x" * (25 * 1024 * 1024 + 1))
+    assert response.status_code == 413
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["progress"]["shots_taken"] == 0
+
+
 def test_skip_routes_reject_non_test_runs():
     test, code = _client()
     run_id = _create_run(test, code)
