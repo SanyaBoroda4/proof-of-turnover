@@ -87,10 +87,13 @@ def check_photo_sequential(client, photo, room_id, rooms, items, effort=None):
 
 
 def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
-    """First look + second looks + item SAMs together; problem SAM chained.
+    """First look first; second looks + item SAMs only for cited items.
 
-    Everything starts at once; each problem-object SAM starts as soon as
-    its second look returns. Same proof inputs as the sequential path.
+    An item's second look and SAM start only after the first look
+    cited this photo for it (done or problem); the second look still
+    never sees the first answer. Each problem-object SAM starts as
+    soon as its second look returns. Same proof inputs as the
+    sequential path.
     """
     effort = prompts.RECHECK_EFFORT if effort is None else effort
     room = rooms.get(room_id, {})
@@ -107,17 +110,6 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
             pool, first_look, client, [photo], {photo.id: assignment},
             checked, rooms, effort,
         )] = ("first", None)
-        for item in checked:
-            name = room_name if item.room_id != "house" else item.room_name
-            desc = room_desc if item.room_id != "house" else None
-            pending[submit_with_context(
-                pool, check_second_look, client, item, photo, name, desc, effort
-            )] = ("second", item)
-            if item.sam_prompt:
-                pending[submit_with_context(
-                    pool, check_sam, client, item.id, photo, item.sam_prompt,
-                    f"sam {item.id} {photo.id} ({item.sam_prompt})",
-                )] = ("sam", item)
         claims_known = False
         chained = set()
         chain_nouns = {}
@@ -158,6 +150,23 @@ def check_photo_parallel(client, photo, room_id, rooms, items, effort=None):
                     issues.extend(result.other_issues)
                     notes.extend(result.notes)
                     claims_known = True
+                    for item in checked:
+                        claim = claims.get(item.id)
+                        if (claim is None or claim.photo_id != photo.id
+                                or claim.status not in ("done", "problem")):
+                            continue
+                        name = room_name if item.room_id != "house" else item.room_name
+                        desc = room_desc if item.room_id != "house" else None
+                        pending[submit_with_context(
+                            pool, check_second_look, client, item, photo,
+                            name, desc, effort,
+                        )] = ("second", item)
+                        if item.sam_prompt:
+                            pending[submit_with_context(
+                                pool, check_sam, client, item.id, photo,
+                                item.sam_prompt,
+                                f"sam {item.id} {photo.id} ({item.sam_prompt})",
+                            )] = ("sam", item)
                     for item_id in seconds:
                         maybe_chain(item_id)
                 elif kind == "second":
