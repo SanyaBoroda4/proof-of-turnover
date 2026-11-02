@@ -20,7 +20,6 @@ MATCH_PHOTO_SIZE = "overview"  # 768 px copies are enough to match rooms
 FIRST_LOOK_PHOTO_SIZE = "check"  # 1600 px copies keep small details (stains)
 VERIFY_PHOTO_SIZE = "check"  # second look also needs full detail
 SETUP_PHOTO_SIZE = "overview"  # 768 px drafts match 1600 px (Step 26)
-SETUP_EFFORT = "minimal"  # fastest all-rules draft in the Step 43 bench
 
 
 def pick_boxes_schema():

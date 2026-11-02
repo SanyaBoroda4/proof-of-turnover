@@ -1,5 +1,8 @@
 """Smoke test for the Meta Model API used by Proof of Turnover.
 
+Standalone diagnostic: this script talks to the API directly on
+purpose (with its own retry loop), not through pot/meta_client.py.
+
 Checks:
   a) GET /v1/models lists models.
   b) muse-spark-1.3-contributor answers a short Responses API prompt.

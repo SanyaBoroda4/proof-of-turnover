@@ -1,4 +1,4 @@
-"""Full live dress rehearsal: a 32-shot guided round against a real server.
+"""Full live dress rehearsal: a guided round against a real server.
 
 Uses the same HTTP API as the phone: starts a run on rental-1, uploads
 each shot's photo from data/inputs/rehearsal_map.json in tour order every
@@ -175,7 +175,7 @@ def upload_photo(base, code, run_id, shot_id, path, original_name, tries=3):
 
 
 def main(argv):
-    parser = argparse.ArgumentParser(description="Live 32-shot dress rehearsal.")
+    parser = argparse.ArgumentParser(description="Live dress rehearsal.")
     parser.add_argument("--base", default="http://127.0.0.1:8000")
     parser.add_argument("--code", required=True, help="server access code")
     parser.add_argument("--language", default="en")
