@@ -735,10 +735,17 @@ class RunState:
             return len(self.calls)
 
     def photo_had_api_failure(self, photo_id, before):
-        """True when the photo's calls since `before` hit an API failure."""
+        """True when the photo's calls since `before` hit an API failure.
+
+        Failed box-pick calls do not count: the pick falls back to keeping
+        all boxes, so the photo was still judged.
+        """
         with self.lock:
             return any(
-                record.get("photo_id") == photo_id and api_failure(record)
+                record.get("photo_id") == photo_id
+                and api_failure(record)
+                and not (record.get("purpose") or "").startswith(
+                    ("pick problem boxes", "pick problem area"))
                 for record in self.calls[before:]
             )
 
@@ -872,6 +879,32 @@ class RunState:
             self._timeline_locked("card_resolved", item_id=item_id, action=action)
             self._save_locked()
             return dict(self.resolutions[item_id])
+
+    def mark_wonder_pending(self, item_id):
+        """A Muse Wonder second opinion is running for this resolution."""
+        with self.lock:
+            if item_id in self.resolutions:
+                self.resolutions[item_id]["wonder"] = {"status": "pending"}
+                self._save_locked()
+
+    def store_wonder(self, item_id, wonder):
+        """Save a finished second opinion (+ news event when it landed)."""
+        phrases = {
+            "agree_with_cleaner": "agrees with the cleaner",
+            "still_a_problem": "still a problem",
+            "unclear": "can't tell from this photo",
+        }
+        with self.lock:
+            if item_id not in self.resolutions:
+                return
+            self.resolutions[item_id]["wonder"] = dict(wonder)
+            if wonder.get("status") == "done":
+                phrase = phrases.get(wonder.get("opinion"), wonder.get("opinion"))
+                self._event_locked(
+                    "request", item_id=item_id,
+                    text=f"Muse Wonder: {phrase} - {wonder.get('reason', '')}",
+                )
+            self._save_locked()
 
     def finish(self):
         """Cleaner sends the turnover: all checked, all critical proven/resolved."""

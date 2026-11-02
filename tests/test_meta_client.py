@@ -158,6 +158,15 @@ def test_empty_answer_doubles_budget_once(tmp_path):
     assert budgets == [16000, 32000, 32000]
 
 
+def test_respond_model_override(tmp_path):
+    fake = _openai_fake([_FakeResponse("hi")])
+    client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,
+                        sleep=lambda seconds: None)
+    assert client.respond("opine", CONTENT, model="muse-wonder-1.0") == "hi"
+    assert fake.responses.calls[0]["model"] == "muse-wonder-1.0"
+    assert client.trace[-1]["model"] == "muse-wonder-1.0"
+
+
 def test_schema_returns_parsed_json(tmp_path):
     fake = _openai_fake([_FakeResponse('{"ready": true}')])
     client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,

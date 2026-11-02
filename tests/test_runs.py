@@ -583,6 +583,30 @@ def test_send_back_clears_resolution_and_reopens_run(tmp_path):
     assert state.agent_state() == "needs_input"
 
 
+def test_pick_failures_do_not_make_photo_unchecked(tmp_path):
+    from pot.checklist import load_property
+    from pot.tour import load_tour
+
+    prop = load_property("demo-house")
+    checklist = build_checklist(prop)
+    state = RunState(tmp_path / "run", prop, checklist,
+                     tour={"shots": load_tour("demo-house")})
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "p", "a.jpg")), "master-bedroom-1")
+
+    def failed(purpose):
+        return {"purpose": purpose, "model": "m", "photo_id": photo.id,
+                "seconds": 0.4, "attempts": 2, "source": "failed",
+                "status": 503}
+
+    assert not state.photo_had_api_failure(photo.id, 0)
+    state.record_call(failed("pick problem boxes bed.beds_made P01 (shoe)"))
+    state.record_call(failed("pick problem area bed.floor_clear P01"))
+    assert not state.photo_had_api_failure(photo.id, 0)
+    state.record_call(failed("second look bed.beds_made P01"))
+    assert state.photo_had_api_failure(photo.id, 0)
+
+
 def test_unchecked_and_skipped_survive_reload(tmp_path):
     from pot.checklist import load_property
     from pot.tour import load_tour

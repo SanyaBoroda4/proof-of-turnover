@@ -421,7 +421,9 @@ class MetaClient:
         schema=None,
         max_output_tokens=16000,
         effort="medium",
+        model=None,
     ):
+        model = model or self.reasoning_model
         """Ask Muse Spark via the Responses API.
 
         content is a list of input_text / input_image / input_video parts.
@@ -434,7 +436,7 @@ class MetaClient:
         def call():
             client = self._ensure_openai(purpose)
             kwargs = {
-                "model": self.reasoning_model,
+                "model": model,
                 "input": [{"role": "user", "content": list(content)}],
                 "max_output_tokens": budget["value"],
             }
@@ -458,7 +460,7 @@ class MetaClient:
                 if not budget["doubled"]:
                     budget["doubled"] = True
                     budget["value"] *= 2
-                raise _RetryableError(f"{purpose}: empty answer from {self.reasoning_model}")
+                raise _RetryableError(f"{purpose}: empty answer from {model}")
             parsed = None
             if schema is not None:
                 try:
@@ -479,7 +481,7 @@ class MetaClient:
 
         request = {
             "method": "respond",
-            "model": self.reasoning_model,
+            "model": model,
             "instructions": instructions,
             "content": list(content),
             "schema": schema,
@@ -487,7 +489,7 @@ class MetaClient:
             "effort": effort,
         }
         return self._execute(
-            purpose=purpose, model=self.reasoning_model, request=request, call=call, rebuild=rebuild
+            purpose=purpose, model=model, request=request, call=call, rebuild=rebuild
         )
 
     def segment_image(self, purpose, jpeg_bytes, prompt):

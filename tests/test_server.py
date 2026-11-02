@@ -770,6 +770,131 @@ def test_api_failure_leaves_photo_unchecked_without_cards():
     assert "could not be checked" in refused.json()["detail"]
 
 
+class _FlakySpark(FakeSpark):
+    """Fails the first N respond calls (fired as failed), then answers."""
+
+    def __init__(self, fails=2, **kwargs):
+        super().__init__(**kwargs)
+        self._fails = fails
+
+    def respond(self, purpose, content, instructions=None, schema=None,
+                max_output_tokens=16000, effort="medium", model=None):
+        if self._fails:
+            self._fails -= 1
+            self.calls.append({
+                "purpose": purpose, "content": content,
+                "instructions": instructions, "schema": schema,
+                "effort": effort, "model": model,
+            })
+            self._fire(purpose, "test-spark", ok=False, status=503)
+            raise MetaClientError(f"{purpose}: request failed with HTTP 503")
+        return super().respond(
+            purpose, content, instructions, schema,
+            max_output_tokens, effort, model,
+        )
+
+
+def test_api_failure_retries_once_automatically():
+    fake = _FlakySpark(fails=2, inspector=_done)
+    test = TestClient(create_app(fake))
+    code = test.app.state.server.code
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id, timeout=30)
+    assert status["unchecked"] == []
+    assert _status_item(status, "master-bedroom.beds_made")["status"] == "proven"
+
+
+def _await_wonder(test, code, run_id, item_id, timeout=10):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+        item = _status_item(status, item_id)
+        wonder = (item.get("resolution") or {}).get("wonder") or {}
+        if wonder.get("status") in ("done", "failed"):
+            return wonder
+        time.sleep(0.1)
+    return {}
+
+
+def test_second_opinion_for_its_fine_uses_wonder_model():
+    test, code = _client(inspector=_problem, verifier=_not_done)
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    item_id = "master-bedroom.beds_made"
+    assert _resolve(test, code, run_id, item_id,
+                    action="its_fine", reason=None).status_code == 200
+    wonder = _await_wonder(test, code, run_id, item_id)
+    assert wonder.get("status") == "done"
+    assert wonder.get("model") == "muse-wonder-1.0"
+    assert wonder.get("opinion") == "still_a_problem"
+    calls = [c for c in test.app.state.server.client.calls
+             if (c.get("purpose") or "").startswith("second opinion")]
+    assert len(calls) == 1
+    assert calls[0]["model"] == "muse-wonder-1.0"
+
+
+def test_second_opinion_skipped_for_cant_fix_supplies():
+    test, code = _client(inspector=_problem, verifier=_not_done)
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    item_id = "master-bedroom.beds_made"
+    assert _resolve(test, code, run_id, item_id).status_code == 200
+    deadline = time.time() + 1.5
+    while time.time() < deadline:
+        status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+        item = _status_item(status, item_id)
+        assert "wonder" not in (item.get("resolution") or {})
+        time.sleep(0.1)
+    calls = [c for c in test.app.state.server.client.calls
+             if (c.get("purpose") or "").startswith("second opinion")]
+    assert calls == []
+
+
+def test_wonder_startup_line():
+    from pot.server import wonder_startup_line
+
+    class _Has:
+        def list_models(self):
+            return {"data": [{"id": "muse-wonder-1.0"}]}
+
+    class _Missing:
+        def list_models(self):
+            return {"data": [{"id": "muse-spark-1.3-contributor"}]}
+
+    assert wonder_startup_line(_Has()) == ("Muse Wonder: OK", True)
+    line, available = wonder_startup_line(_Missing())
+    assert available is False
+    assert line == ("Muse Wonder: not available for this key "
+                    "(second opinions off)")
+
+
+def test_voice_endpoint_validation(monkeypatch):
+    test, code = _client()
+    too_long = test.post(f"/api/voice?code={code}",
+                         json={"text": "x" * 501, "lang": "en"})
+    assert too_long.status_code == 400
+    bad_lang = test.post(f"/api/voice?code={code}",
+                         json={"text": "Hello", "lang": "fr"})
+    assert bad_lang.status_code == 400
+    monkeypatch.setenv("POT_VOICE", "device")
+    off = test.post(f"/api/voice?code={code}",
+                    json={"text": "Hello", "lang": "en"})
+    assert off.status_code == 503
+
+
+def test_voice_endpoint_returns_mp3(monkeypatch):
+    monkeypatch.setattr("pot.voice.synthesize", lambda text, lang: b"ID3fake")
+    test, code = _client()
+    resp = test.post(f"/api/voice?code={code}",
+                     json={"text": "Hello", "lang": "en"})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "audio/mpeg"
+    assert resp.content == b"ID3fake"
+
+
 def test_recheck_unchecked_retries_and_clears():
     fake = _ApiDownSpark(inspector=_done)
     test = TestClient(create_app(fake))

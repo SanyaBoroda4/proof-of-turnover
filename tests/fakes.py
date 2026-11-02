@@ -125,6 +125,10 @@ def _not_shown_everything(call):
     }
 
 
+def _default_opinion(call):
+    return {"opinion": "still_a_problem", "reason": "It looks unfinished."}
+
+
 def _confirm_everything(call):
     return {
         "this_room": "yes",
@@ -203,7 +207,8 @@ class FakeSpark:
 
     def __init__(self, matcher=None, inspector=None, verifier=None, sam=None,
                  decider=None, requester=None, tour=None, picker=None,
-                 transcript=None, noter=None, drafter=None, ruler=None):
+                 transcript=None, noter=None, drafter=None, ruler=None,
+                 opinion=None):
         self.calls = []
         self.sam_calls = []
         self.transcribe_calls = []
@@ -219,6 +224,7 @@ class FakeSpark:
         self._noter = noter or _english_note
         self._drafter = drafter or _empty_draft
         self._ruler = ruler or _echo_rule
+        self._opinion = opinion or _default_opinion
         self.trace = []
         self._hooks = []
 
@@ -245,7 +251,7 @@ class FakeSpark:
 
     def respond(
         self, purpose, content, instructions=None, schema=None,
-        max_output_tokens=16000, effort="medium",
+        max_output_tokens=16000, effort="medium", model=None,
     ):
         call = {
             "purpose": purpose,
@@ -253,6 +259,7 @@ class FakeSpark:
             "instructions": instructions,
             "schema": schema,
             "effort": effort,
+            "model": model,
         }
         self.calls.append(call)
         self._fire(purpose, "test-spark")
@@ -275,6 +282,8 @@ class FakeSpark:
             return self._drafter(call)
         if "english" in props:
             return self._ruler(call)
+        if "opinion" in props:
+            return self._opinion(call)
         return self._inspector(call)
 
     def segment_image(self, purpose, jpeg_bytes, prompt):

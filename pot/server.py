@@ -8,6 +8,7 @@ cookie. Localhost is not exempt: tunnel traffic also arrives locally.
 """
 
 import argparse
+import base64
 import io
 import json
 import os
@@ -27,7 +28,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFi
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from pot import config, examples as examples_mod, prompts
+from pot import config, examples as examples_mod, prompts, voice as voice_mod
 from pot.checklist import PropertyError, build_checklist, load_property
 from pot.meta_client import MetaClient, MetaClientError, call_context
 from pot import setup as setup_mod
@@ -106,6 +107,136 @@ def api_startup_line(client):
     return "Meta API: OK"
 
 
+def wonder_startup_line(client):
+    """(line, available): is WONDER_MODEL offered for this key?"""
+    try:
+        data = client.list_models()
+        ids = [entry.get("id") for entry in (data or {}).get("data", [])
+               if isinstance(entry, dict)]
+    except Exception:  # noqa: BLE001 - one line, never fatal
+        return "Muse Wonder: check failed (second opinions off)", False
+    if config.WONDER_MODEL in ids:
+        return "Muse Wonder: OK", True
+    return "Muse Wonder: not available for this key (second opinions off)", False
+
+
+def voice_start_line():
+    """One startup line about which voice reads instructions aloud."""
+    if voice_mod.neural_off():
+        return "Voice: phone voices (neural voice off)"
+    return "Voice: Microsoft neural voices (edge-tts)"
+
+
+WONDER_OPINIONS = ("agree_with_cleaner", "still_a_problem", "unclear")
+
+WONDER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "opinion": {"type": "string", "enum": list(WONDER_OPINIONS)},
+        "reason": {"type": "string"},
+    },
+    "required": ["opinion", "reason"],
+    "additionalProperties": False,
+}
+
+WONDER_REASONS = ("broken", "before", "wont_clean", "other")
+
+
+def _wonder_eligible(action, reason):
+    """Second opinion: cleaner says fine, or can't fix for a real reason."""
+    if action == "its_fine":
+        return True
+    return action == "cant_fix" and reason in WONDER_REASONS
+
+
+def _wonder_snapshot(state, item_id, body):
+    with state.lock:
+        item = state.items_by_id[item_id]
+        proof = state.proofs[item_id]
+        claim = state.claims.get(item_id)
+        second = state.seconds.get(item_id)
+        photo = next(
+            (p for p in state.photos if p.id == proof.photo_id), None)
+        note = next(
+            (n for n in state.voice_notes if n["id"] == body.note_id), None)
+        return {
+            "photo_id": proof.photo_id,
+            "label": item.label,
+            "requirement": item.requirement,
+            "first_reason": (claim.seen if claim is not None else "")
+            or proof.reason,
+            "second_reason": second.reason if second is not None else "",
+            "action": body.action,
+            "reason": body.reason,
+            "note_english": (note or {}).get("english", ""),
+            "overview_path": str(photo.overview_path) if photo is not None else "",
+        }
+
+
+def _maybe_start_wonder(server, state, item_id, body):
+    """Fire-and-forget second opinion; never blocks the cleaner."""
+    if not server.wonder or not _wonder_eligible(body.action, body.reason):
+        return
+    snapshot = _wonder_snapshot(state, item_id, body)
+    if not snapshot["photo_id"] or not snapshot["overview_path"]:
+        return
+    state.mark_wonder_pending(item_id)
+    server.executor.submit(_wonder_job, server, state, item_id, snapshot)
+
+
+def _wonder_job(server, state, item_id, snapshot):
+    token = call_context.set({
+        "run_dir": str(state.run_dir),
+        "photo_id": snapshot["photo_id"],
+        "live_checks": True,
+    })
+    try:
+        raw = Path(snapshot["overview_path"]).read_bytes()
+        text = (
+            f"Item: {snapshot['label']}\n"
+            f"Requirement: {snapshot['requirement']}\n"
+            f"First look: {snapshot['first_reason']}\n"
+            f"Second look: {snapshot['second_reason']}\n"
+            f"Cleaner answered: {snapshot['action']}"
+            + (f" ({snapshot['reason']})" if snapshot["reason"] else "")
+            + "\n"
+        )
+        if snapshot["note_english"]:
+            text += f"Cleaner's voice note: {snapshot['note_english']}\n"
+        answer = server.client.respond(
+            f"second opinion {item_id} {snapshot['photo_id']}",
+            [
+                {"type": "input_text", "text": text},
+                {"type": "input_image",
+                 "image_url": "data:image/jpeg;base64,"
+                 + base64.b64encode(raw).decode("ascii")},
+            ],
+            instructions=(
+                "You are the senior inspector for vacation-rental "
+                "turnovers. A fast checker flagged this item and the "
+                "cleaner disagrees or can't fix it. Look at the photo "
+                "and tell the host what you see and what to do, in one "
+                "or two short sentences."
+            ),
+            schema=WONDER_SCHEMA,
+            model=config.WONDER_MODEL,
+            effort=config.WONDER_EFFORT,
+        )
+        opinion = answer.get("opinion") if isinstance(answer, dict) else None
+        if opinion not in WONDER_OPINIONS:
+            raise ValueError(f"bad second opinion {answer!r}")
+        state.store_wonder(item_id, {
+            "status": "done",
+            "opinion": opinion,
+            "reason": str(answer.get("reason", "")),
+            "model": config.WONDER_MODEL,
+        })
+    except Exception:  # noqa: BLE001 - an opinion never breaks a run
+        state.store_wonder(item_id, {"status": "failed"})
+    finally:
+        call_context.reset(token)
+
+
 def local_ip():
     """This PC's LAN address (for the cleaner link); 127.0.0.1 as fallback."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -146,6 +277,11 @@ class SkipShotBody(BaseModel):
 
 class SkipRoomBody(BaseModel):
     room_id: str
+
+
+class VoiceBody(BaseModel):
+    text: str
+    lang: str
 
 
 RESOLVE_ACTIONS = ("cant_fix", "its_fine")
@@ -189,6 +325,7 @@ class ServerState:
     def __init__(self, client, code):
         self.client = client
         self.code = code
+        self.wonder = True
         self.runs = {}
         self.registry_lock = threading.Lock()
         self.executor = ThreadPoolExecutor(max_workers=8)
@@ -297,11 +434,19 @@ def _check_worker(server, state, photo_id):
         )
         state.timeline("checks_done", photo_id=photo_id)
         if state.photo_had_api_failure(photo_id, calls_before):
-            state.mark_unchecked(
-                photo_id,
-                f"Photo {photo_id}: AI check failed, saved for retry",
+            state.timeline("checks_retry", photo_id=photo_id)
+            time.sleep(3)
+            retry_before = state.call_count()
+            fresh = run_photo_checks(
+                server.client, state, photo_id, items,
+                parallel=True, effort=prompts.RECHECK_EFFORT,
             )
-            return
+            if state.photo_had_api_failure(photo_id, retry_before):
+                state.mark_unchecked(
+                    photo_id,
+                    f"Photo {photo_id}: AI check failed, saved for retry",
+                )
+                return
         fresh["elapsed_seconds"] = round(time.monotonic() - started, 1)
         merged = state.merge_result(photo_id, fresh)
         count = 0
@@ -403,6 +548,19 @@ def create_app(client=None):
             "taken": state.taken_shots(),
             "current_shot": status["current_shot"],
         }
+
+    @app.post("/api/voice")
+    def _voice(body: VoiceBody):
+        text = (body.text or "").strip()
+        if not text or len(text) > 500:
+            raise HTTPException(400, "text must be 1-500 characters")
+        if body.lang not in config.CLEANER_LANGUAGE_CODES:
+            raise HTTPException(400, f"Unsupported language {body.lang!r}")
+        try:
+            data = voice_mod.synthesize(text, body.lang)
+        except Exception as exc:  # noqa: BLE001 - phone voice is the fallback
+            raise HTTPException(503, f"voice unavailable: {exc}")
+        return Response(data, media_type="audio/mpeg", headers=dict(LONG_CACHE))
 
     @app.get("/api/properties/{property_id}/examples/{shot_id}")
     def _example_file(property_id: str, shot_id: str):
@@ -558,6 +716,7 @@ def create_app(client=None):
         resolution = state.resolve_item(
             item_id, body.action, body.reason, body.note_id
         )
+        _maybe_start_wonder(server, state, item_id, body)
         return {"resolution": resolution, "agent_state": state.agent_state()}
 
     @app.post("/api/runs/{run_id}/recheck-unchecked")
@@ -896,6 +1055,10 @@ def main(argv=None):
     code = app.state.server.code
     if not config.REPLAY:
         print(api_startup_line(app.state.server.client), flush=True)
+        wonder_line, wonder_ok = wonder_startup_line(app.state.server.client)
+        print(wonder_line, flush=True)
+        app.state.server.wonder = wonder_ok
+        print(voice_start_line(), flush=True)
     for line in startup_lines(args.port, code):
         print(line, flush=True)
     import uvicorn

@@ -18,6 +18,8 @@ MODEL_API_KEY = os.environ.get("MODEL_API_KEY", "")
 REASONING_MODEL = os.environ.get("REASONING_MODEL", "muse-spark-1.3-contributor")
 SAM_MODEL = os.environ.get("SAM_MODEL", "sam-3.1")
 ASR_MODEL = os.environ.get("ASR_MODEL", "muse-voice-transcribe-1.0")
+WONDER_MODEL = os.environ.get("WONDER_MODEL", "muse-wonder-1.0")
+WONDER_EFFORT = os.environ.get("WONDER_EFFORT", "high")
 
 REPLAY = os.environ.get("POT_REPLAY") == "1"
 
@@ -44,6 +46,7 @@ DEMO_DIR = _project_dir("POT_DEMO_DIR", "data/demo-build")
 PROPERTIES_DIR = _project_dir("POT_PROPERTIES_DIR", "properties")
 SETUPS_DIR = _project_dir("POT_SETUPS_DIR", "data/setups")
 EXAMPLES_DIR = _project_dir("POT_EXAMPLES_DIR", "data/examples")
+VOICE_CACHE_DIR = _project_dir("POT_VOICE_CACHE_DIR", "data/voice_cache")
 
 #: Supported cleaner languages: (code, native name). Everything reads
 #: from this list, so a new language is one entry + one tour regeneration.

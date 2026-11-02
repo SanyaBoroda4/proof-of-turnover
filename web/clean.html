@@ -292,6 +292,7 @@
 <div id="app"><p>Cargando…</p></div>
 <div id="sheet" hidden></div>
 <div id="flash"></div>
+<audio id="voiceAudio" playsinline></audio>
 <div id="overlay"><img id="big" alt=""><div id="bigcap"></div></div>
 <input type="file" id="snapFile" accept="image/*" capture="environment" hidden>
 <script>
@@ -568,6 +569,21 @@ async function apiUpload(path, opts) {
   }
 }
 
+async function uploadWithRetry(path, form) {
+  const delays = [0, 2000, 5000];
+  let lastError = null;
+  for (const delay of delays) {
+    if (delay) await new Promise(r => setTimeout(r, delay));
+    try {
+      return await apiUpload(path, {method: "POST", body: form});
+    } catch (e) {
+      lastError = e;
+      if (e.message && e.message.indexOf("foto antigua") >= 0) throw e;
+    }
+  }
+  throw lastError;
+}
+
 const VOICE_PREFS = {es: ["es-us", "es-mx"], en: ["en-us"], ru: ["ru-ru"]};
 let voice = null;
 function pickVoice() {
@@ -596,10 +612,69 @@ if ("speechSynthesis" in window) {
 const speechQueue = [];
 let speaking = false;
 let speechTimer = null;
+const voiceCache = new Map();
+let voiceOk = null, voiceUnlocked = false;
+
+function audioEl() {
+  return document.getElementById("voiceAudio");
+}
+
+async function neuralUrl(text) {
+  if (voiceCache.has(text)) return voiceCache.get(text);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 5000);
+  try {
+    const r = await fetch(`/api/voice?code=${encodeURIComponent(CODE)}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text: text, lang: LANG}),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) throw new Error("voice " + r.status);
+    const url = URL.createObjectURL(await r.blob());
+    voiceCache.set(text, url);
+    voiceOk = true;
+    return url;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function pumpSpeech() {
-  if (speaking || !speechQueue.length || !("speechSynthesis" in window)) return;
+  if (speaking || !speechQueue.length) return;
   speaking = true;
-  const u = new SpeechSynthesisUtterance(speechQueue.shift());
+  const text = speechQueue[0];
+  neuralUrl(text).then(url => {
+    const el = audioEl();
+    const done = () => {
+      el.onended = el.onerror = null;
+      speechQueue.shift();
+      speaking = false;
+      pumpSpeech();
+    };
+    const fail = () => {
+      el.onended = el.onerror = null;
+      speechQueue.shift();
+      speaking = false;
+      speakWithPhone(text);
+    };
+    el.onended = done;
+    el.onerror = fail;
+    el.src = url;
+    const playing = el.play();
+    if (playing && playing.catch) playing.catch(fail);
+  }).catch(() => {
+    voiceOk = false;
+    speechQueue.shift();
+    speaking = false;
+    speakWithPhone(text);
+  });
+}
+
+function speakWithPhone(text) {
+  if (!("speechSynthesis" in window)) { speaking = false; return; }
+  speaking = true;
+  const u = new SpeechSynthesisUtterance(text);
   if (voice) u.voice = voice;
   u.lang = (voice && voice.lang) || LANG;
   u.onend = u.onerror = () => {
@@ -619,9 +694,52 @@ function pumpSpeech() {
   }, 15000);
   speechSynthesis.speak(u);
 }
+
+function prefetchSpeech() {
+  if (!tour || !status) return;
+  const texts = [];
+  const screen = screenOf();
+  if (screen === "round") {
+    for (const shot of tour.shots) {
+      if (texts.length >= 2) break;
+      if (takenSet.has(shot.shot_id) || skippedSet().has(shot.shot_id)) continue;
+      texts.push(roomHeading(shot) + ". " + instruction(shot));
+    }
+  } else if (screen === "cards") {
+    const byId = itemsById();
+    for (const id of cardOrder.slice(0, 2)) {
+      if (byId[id]) texts.push(cardText(byId[id]));
+    }
+  }
+  for (const text of texts) {
+    if (text) neuralUrl(text).catch(() => {});
+  }
+}
+
+function silentClipUrl() {
+  const rate = 8000, frames = Math.floor(rate * 0.05);
+  const buf = new ArrayBuffer(44 + frames * 2);
+  const v = new DataView(buf);
+  const wstr = (off, s) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
+  };
+  wstr(0, "RIFF"); v.setUint32(4, 36 + frames * 2, true); wstr(8, "WAVEfmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  wstr(36, "data"); v.setUint32(40, frames * 2, true);
+  return URL.createObjectURL(new Blob([buf], {type: "audio/wav"}));
+}
+
 function say(text) { speechQueue.push(text); pumpSpeech(); }
 function repeatSay(text) {
   speechQueue.length = 0;
+  const el = audioEl();
+  try {
+    el.pause();
+    el.removeAttribute("src");
+    el.load();
+  } catch (e) {}
   if ("speechSynthesis" in window) speechSynthesis.cancel();
   speaking = false;
   say(text);
@@ -1100,9 +1218,12 @@ function render() {
   prevScreen = screen;
   if (!RUN) return renderStart(app);
   if (!tour || !status) { app.innerHTML = `<div class="wrap"><p>${esc(T().loading)}</p></div>`; return; }
-  if (status.finished_at) return renderFinal(app);
-  if (!allTaken() && !status.round_ended) return renderRound(app);
-  return renderCards(app);
+  let view;
+  if (status.finished_at) view = renderFinal(app);
+  else if (!allTaken() && !status.round_ended) view = renderRound(app);
+  else view = renderCards(app);
+  prefetchSpeech();
+  return view;
 }
 
 async function renderStart(app) {
@@ -1351,7 +1472,7 @@ function roundMsgs() {
   if (transcribing) msgs += `<div class="pill">${esc(T().transcribing)}</div>`;
   if (noteMsg) msgs += `<div class="pill">${esc(noteMsg)}</div>`;
   if (!micReady() && !recorder) msgs += `<div class="pill">${esc(T().insecure)}</div>`;
-  if (voiceMissing()) msgs += `<div class="pill">${esc(T().noVoice)}</div>`;
+  if (voiceMissing() && voiceOk !== true) msgs += `<div class="pill">${esc(T().noVoice)}</div>`;
   if (photoError) msgs += `<div class="pill warn">${esc(photoError)}</div>`;
   return msgs;
 }
@@ -1863,7 +1984,7 @@ async function sendShot(shotId, file) {
   form.append("shot_id", shotId);
   form.append("image", file);
   try {
-    await apiUpload(`/api/runs/${encodeURIComponent(RUN)}/photos`, {method: "POST", body: form});
+    await uploadWithRetry(`/api/runs/${encodeURIComponent(RUN)}/photos`, form);
     const entry = optimistic.get(shotId);
     if (entry) {
       try { URL.revokeObjectURL(entry.url); } catch (e) {}
@@ -1998,8 +2119,7 @@ function cardSnap(itemId, file) {
     form.append("shot_id", shot.shot_id);
     form.append("image", file);
     try {
-      const res = await apiUpload(`/api/runs/${encodeURIComponent(RUN)}/photos`,
-        {method: "POST", body: form});
+      const res = await uploadWithRetry(`/api/runs/${encodeURIComponent(RUN)}/photos`, form);
       settled = true;
       retakePhotos[itemId] = res.photo_id;
       photoError = "";
@@ -2207,6 +2327,15 @@ async function boot() {
   document.getElementById("overlay").onclick = () => {
     document.getElementById("overlay").style.display = "none";
   };
+  document.addEventListener("click", () => {
+    if (voiceUnlocked) return;
+    voiceUnlocked = true;
+    try {
+      const el = audioEl();
+      el.src = silentClipUrl();
+      playQuiet(el);
+    } catch (e) {}
+  }, true);
   document.addEventListener("visibilitychange", async () => {
     if (document.hidden) {
       stopCamera();

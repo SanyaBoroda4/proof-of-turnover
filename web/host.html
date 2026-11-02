@@ -49,6 +49,9 @@
   .pill.supplies { background: var(--marsh); color: var(--white); }
   .pill.other { background: var(--line); }
   .news .card audio { width: 100%; margin-top: 6px; }
+  .wonder { background: var(--linen); border-radius: 12px; padding: 8px 10px;
+            margin-top: 8px; font-size: 14px; }
+  .wonder .lab { font-size: 12px; font-weight: 700; color: var(--muted); }
   .duo { display: flex; gap: 8px; }
   .duo figure { margin: 6px 0 0; flex: 1 1 0; }
   .duo img { width: 100%; border-radius: 12px; }
@@ -151,6 +154,17 @@ function allItems() {
   return out;
 }
 
+function wonderHtml(w) {
+  if (!w || w.status === "failed") return "";
+  let line = "Taking a second look…";
+  if (w.status === "done") {
+    if (w.opinion === "agree_with_cleaner") line = `Agrees with the cleaner: ${esc(w.reason || "")}`;
+    else if (w.opinion === "still_a_problem") line = `Still a problem: ${esc(w.reason || "")}`;
+    else line = `Can't tell from this photo: ${esc(w.reason || "")}`;
+  }
+  return `<div class="wonder"><div class="lab">Second opinion · Muse Wonder</div><div>${line}</div></div>`;
+}
+
 function needsDecisionHtml() {
   const rows = allItems().filter(({item}) => item.resolution);
   if (!rows.length) return "";
@@ -171,7 +185,7 @@ function needsDecisionHtml() {
     return `<div class="card"><div><span class="pill ${kind === "reported" ? "missing" : "other"}">${kind}</span>
       <span class="small">${esc(room.name)}</span></div>
       <div><strong>${esc(item.label)}</strong></div>
-      <div class="small">${esc(decision)}</div>${img}${noteHtml}</div>`;
+      <div class="small">${esc(decision)}</div>${wonderHtml(res.wonder)}${img}${noteHtml}</div>`;
   }).join("");
   return `<h2>Needs your decision</h2><div class="news">${cards}</div>`;
 }
