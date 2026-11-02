@@ -608,6 +608,29 @@ def test_pick_failures_do_not_make_photo_unchecked(tmp_path):
     assert state.photo_had_api_failure(photo.id, 0)
 
 
+def test_second_opinion_does_not_change_api_down(tmp_path):
+    from pot.checklist import load_property
+    from pot.tour import load_tour
+
+    prop = load_property("demo-house")
+    state = RunState(tmp_path / "run", prop, build_checklist(prop),
+                     tour={"shots": load_tour("demo-house")})
+
+    def record(purpose, source, status=None):
+        entry = {"purpose": purpose, "model": "m", "photo_id": "P01",
+                 "seconds": 0.4, "attempts": 1, "source": source}
+        if status is not None:
+            entry["status"] = status
+        state.record_call(entry)
+
+    record("second opinion bed.beds_made P01", "failed", 503)
+    assert state.api_down is None
+    record("second look bed.beds_made P01", "failed", 503)
+    assert state.api_down == "Meta API error (503)"
+    record("second opinion bed.beds_made P01", "live")
+    assert state.api_down == "Meta API error (503)"
+
+
 def test_unchecked_and_skipped_survive_reload(tmp_path):
     from pot.checklist import load_property
     from pot.tour import load_tour

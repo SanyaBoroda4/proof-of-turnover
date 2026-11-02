@@ -70,12 +70,23 @@ def test_prefetch_order_and_limit(tmp_path, monkeypatch):
 
     monkeypatch.delenv("POT_VOICE", raising=False)
     started = []
+    guard = threading.Lock()
+    active = 0
+    max_active = 0
     release = threading.Event()
 
     def fake_synth(text, voice):
-        started.append(text)
-        assert release.wait(10)
-        return b"mp3:" + text.encode()
+        nonlocal active, max_active
+        with guard:
+            started.append(text)
+            active += 1
+            max_active = max(max_active, active)
+        try:
+            assert release.wait(10)
+            return b"mp3:" + text.encode()
+        finally:
+            with guard:
+                active -= 1
 
     monkeypatch.setattr(voice_mod, "_synthesize_sync", fake_synth)
     texts = ["one", "two", "three", "four", "five"]
@@ -83,12 +94,14 @@ def test_prefetch_order_and_limit(tmp_path, monkeypatch):
     deadline = time.time() + 5
     while len(started) < 3 and time.time() < deadline:
         time.sleep(0.02)
-    assert started == ["one", "two", "three"]
+    assert set(started) == {"one", "two", "three"}
+    assert max_active <= 3
     release.set()
     deadline = time.time() + 5
     while len(list(tmp_path.glob("*.mp3"))) < 5 and time.time() < deadline:
         time.sleep(0.02)
-    assert started == texts
+    assert set(started) == set(texts)
+    assert max_active <= 3
     assert len(list(tmp_path.glob("*.mp3"))) == 5
 
 

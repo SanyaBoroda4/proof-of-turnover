@@ -327,6 +327,7 @@ let retrying = false, navDepth = 0;
 let camStream = null, camStarting = false, camMode = "live", camSheet = null;
 let camWaiting = false;
 let camWide = false, camWideBusy = false, camDeviceId = null, camNormalId = null;
+let camWideShot = null, camWideImpossible = false;
 let roundView = "card";
 let exState = {shot: null, big: false, popAt: null, leaveAt: null, timer: null};
 let prevScreen = "";
@@ -936,6 +937,7 @@ function stopCamera() {
   }
   camWide = false;
   camDeviceId = null;
+  camWideShot = null;
   document.getElementById("camLayer").hidden = true;
 }
 
@@ -953,6 +955,7 @@ async function startCamera() {
     });
     const track = camStream.getVideoTracks()[0];
     if (track && track.getSettings) camNormalId = track.getSettings().deviceId || null;
+    camWideShot = null;
     return camLive();
   } catch (e) {
     stopCamera();
@@ -1054,9 +1057,23 @@ async function switchCamera(want) {
     return true;
   } catch (e) {
     if (fresh) fresh.getTracks().forEach(t => { try { t.stop(); } catch (err) {} });
+    let restored = false;
     if (old) {
       video.srcObject = old;
       playQuiet(video);
+      restored = camLive();
+    }
+    if (!restored) {
+      const restarted = await startCamera();
+      if (restarted) {
+        video.srcObject = camStream;
+        playQuiet(video);
+      } else {
+        camMode = "file";
+        document.getElementById("camLayer").hidden = true;
+        lastKey = null;
+        renderMaybe();
+      }
     }
     return false;
   }
@@ -1065,28 +1082,45 @@ async function switchCamera(want) {
 async function syncWideCamera() {
   if (!WIDE || DEMO || camMode !== "live" || !camLive() || camWideBusy) return;
   const shot = cameraShot();
+  const shotId = shot ? shot.shot_id : null;
   const want = !!(shot && shot.overview);
-  if (want === camWide) { updateWidePills(); return; }
+  if (shotId === camWideShot) { updateWidePills(); return; }
+  if (want && camWideImpossible) {
+    camWideShot = shotId;
+    updateWidePills();
+    return;
+  }
+  if (want === camWide) {
+    camWideShot = shotId;
+    updateWidePills();
+    return;
+  }
+  camWideShot = shotId;
   camWideBusy = true;
+  const before = camWide;
   try {
     if (want) {
       let ok = await applyZoom(true);
       if (!ok) ok = await switchCamera(true);
       camWide = !!ok;
+      if (!ok) camWideImpossible = true;
     } else if (camDeviceId) {
       const ok = await switchCamera(false);
       camWide = ok ? false : true;
     } else {
-      await applyZoom(false);
-      camWide = false;
+      const ok = await applyZoom(false);
+      camWide = ok ? false : before;
     }
   } catch (e) {
-    camWide = !!camDeviceId;
+    if (want) camWideImpossible = true;
+    camWide = camDeviceId ? true : before;
   } finally {
     camWideBusy = false;
     updateWidePills();
-    lastKey = null;
-    renderMaybe();
+    if (camWide !== before) {
+      lastKey = null;
+      renderMaybe();
+    }
   }
 }
 

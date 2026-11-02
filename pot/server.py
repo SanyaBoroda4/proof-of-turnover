@@ -87,14 +87,19 @@ def access_code():
     return os.environ.get("POT_ACCESS_CODE", "") or secrets.token_urlsafe(9)
 
 
-def api_startup_line(client):
+def api_startup_line(client=None, data=None, error=None):
     """One line about the Meta API key: OK, or rejected/unreachable.
 
-    Never includes the key itself.
+    Never includes the key itself. Pass a fetched models list (or its
+    error) to avoid calling list_models() again.
     """
-    try:
-        client.list_models()
-    except MetaClientError as exc:
+    if error is None and data is None:
+        try:
+            data = client.list_models()
+        except Exception as exc:  # noqa: BLE001 - startup must report
+            error = exc
+    if error is not None:
+        exc = error
         status = getattr(exc, "status", None)
         if status in (401, 403):
             return (
@@ -102,22 +107,35 @@ def api_startup_line(client):
                 "put a valid MODEL_API_KEY in .env"
             )
         return f"Meta API: check failed ({exc})"
-    except Exception as exc:  # noqa: BLE001 - startup must report, not crash
-        return f"Meta API: check failed ({exc})"
     return "Meta API: OK"
 
 
-def wonder_startup_line(client):
+def wonder_startup_line(client=None, data=None, error=None):
     """(line, available): is WONDER_MODEL offered for this key?"""
-    try:
-        data = client.list_models()
-        ids = [entry.get("id") for entry in (data or {}).get("data", [])
-               if isinstance(entry, dict)]
-    except Exception:  # noqa: BLE001 - one line, never fatal
+    if error is not None:
         return "Muse Wonder: check failed (second opinions off)", False
+    if data is None:
+        try:
+            data = client.list_models()
+        except Exception:  # noqa: BLE001 - one line, never fatal
+            return "Muse Wonder: check failed (second opinions off)", False
+    ids = [entry.get("id") for entry in (data or {}).get("data", [])
+           if isinstance(entry, dict)]
     if config.WONDER_MODEL in ids:
         return "Muse Wonder: OK", True
     return "Muse Wonder: not available for this key (second opinions off)", False
+
+
+def startup_check_lines(client):
+    """(meta line, wonder line, wonder available) from one models fetch."""
+    try:
+        data = client.list_models()
+        error = None
+    except Exception as exc:  # noqa: BLE001 - startup must report
+        data = None
+        error = exc
+    wonder_line, wonder_ok = wonder_startup_line(data=data, error=error)
+    return api_startup_line(data=data, error=error), wonder_line, wonder_ok
 
 
 def voice_start_line():
@@ -1078,8 +1096,10 @@ def main(argv=None):
     app = create_app()
     code = app.state.server.code
     if not config.REPLAY:
-        print(api_startup_line(app.state.server.client), flush=True)
-        wonder_line, wonder_ok = wonder_startup_line(app.state.server.client)
+        print("Checking Meta API…", flush=True)
+        meta_line, wonder_line, wonder_ok = startup_check_lines(
+            app.state.server.client)
+        print(meta_line, flush=True)
         print(wonder_line, flush=True)
         app.state.server.wonder = wonder_ok
         print(voice_start_line(), flush=True)

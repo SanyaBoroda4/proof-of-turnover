@@ -63,6 +63,11 @@ def api_failure(record):
     return status in (401, 403) or status >= 500
 
 
+def _is_second_opinion(record):
+    """Background Muse Wonder calls never affect the photo/API status."""
+    return (record.get("purpose") or "").startswith("second opinion")
+
+
 def api_failure_reason(record):
     """Short human reason for an api_failure() record."""
     status = record.get("status")
@@ -278,6 +283,8 @@ class RunState:
                 except json.JSONDecodeError:
                     continue
         for record in reversed(state.calls):
+            if _is_second_opinion(record):
+                continue
             if api_failure(record):
                 state.api_down = api_failure_reason(record)
                 break
@@ -724,6 +731,8 @@ class RunState:
         """Append one model-call log entry (memory side of calls.jsonl)."""
         with self.lock:
             self.calls.append(entry)
+            if _is_second_opinion(entry):
+                return
             if api_failure(entry):
                 self.api_down = api_failure_reason(entry)
             elif entry.get("source") in ("live", "recorded"):

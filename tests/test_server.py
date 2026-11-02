@@ -907,6 +907,25 @@ def test_wonder_startup_line():
                     "(second opinions off)")
 
 
+def test_startup_checks_fetch_models_once():
+    from pot.server import startup_check_lines
+
+    class _Counting:
+        def __init__(self):
+            self.calls = 0
+
+        def list_models(self):
+            self.calls += 1
+            return {"data": [{"id": "muse-wonder-1.0"}]}
+
+    client = _Counting()
+    meta_line, wonder_line, wonder_ok = startup_check_lines(client)
+    assert client.calls == 1
+    assert meta_line == "Meta API: OK"
+    assert wonder_line == "Muse Wonder: OK"
+    assert wonder_ok is True
+
+
 def test_voice_endpoint_validation(monkeypatch):
     test, code = _client()
     too_long = test.post(f"/api/voice?code={code}",
