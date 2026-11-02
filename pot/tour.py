@@ -41,6 +41,7 @@ def tour_schema():
                         "short_en": {"type": "string"},
                         "short_ru": {"type": "string"},
                         "item_ids": {"type": "array", "items": {"type": "string"}},
+                        "overview": {"type": "boolean"},
                         "instruction_es": {"type": "string"},
                         "instruction_en": {"type": "string"},
                         "instruction_ru": {"type": "string"},
@@ -103,6 +104,7 @@ def fixup_tour(property, checklist, shots):
             "shot_id": shot_id,
             "room_id": room_id,
             "item_ids": list(item_ids),
+            "overview": entry.get("overview") is True,
         }
         room_en = entry.get("room_name_en") or rooms[room_id]["name"]
         short_en = entry.get("short_en") or room_en
@@ -153,6 +155,7 @@ def fixup_tour(property, checklist, shots):
             "short_en": room_name,
             "short_ru": room_name,
             "item_ids": [item.id],
+            "overview": False,
             "instruction_es": f"Foto: {item.label}",
             "instruction_en": item.requirement,
             "instruction_ru": item.requirement,

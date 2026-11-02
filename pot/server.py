@@ -283,6 +283,11 @@ class VoiceBody(BaseModel):
     lang: str
 
 
+class VoicePrefetchBody(BaseModel):
+    lang: str
+    texts: list
+
+
 RESOLVE_ACTIONS = ("cant_fix", "its_fine")
 RESOLVE_REASONS = ("broken", "before", "supplies", "wont_clean", "other")
 
@@ -561,6 +566,23 @@ def create_app(client=None):
             raise HTTPException(503, f"voice unavailable: {exc}")
         return Response(data, media_type="audio/mpeg", headers=dict(LONG_CACHE))
 
+    @app.post("/api/voice/prefetch")
+    def _voice_prefetch(body: VoicePrefetchBody):
+        if body.lang not in config.CLEANER_LANGUAGE_CODES:
+            raise HTTPException(400, f"Unsupported language {body.lang!r}")
+        if len(body.texts) > 80:
+            raise HTTPException(400, "at most 80 texts")
+        texts = []
+        for text in body.texts:
+            if not isinstance(text, str) or not text.strip() or len(text) > 500:
+                raise HTTPException(400, "each text must be 1-500 characters")
+            texts.append(text)
+        try:
+            queued = voice_mod.prefetch(texts, body.lang)
+        except Exception as exc:  # noqa: BLE001 - phone voice is the fallback
+            raise HTTPException(503, f"voice unavailable: {exc}")
+        return {"queued": queued}
+
     @app.get("/api/properties/{property_id}/examples/{shot_id}")
     def _example_file(property_id: str, shot_id: str):
         _checked_id(property_id, "property")
@@ -669,6 +691,9 @@ def create_app(client=None):
         if body.decision == "approve":
             signoff = state.approve()
             for shot in state.tour["shots"]:
+                if examples_mod.has_example(
+                        state.property["id"], shot["shot_id"]):
+                    continue
                 photo = examples_mod.proving_photo_for_shot(state, shot)
                 if photo is not None:
                     examples_mod.save_example(

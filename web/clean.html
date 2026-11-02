@@ -56,7 +56,7 @@
   /* Round: full-bleed camera */
   #camLayer[hidden] { display: none; }
   #camLayer { position: fixed; inset: 0; background: #121417; }
-  #camLayer video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #camLayer video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
   .round { position: fixed; inset: 0; background: transparent; overflow: hidden; }
   .round.nocam { background: #121417; }
   .round .novid, #sheet .novid { position: absolute; inset: 0; display: flex; align-items: center;
@@ -120,7 +120,7 @@
   @keyframes expop { from { transform: scale(.85); opacity: 0; }
                      to { transform: none; opacity: 1; } }
   @keyframes extuck { to { transform: scale(.15); opacity: 0; } }
-  .expop img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .expop img { width: 100%; height: 100%; object-fit: contain; background: var(--linen); display: block; }
   .expop .chip2 { position: absolute; left: 10px; bottom: 10px; background: var(--white);
                   border-radius: 999px; padding: 4px 12px; font-size: 13px;
                   font-weight: 700; }
@@ -212,15 +212,20 @@
   .tagrow .of { margin-left: auto; font-size: 14px; color: var(--muted); }
   .photowrap { position: relative; margin: 0 0 12px; }
   .photowrap img.photo { width: 100%; border-radius: 20px; cursor: zoom-in; display: block;
-    max-height: max(200px, calc(100vh - 430px));
-    max-height: max(200px, calc(100svh - 430px));
+    max-height: max(200px, calc(100vh - 506px));
+    max-height: max(200px, calc(100svh - 506px));
     object-fit: contain; background: var(--linen); }
-  .inset { position: absolute; right: 8px; bottom: 8px; width: 96px; cursor: zoom-in;
-           background: var(--white); border-radius: 12px; padding: 4px;
-           box-shadow: var(--float-shadow); border: none; }
-  .inset img { width: 100%; border-radius: 8px; display: block; }
-  .inset span { display: block; font-size: 11px; line-height: 14px; padding: 2px 4px;
-                color: var(--muted); }
+  .exrow { display: flex; align-items: center; gap: 10px; width: 100%;
+           margin: 0 0 12px; padding: 0; border: none; background: none;
+           cursor: zoom-in; text-align: left; font-family: inherit; }
+  .exrow img { width: 64px; height: 64px; border-radius: 14px; object-fit: cover;
+               display: block; flex: none; }
+  .exrow span { font-size: 14px; font-weight: 700; color: var(--muted); }
+  .widepill { position: absolute; left: 50%; bottom: 122px; z-index: 3;
+              transform: translateX(-50%); background: rgba(255, 255, 255, 0.88);
+              color: var(--ink); border-radius: 999px; padding: 5px 12px;
+              font-size: 14px; font-weight: 700; }
+  #sheet .widepill { position: static; transform: none; }
   .card .instruction { font-size: 22px; line-height: 28px; }
   .cardactions { position: sticky; bottom: 0; z-index: 2; background: var(--white);
                  margin: 0 -16px; padding: 2px 16px calc(6px + env(safe-area-inset-bottom));
@@ -301,6 +306,7 @@ const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
 const DEMO = params.get("demo") === "1";
 const TEST = params.get("test") === "1";
+const WIDE = params.get("wide") !== "0";
 let RUN = params.get("run") || "";
 let LANG = "es", langPicked = false, LANGS = null, modePicked = "";
 let tour = null, tourRun = "", takenSet = new Set(), status = null, demoPhotos = null;
@@ -320,6 +326,7 @@ let toast = null, toastTimer = null;
 let retrying = false, navDepth = 0;
 let camStream = null, camStarting = false, camMode = "live", camSheet = null;
 let camWaiting = false;
+let camWide = false, camWideBusy = false, camDeviceId = null, camNormalId = null;
 let roundView = "card";
 let exState = {shot: null, big: false, popAt: null, leaveAt: null, timer: null};
 let prevScreen = "";
@@ -394,6 +401,8 @@ const I18N = {
     finishEarly: "Terminar fotos ahora",
     finishEarlyConfirm: "¿Terminar las fotos ahora? Las fotos no tomadas se omitirán.",
     skipTest: "Saltar área",
+    wide: "Ancho",
+    skippedLine: (taken, skipped) => `${taken} fotos tomadas · ${skipped} omitidas (prueba)`,
   },
   en: {
     title: "Cleaning turnover",
@@ -462,6 +471,8 @@ const I18N = {
     finishEarly: "Finish photos now",
     finishEarlyConfirm: "Finish photos now? Shots not taken will be skipped.",
     skipTest: "Skip area",
+    wide: "Wide",
+    skippedLine: (taken, skipped) => `${taken} photos taken · ${skipped} skipped (test)`,
   },
   ru: {
     title: "Уборка",
@@ -530,6 +541,8 @@ const I18N = {
     finishEarly: "Закончить фото сейчас",
     finishEarlyConfirm: "Закончить фото сейчас? Неснятые кадры будут пропущены.",
     skipTest: "Пропустить зону",
+    wide: "Широко",
+    skippedLine: (taken, skipped) => `${taken} фото сделано · ${skipped} пропущено (тест)`,
   },
 };
 function T() { return I18N[LANG] || I18N.en; }
@@ -590,10 +603,21 @@ function pickVoice() {
   voice = null;
   if (!("speechSynthesis" in window)) return;
   const all = speechSynthesis.getVoices() || [];
-  const mine = all.filter(
-    v => v.lang && v.lang.toLowerCase().startsWith(LANG));
+  const langOf = v => (v.lang || "").toLowerCase().replace("_", "-");
+  if (LANG === "en") {
+    const british = all.filter(v => langOf(v).startsWith("en-gb"));
+    for (const name of ["kate", "serena", "martha", "stephanie"]) {
+      voice = british.find(v => (v.name || "").toLowerCase().includes(name)) || null;
+      if (voice) break;
+    }
+    voice = voice || british[0]
+      || all.find(v => langOf(v).startsWith("en-us"))
+      || all.find(v => langOf(v).startsWith("en")) || null;
+    return;
+  }
+  const mine = all.filter(v => langOf(v).startsWith(LANG));
   for (const pref of (VOICE_PREFS[LANG] || [])) {
-    voice = mine.find(v => v.lang.toLowerCase() === pref) || null;
+    voice = mine.find(v => langOf(v) === pref) || null;
     if (voice) break;
   }
   voice = voice || mine[0] || null;
@@ -613,16 +637,10 @@ const speechQueue = [];
 let speaking = false;
 let speechTimer = null;
 const voiceCache = new Map();
-let voiceOk = null, voiceUnlocked = false, voiceRetryAt = 0;
-
-function neuralPaused() {
-  return Date.now() < voiceRetryAt;
-}
-
-function pauseNeuralVoice() {
-  voiceOk = false;
-  voiceRetryAt = Date.now() + 120000;
-}
+let voiceOk = null, voiceUnlocked = false;
+let speechGen = 0, voice503Streak = 0, voicePhoneOnly = false;
+const voiceWarmed = new Set();
+let voiceTourRun = "", voiceCardsKey = "";
 
 function audioEl() {
   return document.getElementById("voiceAudio");
@@ -630,9 +648,13 @@ function audioEl() {
 
 async function neuralUrl(text) {
   if (voiceCache.has(text)) return voiceCache.get(text);
-  if (neuralPaused()) throw new Error("neural voice paused");
+  if (voicePhoneOnly) {
+    const err = new Error("phone voice for this session");
+    err.status = 503;
+    throw err;
+  }
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 5000);
+  const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const r = await fetch(`/api/voice?code=${encodeURIComponent(CODE)}`, {
       method: "POST",
@@ -640,62 +662,146 @@ async function neuralUrl(text) {
       body: JSON.stringify({text: text, lang: LANG}),
       signal: ctrl.signal,
     });
-    if (!r.ok) throw new Error("voice " + r.status);
+    if (!r.ok) {
+      const err = new Error("voice " + r.status);
+      err.status = r.status;
+      throw err;
+    }
     const url = URL.createObjectURL(await r.blob());
     voiceCache.set(text, url);
     voiceOk = true;
-    voiceRetryAt = 0;
+    voice503Streak = 0;
     return url;
   } finally {
     clearTimeout(timer);
   }
 }
 
+function serverPrefetch(texts) {
+  const fresh = [];
+  for (const text of texts) {
+    if (!text || voiceWarmed.has(text)) continue;
+    voiceWarmed.add(text);
+    fresh.push(text);
+  }
+  if (!fresh.length) return;
+  for (let i = 0; i < fresh.length; i += 80) {
+    fetch(`/api/voice/prefetch?code=${encodeURIComponent(CODE)}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({lang: LANG, texts: fresh.slice(i, i + 80)}),
+    }).catch(() => {});
+  }
+}
+
+function warmShotLines() {
+  if (!tour || !status) return;
+  const skip = skippedSet();
+  const remaining = tour.shots.filter(s =>
+    !takenSet.has(s.shot_id) && !skip.has(s.shot_id));
+  const cur = roundCurrent();
+  const ordered = [];
+  if (cur) ordered.push(cur);
+  for (const shot of remaining) {
+    if (!cur || shot.shot_id !== cur.shot_id) ordered.push(shot);
+  }
+  serverPrefetch(ordered.map(s => roomHeading(s) + ". " + instruction(s)));
+}
+
+function warmCardLines() {
+  if (!tour || !status || screenOf() !== "cards") return;
+  const byId = itemsById();
+  const texts = [T().photosDone, T().doneAll];
+  for (const id of cardOrder) {
+    if (byId[id]) texts.push(cardText(byId[id]));
+  }
+  const key = texts.join("\n");
+  if (key === voiceCardsKey) return;
+  voiceCardsKey = key;
+  serverPrefetch(texts);
+}
+
+function stopSpeech() {
+  speechGen += 1;
+  speechQueue.length = 0;
+  speaking = false;
+  if (speechTimer) { clearTimeout(speechTimer); speechTimer = null; }
+  const el = audioEl();
+  if (el) {
+    el.onended = null;
+    el.onerror = null;
+    try {
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
+    } catch (e) {}
+  }
+  if ("speechSynthesis" in window) {
+    try { speechSynthesis.cancel(); } catch (e) {}
+  }
+}
+
 function pumpSpeech() {
   if (speaking || !speechQueue.length) return;
-  speaking = true;
+  const gen = speechGen;
   const text = speechQueue[0];
-  if (!voiceCache.has(text) && neuralPaused()) {
+  speaking = true;
+  if (voicePhoneOnly && !voiceCache.has(text)) {
     speechQueue.shift();
     speaking = false;
-    speakWithPhone(text);
+    speakWithPhone(text, gen);
     return;
   }
   neuralUrl(text).then(url => {
+    if (gen !== speechGen) return;
     const el = audioEl();
     const done = () => {
+      if (gen !== speechGen) return;
       el.onended = el.onerror = null;
       speechQueue.shift();
       speaking = false;
       pumpSpeech();
     };
     const fail = () => {
+      if (gen !== speechGen) return;
       el.onended = el.onerror = null;
-      pauseNeuralVoice();
       speechQueue.shift();
       speaking = false;
-      speakWithPhone(text);
+      speakWithPhone(text, gen);
     };
     el.onended = done;
     el.onerror = fail;
     el.src = url;
+    el.currentTime = 0;
     const playing = el.play();
     if (playing && playing.catch) playing.catch(fail);
-  }).catch(() => {
-    if (!neuralPaused()) pauseNeuralVoice();
+  }).catch(err => {
+    if (gen !== speechGen) return;
+    if (err && err.status === 503) {
+      voice503Streak += 1;
+      voiceOk = false;
+      if (voice503Streak >= 3) voicePhoneOnly = true;
+    }
     speechQueue.shift();
     speaking = false;
-    speakWithPhone(text);
+    speakWithPhone(text, gen);
   });
 }
 
-function speakWithPhone(text) {
-  if (!("speechSynthesis" in window)) { speaking = false; return; }
+function speakWithPhone(text, gen) {
+  if (gen === undefined) gen = speechGen;
+  if (!("speechSynthesis" in window)) {
+    speaking = false;
+    pumpSpeech();
+    return;
+  }
   speaking = true;
+  pickVoice();
   const u = new SpeechSynthesisUtterance(text);
   if (voice) u.voice = voice;
   u.lang = (voice && voice.lang) || LANG;
   u.onend = u.onerror = () => {
+    if (gen !== speechGen) return;
     speaking = false;
     if (speechTimer) { clearTimeout(speechTimer); speechTimer = null; }
     pumpSpeech();
@@ -704,6 +810,7 @@ function speakWithPhone(text) {
   speechTimer = setTimeout(() => {
     // Some Android Chrome versions never fire onend: force-advance.
     speechTimer = null;
+    if (gen !== speechGen) return;
     if (speaking) {
       speaking = false;
       try { speechSynthesis.cancel(); } catch (e) {}
@@ -730,11 +837,7 @@ function prefetchSpeech() {
     }
   }
   for (const text of texts) {
-    if (text) {
-      neuralUrl(text).catch(() => {
-        if (!neuralPaused()) pauseNeuralVoice();
-      });
-    }
+    if (text) neuralUrl(text).catch(() => {});
   }
 }
 
@@ -754,17 +857,14 @@ function silentClipUrl() {
 }
 
 function say(text) { speechQueue.push(text); pumpSpeech(); }
+function sayNow(text) { stopSpeech(); say(text); }
 function repeatSay(text) {
-  speechQueue.length = 0;
-  const el = audioEl();
-  try {
-    el.pause();
-    el.removeAttribute("src");
-    el.load();
-  } catch (e) {}
-  if ("speechSynthesis" in window) speechSynthesis.cancel();
-  speaking = false;
-  say(text);
+  stopSpeech();
+  if (voiceCache.has(text)) {
+    say(text);
+  } else {
+    speakWithPhone(text, speechGen);
+  }
 }
 
 let wakeLock = null;
@@ -834,6 +934,8 @@ function stopCamera() {
     camStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
     camStream = null;
   }
+  camWide = false;
+  camDeviceId = null;
   document.getElementById("camLayer").hidden = true;
 }
 
@@ -849,6 +951,8 @@ async function startCamera() {
       video: {facingMode: "environment", width: {ideal: 1920}, height: {ideal: 1440}},
       audio: false,
     });
+    const track = camStream.getVideoTracks()[0];
+    if (track && track.getSettings) camNormalId = track.getSettings().deviceId || null;
     return camLive();
   } catch (e) {
     stopCamera();
@@ -869,12 +973,14 @@ function attachCamera() {
   if (camLive()) {
     if (video.srcObject !== camStream) video.srcObject = camStream;
     playQuiet(video);
+    syncWideCamera();
     return;
   }
   startCamera().then(ok => {
     if (ok) {
       video.srcObject = camStream;
       playQuiet(video);
+      syncWideCamera();
     }
     if (camMode === "live" && !ok && !camStarting) {
       camMode = "file";
@@ -883,6 +989,105 @@ function attachCamera() {
       renderMaybe();
     }
   });
+}
+
+function cameraShot() {
+  if (camSheet) return shotOfItem(camSheet.item);
+  if (!tour || !status || screenOf() !== "round") return null;
+  return roundCurrent();
+}
+
+function updateWidePills() {
+  document.querySelectorAll(".widepill").forEach(el => { el.hidden = !camWide; });
+}
+
+async function applyZoom(want) {
+  const track = camStream && camStream.getVideoTracks()[0];
+  if (!track || !track.getCapabilities || !track.applyConstraints) return false;
+  const caps = track.getCapabilities() || {};
+  if (!caps.zoom) return false;
+  if (want && !(caps.zoom.min < 1)) return false;
+  try {
+    await track.applyConstraints({advanced: [{zoom: want ? caps.zoom.min : 1}]});
+  } catch (e) {
+    return false;
+  }
+  return true;
+}
+
+async function switchCamera(want) {
+  if (!(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices)) return false;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const backs = devices.filter(d => d.kind === "videoinput");
+  let target = null;
+  if (want) {
+    target = backs.find(d => /ultra\s*wide/i.test(d.label || "")) || null;
+  } else {
+    target = backs.find(d => d.deviceId === camNormalId)
+      || backs.find(d => !/ultra\s*wide/i.test(d.label || "")
+        && /back|rear|environment/i.test(d.label || ""))
+      || backs.find(d => !/ultra\s*wide/i.test(d.label || "")) || null;
+  }
+  if (!target || target.deviceId === camDeviceId) return false;
+  const video = document.getElementById("camView");
+  const old = camStream;
+  const oldId = old && old.getVideoTracks()[0] && old.getVideoTracks()[0].getSettings
+    ? old.getVideoTracks()[0].getSettings().deviceId : null;
+  let fresh = null;
+  try {
+    fresh = await navigator.mediaDevices.getUserMedia({
+      video: {deviceId: {exact: target.deviceId},
+              width: {ideal: 1920}, height: {ideal: 1440}},
+      audio: false,
+    });
+    video.srcObject = fresh;
+    playQuiet(video);
+    if (!await waitForVideo(video, 1500)) throw new Error("camera not ready");
+    old.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+    camStream = fresh;
+    if (want) {
+      camNormalId = oldId || camNormalId;
+      camDeviceId = target.deviceId;
+    } else {
+      camDeviceId = null;
+    }
+    return true;
+  } catch (e) {
+    if (fresh) fresh.getTracks().forEach(t => { try { t.stop(); } catch (err) {} });
+    if (old) {
+      video.srcObject = old;
+      playQuiet(video);
+    }
+    return false;
+  }
+}
+
+async function syncWideCamera() {
+  if (!WIDE || DEMO || camMode !== "live" || !camLive() || camWideBusy) return;
+  const shot = cameraShot();
+  const want = !!(shot && shot.overview);
+  if (want === camWide) { updateWidePills(); return; }
+  camWideBusy = true;
+  try {
+    if (want) {
+      let ok = await applyZoom(true);
+      if (!ok) ok = await switchCamera(true);
+      camWide = !!ok;
+    } else if (camDeviceId) {
+      const ok = await switchCamera(false);
+      camWide = ok ? false : true;
+    } else {
+      await applyZoom(false);
+      camWide = false;
+    }
+  } catch (e) {
+    camWide = !!camDeviceId;
+  } finally {
+    camWideBusy = false;
+    updateWidePills();
+    lastKey = null;
+    renderMaybe();
+  }
 }
 
 function waitForVideo(video, ms) {
@@ -929,6 +1134,7 @@ function captureFrame(videoId) {
 }
 
 async function shutterShot(shot) {
+  stopSpeech();
   if (camMode !== "live" || !camLive()) {
     roundView = "card";
     lastKey = null;
@@ -962,7 +1168,7 @@ async function shutterShot(shot) {
   const next = roundCurrent();
   if (next && next.shot_id !== shot.shot_id) {
     prevShotId = next.shot_id;
-    say(roomHeading(next) + ". " + instruction(next));
+    sayNow(roomHeading(next) + ". " + instruction(next));
   }
   lastKey = null;
   renderMaybe();
@@ -1171,7 +1377,7 @@ function renderKey() {
       voiceKey(),
       (status.unchecked || []).length,
       (status.skipped_shots || []).join(","),
-      camMode, camWaiting,
+      camMode, camWaiting, camWide,
       roundView, roundView === "card" ? exState.big : null,
       camera ? null : lastPhotoUrl(),
     ]));
@@ -1341,6 +1547,10 @@ async function renderLanguage(app) {
 }
 
 function resetRunState() {
+  stopSpeech();
+  voiceWarmed.clear();
+  voiceTourRun = "";
+  voiceCardsKey = "";
   stopCamera();
   camSheet = null;
   camMode = "live";
@@ -1402,7 +1612,7 @@ async function startTour() {
     const shot = roundCurrent();
     if (shot) {
       prevShotId = shot.shot_id;
-      say(roomHeading(shot) + ". " + instruction(shot));
+      sayNow(roomHeading(shot) + ". " + instruction(shot));
     }
     renderMaybe();
   } catch (e) { fail(app, e); }
@@ -1620,6 +1830,7 @@ function renderCameraView(app) {
       ${ex ? `<button class="exthumb" id="exBtn" aria-label="${esc(T().howShould)}"><img src="${esc(ex)}" alt=""></button>` : ""}
     </div>
     <div class="roundmsg">${roundMsgs()}</div>
+    ${camWide ? `<div class="widepill">${esc(T().wide)}</div>` : ""}
     <div class="cambar">
       ${shot ? `<button class="shutter" id="snapCam" aria-label="${esc(T().take)}"><span></span></button>` : ""}
     </div>
@@ -1676,9 +1887,8 @@ function cardHtml(item, animate, pos, total) {
   const ex = exampleUrl(shotOfItem(item.id));
   let img = "";
   if (url) {
-    img = `<div class="photowrap"><img class="photo" src="${url}" data-full="${url}" alt="">`
-      + (ex ? `<button class="inset" data-full="${esc(ex)}" data-cap="${esc(T().shouldLook)}"><img src="${esc(ex)}" alt=""><span>${esc(T().shouldLook)}</span></button>` : "")
-      + `</div>`;
+    img = `<div class="photowrap"><img class="photo" src="${url}" data-full="${url}" alt=""></div>`
+      + (ex ? `<button class="exrow" data-full="${esc(ex)}" data-cap="${esc(T().howShould)}"><img src="${esc(ex)}" alt=""><span>${esc(T().shouldLook)}</span></button>` : "");
   } else if (ex) {
     img = `<div class="photowrap"><img class="photo" src="${esc(ex)}" data-full="${esc(ex)}" data-cap="${esc(T().shouldLook)}" alt=""></div>`;
   }
@@ -1707,6 +1917,10 @@ function renderCards(app) {
   let html = `<div class="wrap"><div class="cardshead"><h1>${esc(T().photosDone)}</h1>`
     + (remaining ? `<div class="left">${esc(T().toFix(remaining))}</div>` : "")
     + `</div>` + uncheckedLineHtml();
+  const skippedCount = (status.skipped_shots || []).length;
+  if (skippedCount) {
+    html += `<div class="small">${esc(T().skippedLine(takenSet.size, skippedCount))}</div>`;
+  }
   const total = status.progress.photos;
   const left = status.checking.length;
   if (left) {
@@ -1778,6 +1992,8 @@ function wireCard(item) {
     renderMaybe();
   };
   document.getElementById("cardLater").onclick = () => {
+    stopSpeech();
+    spokenCard = null;
     const i = cardOrder.indexOf(item.id);
     if (i >= 0) cardOrder.push(cardOrder.splice(i, 1)[0]);
     renderMaybe();
@@ -1994,7 +2210,7 @@ function snapShot(shot, file, quiet) {
     const next = roundCurrent();
     if (next && next.shot_id !== shot.shot_id) {
       prevShotId = next.shot_id;
-      say(roomHeading(next) + ". " + instruction(next));
+      sayNow(roomHeading(next) + ". " + instruction(next));
     }
   }
   renderMaybe();
@@ -2061,7 +2277,7 @@ function openSheet(itemId) {
       <div class="instruction">${esc(text)}</div>
       ${ex ? `<button class="exthumb" id="sheetEx" aria-label="${esc(T().howShould)}"><img src="${esc(ex)}" alt=""></button>` : ""}
     </div></div>
-    <div class="sheetbar"><div class="pill" id="sheetWait" hidden>${esc(T().camStarting)}</div><button class="shutter" id="sheetSnap" aria-label="${esc(T().fixed)}"><span></span></button></div>`;
+    <div class="sheetbar"><div class="pill" id="sheetWait" hidden>${esc(T().camStarting)}</div><div class="widepill"${camWide ? "" : " hidden"}>${esc(T().wide)}</div><button class="shutter" id="sheetSnap" aria-label="${esc(T().fixed)}"><span></span></button></div>`;
   sheet.className = nocam ? "nocam" : "";
   sheet.hidden = false;
   document.body.classList.add("sheet-open");
@@ -2158,6 +2374,7 @@ function cardSnap(itemId, file) {
 }
 
 async function resolveCard(itemId, action, reason) {
+  stopSpeech();
   try {
     await api(`/api/runs/${encodeURIComponent(RUN)}/items/${encodeURIComponent(itemId)}/resolve`, {
       method: "POST", headers: {"Content-Type": "application/json"},
@@ -2199,6 +2416,7 @@ async function endRound() {
 }
 
 async function skipShot(shotId) {
+  stopSpeech();
   const shot = tour.shots.find(x => x.shot_id === shotId);
   try {
     await api(`/api/runs/${encodeURIComponent(RUN)}/skip-room`, {
@@ -2268,24 +2486,27 @@ function announce() {
     const cur = roundCurrent();
     const curId = cur ? cur.shot_id : null;
     if (prevShotId !== null && curId && curId !== prevShotId) {
-      say(roomHeading(cur) + ". " + instruction(cur));
+      sayNow(roomHeading(cur) + ". " + instruction(cur));
     }
     if (curId) prevShotId = curId;
     return;
   }
+  let justPhotosDone = false;
   if (!photosDoneSaid) {
     photosDoneSaid = true;
-    say(T().photosDone);
+    justPhotosDone = true;
+    sayNow(T().photosDone);
   }
   const byId = itemsById();
   const shown = shownCard();
   if (shown && shown !== spokenCard && byId[shown]) {
     spokenCard = shown;
-    say(cardText(byId[shown]));
+    if (justPhotosDone) say(cardText(byId[shown]));
+    else sayNow(cardText(byId[shown]));
   }
   if (status.finished_at && !saidFinal) {
     saidFinal = true;
-    say(T().doneAll);
+    sayNow(T().doneAll);
   }
 }
 
@@ -2299,6 +2520,11 @@ async function refresh() {
   status = s;
   takenSet = new Set((s.recent || []).map(e => e.shot_id));
   reconcileCards();
+  if (voiceTourRun !== RUN) {
+    voiceTourRun = RUN;
+    warmShotLines();
+  }
+  warmCardLines();
   if (s.language && I18N[s.language]) {
     if (LANG !== s.language) { LANG = s.language; pickVoice(); }
     langPicked = true;

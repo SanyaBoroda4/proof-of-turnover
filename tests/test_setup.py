@@ -220,6 +220,23 @@ def test_draft_needs_a_photo_and_stores_fixup(dirs, client):
     assert room["id"] == "kitchen" and room["status"] == "ready"
 
 
+def test_draft_uses_configured_model_and_effort(dirs, monkeypatch):
+    from pot import config
+
+    monkeypatch.setattr(config, "SETUP_MODEL", "muse-wonder-1.0")
+    monkeypatch.setattr(config, "SETUP_EFFORT", "minimal")
+    test = TestClient(create_app(FakeSpark(drafter=lambda call: _draft_answer())))
+    code = test.app.state.server.code
+    sid = _create(test, code)["setup_id"]
+    assert _photo(test, code, sid, "kitchen").status_code == 200
+    draft = test.post(f"/api/setups/{sid}/rooms/kitchen/draft?code={code}")
+    assert draft.status_code == 200, draft.text
+    call = [c for c in test.app.state.server.client.calls
+            if c["purpose"].startswith("setup draft")][-1]
+    assert call["model"] == "muse-wonder-1.0"
+    assert call["effort"] == "minimal"
+
+
 def test_fixup_keys_texts_and_caps():
     room = {"id": "kitchen", "type": "kitchen", "name": "Kitchen"}
     items = [

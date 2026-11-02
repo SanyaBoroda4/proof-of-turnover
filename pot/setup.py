@@ -610,7 +610,7 @@ def standard_checks_for(room_type):
     ]
 
 
-def draft_room(client, setup_id, room_id, effort=None):
+def draft_room(client, setup_id, room_id, effort=None, model=None, store=True):
     """Draft one room's checklist from its rules + photos; returns the draft.
 
     The setup lock is released during the model call (runs.py pattern):
@@ -619,7 +619,8 @@ def draft_room(client, setup_id, room_id, effort=None):
     drops the result; changed rules or photos store it but mark the
     room stale.
     """
-    effort = prompts.SETUP_EFFORT if effort is None else effort
+    effort = config.SETUP_EFFORT if effort is None else effort
+    model = config.SETUP_MODEL if model is None else model
     with _lock_for(setup_id):
         setup = load_setup(setup_id)
         room = _room_locked(setup, room_id)
@@ -651,8 +652,11 @@ def draft_room(client, setup_id, room_id, effort=None):
         ),
         schema=draft_schema(),
         effort=effort,
+        model=model,
     )
     draft = fixup_draft(answer, snapshot)
+    if not store:
+        return draft
     with _lock_for(setup_id):
         setup = load_setup(setup_id)
         try:

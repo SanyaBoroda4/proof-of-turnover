@@ -141,6 +141,25 @@ def test_fixup_keeps_spanish_room_names():
     assert extras and all(s["room_name_es"] for s in extras)
 
 
+def test_fixup_keeps_overview_flag():
+    property = tiny_property()
+    checklist = build_checklist(property)
+    bed_items = [i.id for i in checklist if i.room_id == "bed" and i.key != "coverage"]
+    bath_items = [i.id for i in checklist if i.room_id == "bath" and i.key != "coverage"]
+    given = [_shot("bed-1", "bed", bed_items), _shot("bath-1", "bath", bath_items)]
+    given[0]["overview"] = True
+    given[1]["overview"] = "yes"
+    shots, notes = fixup_tour(property, checklist, given)
+    assert notes == []
+    assert shots[0]["overview"] is True
+    assert shots[1]["overview"] is False
+    from pot.tour import tour_schema
+
+    item_schema = tour_schema()["properties"]["shots"]["items"]
+    assert item_schema["properties"]["overview"] == {"type": "boolean"}
+    assert "overview" not in item_schema["required"]
+
+
 def test_tour_schema_requires_all_three_languages():
     from pot.tour import tour_schema
 

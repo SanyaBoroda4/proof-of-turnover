@@ -20,7 +20,7 @@ MATCH_PHOTO_SIZE = "overview"  # 768 px copies are enough to match rooms
 FIRST_LOOK_PHOTO_SIZE = "check"  # 1600 px copies keep small details (stains)
 VERIFY_PHOTO_SIZE = "check"  # second look also needs full detail
 SETUP_PHOTO_SIZE = "overview"  # 768 px drafts match 1600 px (Step 26)
-SETUP_EFFORT = "medium"  # low effort weakened sam_prompts (Step 26)
+SETUP_EFFORT = "minimal"  # fastest all-rules draft in the Step 43 bench
 
 
 def pick_boxes_schema():
@@ -336,4 +336,4 @@ Rules:
 - When an item's requirement says a door or lid must be open, that item gets its own shot.
 - When a requirement says something is opened only for the photo, that shot comes before the room's overview shot.
 - Each shot is ONE photo taken from ONE spot that clearly shows every item in it. Never combine in one shot things that need a different angle, distance, or something opened: for example the toilet with the lid open and the sink/vanity are two shots; the inside of the fridge and each fridge door are separate shots. Small things get their own close-up (coffee bean hopper, lint filter, toilet paper). Prefer more shots over crowded shots.
-- Each room starts with one overview shot: from the doorway, one photo of the whole room with its general items (floor, tidiness, no guest items); then the detail shots. In bathrooms the cleaner must not appear in the mirror."""
+- Each room starts with one overview shot: from the doorway, one photo of the whole room with its general items (floor, tidiness, no guest items); then the detail shots. Set "overview": true on each room's first shot. In bathrooms the cleaner must not appear in the mirror."""

@@ -127,6 +127,7 @@ const I18N = {
     sayRule: "Di una regla", stop: "Detener", transcribing: "Transcribiendo…",
     noSpeech: "No se escuchó nada.", micDenied: "Sin acceso al micrófono.",
     makeList: "Crear lista", writing: "Escribiendo la lista…",
+    makingList: s => `Creando lista… ${s} s`,
     updateList: "Actualizar lista",
     editsLost: "Tus cambios en esta lista se reemplazarán.",
     needsUpdate: "necesita actualizar",
@@ -182,6 +183,7 @@ const I18N = {
     sayRule: "Say a rule", stop: "Stop", transcribing: "Transcribing…",
     noSpeech: "No speech heard.", micDenied: "No microphone access.",
     makeList: "Make checklist", writing: "Writing the checklist…",
+    makingList: s => `Making checklist… ${s} s`,
     updateList: "Update checklist",
     editsLost: "Your edits to this list will be replaced.",
     needsUpdate: "needs update",
@@ -237,6 +239,7 @@ const I18N = {
     sayRule: "Скажите правило", stop: "Стоп", transcribing: "Распознаём…",
     noSpeech: "Речь не слышна.", micDenied: "Нет доступа к микрофону.",
     makeList: "Составить список", writing: "Составляем список…",
+    makingList: s => `Составляем список… ${s} с`,
     updateList: "Обновить список",
     editsLost: "Ваши правки в этом списке будут заменены.",
     needsUpdate: "нужно обновить",
@@ -289,6 +292,7 @@ let setup = null, screen = "house", roomIdx = 0;
 let house = {name: "", floors: 1, bedrooms: 1, bathrooms: 1, halfBaths: 0,
   kitchen: true, living: true, dining: false, laundry: false, back: false, front: false};
 let busy = "", err = "", editing = null, noteMsg = "";
+let draftSeconds = 0, draftTimer = null;
 let recorder = null, recStream = null, recChunks = [], recStart = 0, recTimer = null;
 let addType = "bedroom", addName = "", addFloor = 1;
 
@@ -548,10 +552,10 @@ function renderRoom(app) {
   }
   if (noteMsg) html += `<div class="result wait">${esc(noteMsg)}</div>`;
   if (!draft) {
-    html += `<button class="btn" id="draft" ${busy || !room.photos.length ? "disabled" : ""}>${esc(busy === "draft" ? t.writing : t.makeList)}</button>`;
+    html += `<button class="btn" id="draft" ${busy || !room.photos.length ? "disabled" : ""}>${esc(busy === "draft" ? t.makingList(draftSeconds) : t.makeList)}</button>`;
   } else {
     if (room.stale) {
-      html += `<button class="btn" id="draft" ${busy || !room.photos.length ? "disabled" : ""}>${esc(busy === "draft" ? t.writing : t.updateList)}</button>
+      html += `<button class="btn" id="draft" ${busy || !room.photos.length ? "disabled" : ""}>${esc(busy === "draft" ? t.makingList(draftSeconds) : t.updateList)}</button>
         <p class="small">${esc(t.editsLost)}</p>`;
     }
     html += draftHtml(room, draft);
@@ -829,7 +833,15 @@ async function makeDraft(room) {
   const box = document.getElementById("rrules");
   const currentRules = box ? box.value : room.rules;
   busy = "draft";
+  draftSeconds = 0;
   render();
+  const draftStarted = Date.now();
+  if (draftTimer) clearInterval(draftTimer);
+  draftTimer = setInterval(() => {
+    draftSeconds = Math.floor((Date.now() - draftStarted) / 1000);
+    const button = document.getElementById("draft");
+    if (button) button.textContent = T().makingList(draftSeconds);
+  }, 250);
   try {
     await api(roomUrl(room), {
       method: "PUT", headers: {"Content-Type": "application/json"},
@@ -844,6 +856,8 @@ async function makeDraft(room) {
   } catch (e2) {
     if (!err) err = e2.message;
   }
+  if (draftTimer) { clearInterval(draftTimer); draftTimer = null; }
+  draftSeconds = 0;
   busy = "";
   editing = null;
   render();

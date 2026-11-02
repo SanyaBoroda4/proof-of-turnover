@@ -931,6 +931,34 @@ def test_voice_endpoint_returns_mp3(monkeypatch):
     assert resp.content == b"ID3fake"
 
 
+def test_voice_prefetch_endpoint(monkeypatch):
+    calls = []
+
+    def fake_prefetch(texts, lang):
+        calls.append((list(texts), lang))
+        return len(texts)
+
+    monkeypatch.setattr("pot.voice.prefetch", fake_prefetch)
+    test, code = _client()
+    resp = test.post(f"/api/voice/prefetch?code={code}",
+                     json={"lang": "en", "texts": ["One", "Two"]})
+    assert resp.status_code == 200
+    assert resp.json() == {"queued": 2}
+    assert calls == [(["One", "Two"], "en")]
+    too_many = test.post(
+        f"/api/voice/prefetch?code={code}",
+        json={"lang": "en", "texts": ["x"] * 81})
+    assert too_many.status_code == 400
+    bad_text = test.post(
+        f"/api/voice/prefetch?code={code}",
+        json={"lang": "en", "texts": ["x" * 501]})
+    assert bad_text.status_code == 400
+    bad_lang = test.post(
+        f"/api/voice/prefetch?code={code}",
+        json={"lang": "fr", "texts": ["Bonjour"]})
+    assert bad_lang.status_code == 400
+
+
 def test_recheck_unchecked_retries_and_clears():
     fake = _ApiDownSpark(inspector=_done)
     test = TestClient(create_app(fake))
@@ -1057,7 +1085,7 @@ def test_approve_learns_missing_examples_from_proving_photos():
     assert "example_url" in by_id["master-bedroom-1"]
 
 
-def test_approve_overwrites_existing_examples_with_proving_photos():
+def test_approve_never_overwrites_existing_examples():
     from pot import config, examples as examples_mod
 
     test, code = _client()
@@ -1077,7 +1105,7 @@ def test_approve_overwrites_existing_examples_with_proving_photos():
     after = (
         config.EXAMPLES_DIR / "demo-house" / "master-bedroom-1.jpg"
     ).read_bytes()
-    assert after != before
+    assert after == before
 
 
 def test_progress_counts_skipped_shots_as_done():

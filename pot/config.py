@@ -20,6 +20,8 @@ SAM_MODEL = os.environ.get("SAM_MODEL", "sam-3.1")
 ASR_MODEL = os.environ.get("ASR_MODEL", "muse-voice-transcribe-1.0")
 WONDER_MODEL = os.environ.get("WONDER_MODEL", "muse-wonder-1.0")
 WONDER_EFFORT = os.environ.get("WONDER_EFFORT", "high")
+SETUP_MODEL = os.environ.get("SETUP_MODEL") or REASONING_MODEL
+SETUP_EFFORT = os.environ.get("SETUP_EFFORT", "minimal")
 
 REPLAY = os.environ.get("POT_REPLAY") == "1"
 
