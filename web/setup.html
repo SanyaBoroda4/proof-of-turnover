@@ -15,7 +15,8 @@
     --white: #FFFFFF; --muted: #6A707A; --line: #E1E4E8;
     --float-shadow: 0 8px 28px rgba(31, 35, 40, 0.16);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent; }
   body { font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
          margin: 0; background: var(--linen); color: var(--ink);
          font-size: 17px; line-height: 24px; }

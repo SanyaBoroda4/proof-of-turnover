@@ -15,7 +15,8 @@
     --white: #FFFFFF; --muted: #6A707A; --line: #E1E4E8;
     --float-shadow: 0 8px 28px rgba(31, 35, 40, 0.16);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent; }
   body { font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
          margin: 0; background: var(--linen); color: var(--ink);
          font-size: 17px; line-height: 24px; }
@@ -95,6 +96,66 @@
   .excol { display: flex; flex-direction: column; align-items: center; }
   .excap { font-size: 11px; line-height: 14px; color: var(--white); margin-top: 2px;
            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+  /* Round card view (opaque, above the playing camera) */
+  .rcard { position: fixed; inset: 0; z-index: 1; overflow-y: auto;
+           background: var(--linen); }
+  .rcard .inner { max-width: 640px; margin: 0 auto;
+           padding: max(12px, env(safe-area-inset-top)) 16px
+                    calc(120px + env(safe-area-inset-bottom)); }
+  .rhead { display: flex; align-items: center; gap: 12px; }
+  .rhead .room { font-size: 17px; font-weight: 700; flex: 1; }
+  .rhead .count { font-size: 14px; color: var(--muted); white-space: nowrap; }
+  .shotcard { position: relative; background: var(--white); border-radius: 24px;
+              padding: 20px 18px; margin: 12px 0; box-shadow: var(--float-shadow); }
+  .shotcard .instruction { font-size: 26px; line-height: 32px; margin: 0; font-weight: 700; }
+  .shotcard .instruction.long { font-size: 22px; line-height: 28px; }
+  .shotcard.tucked .instruction { padding-right: 72px; }
+  .expop { display: block; border: none; padding: 0; cursor: pointer;
+           position: relative; background: var(--muted); }
+  .expop.big { width: 100%; height: 36vh; height: 36svh; margin-top: 16px;
+               border-radius: 18px; overflow: hidden; }
+  .expop.big.pop { animation: expop 340ms cubic-bezier(.2, 1.3, .4, 1); }
+  .expop.big.leave { animation: extuck 280ms ease-in forwards;
+                     transform-origin: top right; }
+  @keyframes expop { from { transform: scale(.85); opacity: 0; }
+                     to { transform: none; opacity: 1; } }
+  @keyframes extuck { to { transform: scale(.15); opacity: 0; } }
+  .expop img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .expop .chip2 { position: absolute; left: 10px; bottom: 10px; background: var(--white);
+                  border-radius: 999px; padding: 4px 12px; font-size: 13px;
+                  font-weight: 700; }
+  .expop.small { position: absolute; top: 14px; right: 14px; width: 60px; height: 60px;
+                 border-radius: 14px; overflow: hidden;
+                 box-shadow: var(--float-shadow); }
+  .pillrow { display: flex; gap: 10px; margin: 12px 0; }
+  .pillbtn { flex: 1; display: inline-flex; align-items: center; justify-content: center;
+             gap: 8px; background: var(--white); border: 2px solid var(--line);
+             border-radius: 999px; min-height: 48px; padding: 10px 12px;
+             font-size: 16px; font-weight: 700; font-family: inherit;
+             color: var(--ink); cursor: pointer; }
+  .pillbtn.rec { color: var(--brick); border-color: var(--brick); }
+  .pillbtn .t { font-size: 14px; }
+  .takebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
+             padding: 20px 16px calc(14px + env(safe-area-inset-bottom));
+             background: linear-gradient(to top, var(--linen) 75%,
+                                         rgba(242, 243, 245, 0)); }
+  .takerow { display: flex; gap: 12px; align-items: center; max-width: 640px;
+             margin: 0 auto; }
+  #takePhoto { flex: 1; min-height: 64px; font-size: 19px; margin: 0; }
+  .takerow .demobox { flex: 1; }
+  .lastshot { width: 56px; height: 56px; flex: none; }
+  /* Round camera view */
+  .camtop { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px;
+            background: rgba(255, 255, 255, 0.78);
+            -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+            border-radius: 20px; box-shadow: var(--float-shadow); padding: 12px 16px;
+            display: flex; gap: 12px; align-items: center; }
+  .camtop .instruction { font-size: 20px; line-height: 25px; margin: 0; flex: 1;
+                         font-weight: 700; }
+  .camtop .exthumb { flex: none; }
+  .cambar { position: absolute; left: 0; right: 0;
+            bottom: max(24px, env(safe-area-inset-bottom));
+            display: flex; justify-content: center; }
   .lastshot .check { position: absolute; right: 2px; bottom: 2px; background: var(--marsh);
              color: var(--white); border-radius: 50%; width: 26px; height: 26px;
              font-size: 16px; line-height: 26px; text-align: center; }
@@ -140,6 +201,7 @@
     #flash.on, #flash.off { transition: none; }
     .stamp { animation: none; }
     .psheet.anim, .pbackdrop.anim { animation: none; }
+    .expop.big.pop, .expop.big.leave { animation: none; }
   }
   .tagrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .tag { display: inline-block; border-radius: 999px; padding: 6px 14px;
@@ -257,6 +319,8 @@ let toast = null, toastTimer = null;
 let retrying = false, navDepth = 0;
 let camStream = null, camStarting = false, camMode = "live", camSheet = null;
 let camWaiting = false;
+let roundView = "card";
+let exState = {shot: null, big: false, popped: false, timer: null};
 let prevScreen = "";
 
 const REASONS = ["broken", "before", "supplies", "wont_clean", "other"];
@@ -726,6 +790,9 @@ function captureFrame(videoId) {
 
 async function shutterShot(shot) {
   if (camMode !== "live" || !camLive()) {
+    roundView = "card";
+    lastKey = null;
+    renderMaybe();
     openCamera(shot.shot_id);
     return;
   }
@@ -737,6 +804,7 @@ async function shutterShot(shot) {
     const ready = await waitForVideo(video, 1500);
     camWaiting = false;
     if (!ready || !camLive()) {
+      roundView = "card";
       lastKey = null;
       renderMaybe();
       openCamera(shot.shot_id);
@@ -748,6 +816,7 @@ async function shutterShot(shot) {
   canvas.height = video.videoHeight;
   canvas.getContext("2d").drawImage(video, 0, 0);
   flash();
+  roundView = "card";
   optimistic.set(shot.shot_id, {file: null, url: "", state: "encoding"});
   if (overrideShot === shot.shot_id) overrideShot = null;
   const next = roundCurrent();
@@ -960,6 +1029,7 @@ function renderKey() {
       (status.unchecked || []).length,
       (status.skipped_shots || []).join(","),
       camMode, camWaiting,
+      roundView, roundView === "card" ? exState.big : null,
     ]));
   }
   const byId = itemsById();
@@ -982,7 +1052,32 @@ function renderKey() {
   ]));
 }
 
+function syncExample() {
+  if (!tour || screenOf() !== "round") return;
+  const cur = roundCurrent();
+  const id = cur ? cur.shot_id : null;
+  if (id === exState.shot) return;
+  if (exState.timer) {
+    clearTimeout(exState.timer);
+    exState.timer = null;
+  }
+  exState = {shot: id, big: !!(cur && exampleUrl(cur)), popped: false, timer: null};
+  if (exState.big) {
+    exState.timer = setTimeout(() => {
+      const pop = document.getElementById("exPop");
+      if (pop) pop.classList.add("leave");
+      exState.timer = setTimeout(() => {
+        exState.timer = null;
+        exState.big = false;
+        lastKey = null;
+        renderMaybe();
+      }, 280);
+    }, 2500);
+  }
+}
+
 function renderMaybe() {
+  syncExample();
   const key = renderKey();
   if (key === lastKey) return;
   lastKey = key;
@@ -990,6 +1085,7 @@ function renderMaybe() {
 }
 
 function render() {
+  syncExample();
   document.documentElement.lang = LANG;
   document.title = T().title;
   const app = document.getElementById("app");
@@ -1100,6 +1196,9 @@ function resetRunState() {
   camSheet = null;
   camMode = "live";
   camWaiting = false;
+  roundView = "card";
+  if (exState.timer) clearTimeout(exState.timer);
+  exState = {shot: null, big: false, popped: false, timer: null};
   document.getElementById("sheet").hidden = true;
   document.body.classList.remove("sheet-open");
   for (const entry of optimistic.values()) {
@@ -1183,10 +1282,10 @@ function fmtTime(seconds) {
 
 function micHtml(stopId, startId) {
   if (recorder) {
-    return `<button class="iconbtn rec" id="${stopId}" aria-label="${esc(T().stop)}">${ICONS.stop}<span class="t">${esc(fmtTime(recSeconds))}</span></button>`;
+    return `<button class="pillbtn rec" id="${stopId}">${ICONS.stop}<span>${esc(T().stop)}</span><span class="t">${esc(fmtTime(recSeconds))}</span></button>`;
   }
   if (micReady()) {
-    return `<button class="iconbtn" id="${startId}" aria-label="${esc(T().mic)}" title="${esc(T().mic)}">${ICONS.mic}</button>`;
+    return `<button class="pillbtn" id="${startId}">${ICONS.mic}<span>${esc(T().mic)}</span></button>`;
   }
   return "";
 }
@@ -1236,19 +1335,11 @@ function lastPhotoUrl() {
 }
 
 function renderRound(app) {
-  const shot = roundCurrent();
-  const p = status.progress;
-  const pct = p.shots_total ? Math.round(100 * p.shots_taken / p.shots_total) : 0;
-  const nocam = DEMO || camMode !== "live";
-  let center = "";
-  if (DEMO) {
-    center = `<div class="novid">${cameraHtml(T().take, "demoPick", "snapCam")}</div>`;
-  } else if (nocam) {
-    center = `<div class="novid">${esc(T().camHint)}</div>`;
-  }
-  const ex = exampleUrl(shot);
-  const lastUrl = lastPhotoUrl();
-  const last = lastTakenShot();
+  if (roundView === "camera") return renderCameraView(app);
+  return renderCardView(app);
+}
+
+function roundMsgs() {
   let msgs = uncheckedLineHtml() + sendingHtml();
   if (camWaiting) msgs += `<div class="pill">${esc(T().camStarting)}</div>`;
   if (transcribing) msgs += `<div class="pill">${esc(T().transcribing)}</div>`;
@@ -1256,58 +1347,10 @@ function renderRound(app) {
   if (!micReady() && !recorder) msgs += `<div class="pill">${esc(T().insecure)}</div>`;
   if (voiceMissing()) msgs += `<div class="pill">${esc(T().noVoice)}</div>`;
   if (photoError) msgs += `<div class="pill warn">${esc(photoError)}</div>`;
-  const prompt = shot ? instruction(shot) : T().checking;
-  app.innerHTML = `<div class="round${nocam ? " nocam" : ""}">${center}
-    <div class="topcard">
-      <div class="row1">
-        <button class="iconbtn small" id="exitLink" aria-label="${esc(T().exit)}">${ICONS.exit}</button>
-        <span class="room">${shot ? esc(roomHeading(shot)) : ""}</span>
-        <span class="count">${esc(T().ofTotal(p.shots_taken, p.shots_total))}</span>
-      </div>
-      <div class="bar"><div style="width:${pct}%"></div></div>
-      <div class="instruction${prompt.length > 90 ? " long" : ""}">${esc(prompt)}</div>
-      ${(TEST || DEMO) ? `<div class="testrow">${shot ? `<button class="link" id="skipShot">${esc(T().skipTest)}</button>` : ""}<a href="#" id="finishEarly" class="small">${esc(T().finishEarly)}</a></div>` : ""}
-    </div>
-    <div class="roundmsg">${msgs}</div>
-    <div class="bottombar">
-      <div class="sidecol">
-        ${lastUrl ? `<button class="lastshot" id="retakeLast" aria-label="${esc(T().retakeLast)}"><img src="${esc(lastUrl)}" alt=""><span class="check">✓</span></button>` : ""}
-        ${ex ? `<div class="excol"><button class="exthumb" id="exBtn" aria-label="${esc(T().howShould)}"><img src="${esc(ex)}" alt=""></button><span class="excap">${esc(T().exampleCap)}</span></div>` : ""}
-      </div>
-      ${shot && !DEMO ? `<button class="shutter" id="snapCam" aria-label="${esc(T().take)}"><span></span></button>` : ""}
-      <div class="sidecol">
-        ${shot ? `<button class="iconbtn" id="repeat" aria-label="${esc(T().repeat)}" title="${esc(T().repeat)}">${ICONS.speaker}</button>` : ""}
-        ${shot ? micHtml("micStop", "micStart") : ""}
-      </div>
-    </div>
-  </div>`;
-  document.getElementById("exitLink").onclick = () => {
-    if (confirm(T().exitConfirm)) newTurnover();
-  };
-  const early = document.getElementById("finishEarly");
-  if (early) early.onclick = ev => {
-    ev.preventDefault();
-    if (confirm(T().finishEarlyConfirm)) endRound();
-  };
-  const exBtn = document.getElementById("exBtn");
-  if (exBtn) exBtn.onclick = () => showBig(ex, T().howShould);
-  if (shot) {
-    document.getElementById("repeat").onclick = () =>
-      repeatSay(roomHeading(shot) + ". " + instruction(shot));
-    if (DEMO) {
-      wireDemo("demoPick", "snapCam", file => snapShot(shot, file));
-    } else {
-      document.getElementById("snapCam").onclick = () => shutterShot(shot);
-    }
-    const micStart = document.getElementById("micStart");
-    if (micStart) micStart.onclick = () => startRec(shot.room_id, null, null);
-    const micStop = document.getElementById("micStop");
-    if (micStop) micStop.onclick = stopRec;
-    const skipBtn = document.getElementById("skipShot");
-    if (skipBtn) skipBtn.onclick = () => skipShot(shot.shot_id);
-  }
-  const retryLast = document.getElementById("retakeLast");
-  if (retryLast) retryLast.onclick = () => { overrideShot = last.shot_id; renderMaybe(); };
+  return msgs;
+}
+
+function wireRetries(app) {
   app.querySelectorAll("[data-retry]").forEach(b => {
     b.onclick = () => {
       const shotId = b.getAttribute("data-retry");
@@ -1319,6 +1362,122 @@ function renderRound(app) {
       }
     };
   });
+}
+
+function renderCardView(app) {
+  const shot = roundCurrent();
+  const p = status.progress;
+  const pct = p.shots_total ? Math.round(100 * p.shots_taken / p.shots_total) : 0;
+  const ex = exampleUrl(shot);
+  const lastUrl = lastPhotoUrl();
+  const last = lastTakenShot();
+  const prompt = shot ? instruction(shot) : T().checking;
+  let exHtml = "";
+  if (ex) {
+    if (exState.big) {
+      const pop = exState.popped ? "" : " pop";
+      exState.popped = true;
+      exHtml = `<button class="expop big${pop}" id="exPop"><img src="${esc(ex)}" alt=""><span class="chip2">${esc(T().shouldLook)}</span></button>`;
+    } else {
+      exHtml = `<button class="expop small" id="exPop"><img src="${esc(ex)}" alt=""></button>`;
+    }
+  }
+  const tucked = ex && !exState.big ? " tucked" : "";
+  const testrow = (TEST || DEMO)
+    ? `<div class="testrow">${shot ? `<button class="link" id="skipShot">${esc(T().skipTest)}</button>` : ""}<a href="#" id="finishEarly" class="small">${esc(T().finishEarly)}</a></div>`
+    : "";
+  let take = "";
+  if (shot && !DEMO) {
+    take = `<button class="btn" id="takePhoto">${ICONS.camera}${esc(T().take)}</button>`;
+  } else if (shot) {
+    take = `<div class="demobox">${cameraHtml(T().take, "demoPick", "snapCam")}</div>`;
+  }
+  app.innerHTML = `<div class="rcard"><div class="inner">
+    <div class="rhead">
+      <button class="iconbtn small" id="exitLink" aria-label="${esc(T().exit)}">${ICONS.exit}</button>
+      <span class="room">${shot ? esc(roomHeading(shot)) : ""}</span>
+      <span class="count">${esc(T().ofTotal(p.shots_taken, p.shots_total))}</span>
+    </div>
+    <div class="bar"><div style="width:${pct}%"></div></div>
+    <div class="shotcard${tucked}">
+      <div class="instruction${prompt.length > 90 ? " long" : ""}">${esc(prompt)}</div>
+      ${exHtml}
+    </div>
+    ${shot ? `<div class="pillrow"><button class="pillbtn" id="repeat">${ICONS.speaker}<span>${esc(T().repeat)}</span></button>${micHtml("micStop", "micStart")}</div>` : ""}
+    ${testrow}
+    ${roundMsgs()}
+  </div></div>
+  <div class="takebar"><div class="takerow">
+    ${lastUrl ? `<button class="lastshot" id="retakeLast" aria-label="${esc(T().retakeLast)}"><img src="${esc(lastUrl)}" alt=""><span class="check">✓</span></button>` : ""}
+    ${take}
+  </div></div>`;
+  document.getElementById("exitLink").onclick = () => {
+    if (confirm(T().exitConfirm)) newTurnover();
+  };
+  const early = document.getElementById("finishEarly");
+  if (early) early.onclick = ev => {
+    ev.preventDefault();
+    if (confirm(T().finishEarlyConfirm)) endRound();
+  };
+  const exPop = document.getElementById("exPop");
+  if (exPop) exPop.onclick = () => showBig(ex, T().howShould);
+  if (shot) {
+    document.getElementById("repeat").onclick = () =>
+      repeatSay(roomHeading(shot) + ". " + instruction(shot));
+    if (DEMO) {
+      wireDemo("demoPick", "snapCam", file => snapShot(shot, file));
+    } else {
+      document.getElementById("takePhoto").onclick = () => {
+        if (camMode === "live") {
+          roundView = "camera";
+          lastKey = null;
+          renderMaybe();
+        } else {
+          openCamera(shot.shot_id);
+        }
+      };
+    }
+    const micStart = document.getElementById("micStart");
+    if (micStart) micStart.onclick = () => startRec(shot.room_id, null, null);
+    const micStop = document.getElementById("micStop");
+    if (micStop) micStop.onclick = stopRec;
+    const skipBtn = document.getElementById("skipShot");
+    if (skipBtn) skipBtn.onclick = () => skipShot(shot.shot_id);
+  }
+  const retryLast = document.getElementById("retakeLast");
+  if (retryLast) retryLast.onclick = () => { overrideShot = last.shot_id; renderMaybe(); };
+  wireRetries(app);
+  attachCamera();
+}
+
+function renderCameraView(app) {
+  const shot = roundCurrent();
+  const nocam = DEMO || camMode !== "live";
+  const center = nocam ? `<div class="novid">${esc(T().camHint)}</div>` : "";
+  const ex = exampleUrl(shot);
+  const prompt = shot ? instruction(shot) : T().checking;
+  app.innerHTML = `<div class="round${nocam ? " nocam" : ""}">${center}
+    <div class="camtop">
+      <button class="iconbtn small" id="camClose" aria-label="${esc(T().close)}">${ICONS.x}</button>
+      <div class="instruction">${esc(prompt)}</div>
+      ${ex ? `<button class="exthumb" id="exBtn" aria-label="${esc(T().howShould)}"><img src="${esc(ex)}" alt=""></button>` : ""}
+    </div>
+    <div class="roundmsg">${roundMsgs()}</div>
+    <div class="cambar">
+      ${shot ? `<button class="shutter" id="snapCam" aria-label="${esc(T().take)}"><span></span></button>` : ""}
+    </div>
+  </div>`;
+  document.getElementById("camClose").onclick = () => {
+    roundView = "card";
+    lastKey = null;
+    renderMaybe();
+  };
+  const exBtn = document.getElementById("exBtn");
+  if (exBtn) exBtn.onclick = () => showBig(ex, T().howShould);
+  if (shot) {
+    document.getElementById("snapCam").onclick = () => shutterShot(shot);
+  }
+  wireRetries(app);
   attachCamera();
 }
 
@@ -1875,6 +2034,7 @@ async function endRound() {
   try {
     await api(`/api/runs/${encodeURIComponent(RUN)}/end-round`, {method: "POST"});
     photoError = "";
+    roundView = "card";
     await refresh();
   } catch (e) {
     photoError = e.message;

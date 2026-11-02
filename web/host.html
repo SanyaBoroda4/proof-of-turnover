@@ -15,7 +15,8 @@
     --white: #FFFFFF; --muted: #6A707A; --line: #E1E4E8;
     --float-shadow: 0 8px 28px rgba(31, 35, 40, 0.16);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent; }
   body { font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
          margin: 0; padding: 16px 24px 32px; max-width: 1100px;
          margin-left: auto; margin-right: auto;
@@ -66,7 +67,7 @@
   #approve { background: var(--marsh); color: var(--white); border: none; border-radius: 20px; }
   #sendback { background: var(--white); color: var(--ink); border: 2px solid var(--line);
               border-radius: 20px; }
-  input[type=text] { font-size: 15px; font-family: inherit; padding: 10px 12px; width: 100%;
+  input[type=text] { font-size: 16px; font-family: inherit; padding: 10px 12px; width: 100%;
          border-radius: 20px; border: 2px solid var(--line); background: var(--white);
          color: var(--ink); }
   .sendback-list { max-height: 220px; overflow-y: auto; background: var(--white);
