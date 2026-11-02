@@ -42,7 +42,7 @@ changes when cards appear during the round).
 ## Commits
 
 - `812e1d8` Overnight 1: SAM count must reach the minimum for proof — countable items with a sam_prompt now need SAM itself to find enough (review #3). Why: a “proven” could rest on the second look's count while SAM found too few. Risk: medium (proof outcomes change). Safe before filming? **No** — needs a live rehearsal first. Tests: updated proof tests (SAM 1 of 4 + second look 4 → needs proof) and the full-tour fake SAM.
-- `cae106f` Overnight 2: verify only items the first look cited — second look and SAM start after the first look cites the photo (review #11). Why: fewer wasted calls, less 429/timeout pressure; independence unchanged (the second look never sees the first answer). Risk: medium (hot checking path; call order changes). Safe before filming? **No** — time it in a rehearsal first. Tests: new call-count test (5-item shot, 2 cited → 2 second looks, 2 SAM calls); Step 41 retry test now flakes only the first call, matching the new order.
+- `cae106f` Overnight 2: verify only items the first look cited — **REVERTED by `d26615b` (Step 48a)** — second look and SAM start after the first look cites the photo (review #11). Why: fewer wasted calls, less 429/timeout pressure; independence unchanged (the second look never sees the first answer). Risk: medium (hot checking path; call order changes). Safe before filming? **No** — time it in a rehearsal first. Tests: new call-count test (5-item shot, 2 cited → 2 second looks, 2 SAM calls); Step 41 retry test now flakes only the first call, matching the new order.
 - `f0aeb30` Overnight 3: separate host and cleaner access codes — `POT_HOST_CODE` (random when unset, printed in the host link) gates sign-off, setup, run admin, call log and note audio; the cleaner code covers the tour/photo/note/voice/status routes and is what the host page's QR carries (review #4). Risk: medium-high (every existing link changes meaning; the host code also works on cleaner routes so the host's own phone flow keeps working). Safe before filming? **No**. Tests: split-access tests (cleaner code gets 401 on host routes, cleaner-code endpoint only for the host). README updated in this commit.
 - `9c016b8` Overnight 4: server enforces test-only skips — runs created from `?test=1`/`?demo=1` are marked test; skip-shot, skip-room and end-round return 400 for other runs (review #5). Risk: medium (test-mode filming flow must pass `test` at run creation, which the cleaner page now does). Safe before filming? **No** — Alex's filming uses Skip area in test mode; merge only with a phone check. Tests: non-test runs rejected on all three routes; existing skip tests create test runs.
 - `e26d404` Overnight 5: approve only when ready, or forced after confirm — the sign-off route rejects approve unless the run is `awaiting_signoff` (400 naming open/checking counts); the host button shows that confirm and sends `force` (review #9). Risk: medium (host flow). Safe before filming? **No**. Tests: approve rejected while open, forced approve works; existing approve-early tests now pass `force: true`.
@@ -69,5 +69,34 @@ changes when cards appear during the round).
   batching: untouched, per the freeze advice in
   `reports/review-wonder.md`.
 
-Final state of the branch: full suite **319 passed** after item 8;
-each item above also passed the full suite at its own commit.
+
+## Step 48 follow-ups (daytime, before merging)
+
+- `d26615b` Step 48a: revert cited-only checks. Reason, from the
+  Nov 1 live runs: starting second looks/SAM only after the first
+  look makes each photo's check about 6-14 s slower (median), while
+  the 10-call limit was almost never reached in walking runs (under
+  1 s of queueing). Speed matters more than the saved calls, so the
+  parallel start from main is back. Safe before filming? The branch
+  is not merged before filming; on the branch it restores main's
+  exact checking order.
+- `16acea4` Step 48b: role-aware setup links, docs for two access
+  codes. New `GET /api/role` answers host/cleaner from the presented
+  code; the cleaner page shows the “Set up a new house” tile only
+  for the host role (hidden when the role call fails); the host page
+  links to `/setup` with the host code; `.env.example` documents
+  `POT_HOST_CODE`; the README now describes the two codes, the
+  server-enforced test/demo-only skips, setup from the host page,
+  and the current test count. Tests: `/api/role` for both codes,
+  cleaner code 401 vs host code 200 on `/setup`.
+- `988a16e` Step 48c: close temp file on 413, Russian tour-notes
+  heading. The photo-upload finally block closes the temp file
+  before unlinking, so a 25 MB-cap rejection leaves no partial temp
+  file on Windows (new test); Russian setup pages get their
+  “??????? ? ????-????” heading instead of “undefined”.
+
+Final state after Step 48: full suite **319 passed** (run with the
+main folder's venv, from this worktree). The branch is ready to
+merge into main after filming; nothing was merged or pushed to
+main.
+
