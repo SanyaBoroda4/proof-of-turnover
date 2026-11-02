@@ -844,7 +844,7 @@ class _FlakySpark(FakeSpark):
 
 
 def test_api_failure_retries_once_automatically():
-    fake = _FlakySpark(fails=1, inspector=_done)
+    fake = _FlakySpark(fails=2, inspector=_done)
     test = TestClient(create_app(fake))
     code = test.app.state.server.code
     run_id = _create_run(test, code)
