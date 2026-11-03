@@ -525,13 +525,21 @@ def _check_worker(server, state, photo_id):
         merged = state.merge_result(photo_id, fresh)
         count = 0
         if merged["failed"]:
-            requests, notes = write_requests(
-                server.client, state.property, state.checklist, state.proofs,
-                effort=prompts.RECHECK_EFFORT, item_ids=set(merged["failed"]),
-                language=state.language,
-            )
-            state.store_requests(requests, notes)
-            count = len(requests)
+            # A retake reuses the item's existing request text when it
+            # is still not proven; only new failures need a requests call.
+            with state.lock:
+                fresh_failed = [
+                    item_id for item_id in merged["failed"]
+                    if item_id not in state.requests
+                ]
+            if fresh_failed:
+                requests, notes = write_requests(
+                    server.client, state.property, state.checklist, state.proofs,
+                    effort=prompts.RECHECK_EFFORT, item_ids=set(fresh_failed),
+                    language=state.language,
+                )
+                state.store_requests(requests, notes)
+                count = len(requests)
         state.timeline("requests_done", photo_id=photo_id, items=count)
         state.finish_photo(photo_id)
     except Exception as exc:  # noqa: BLE001 - a photo check never kills the server

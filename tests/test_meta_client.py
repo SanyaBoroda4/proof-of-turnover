@@ -389,6 +389,22 @@ def test_live_checks_use_fast_timeout_and_one_retry(tmp_path):
     assert [call["timeout"] for call in fake.responses.calls] == [LIVE_TIMEOUT] * 2
 
 
+def test_live_pick_problem_boxes_makes_one_attempt_only(tmp_path):
+    from pot.meta_client import LIVE_TIMEOUT, call_context
+
+    fake = _openai_fake([_http_error(500)])
+    client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,
+                        sleep=lambda seconds: None)
+    token = call_context.set({"live_checks": True})
+    try:
+        with pytest.raises(MetaClientError):
+            client.respond("pick problem boxes x P01 (shoe)", CONTENT)
+    finally:
+        call_context.reset(token)
+    assert client.trace[-1]["attempts"] == 1
+    assert [call["timeout"] for call in fake.responses.calls] == [LIVE_TIMEOUT]
+
+
 def test_batch_calls_keep_default_budget_without_timeout_kwarg(tmp_path):
     fake = _openai_fake([_http_error(500)])
     client = MetaClient(cache_dir=tmp_path, api_key="k", openai_client=fake,

@@ -200,8 +200,15 @@
   @keyframes flyout {
     to { transform: translateX(-60px) scale(0.94); opacity: 0; }
   }
+  .spinner { width: 36px; height: 36px; border-radius: 50%;
+             border: 4px solid var(--line); border-top-color: var(--marsh);
+             animation: spin 0.9s linear infinite; margin: 12px auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .checkingcard img.photo { width: 100%; border-radius: 20px; display: block;
+             max-height: 300px; object-fit: contain; background: var(--linen); }
   @media (prefers-reduced-motion: reduce) {
     .card.slide, .card.out { animation: none; }
+    .spinner { animation: none; }
     #flash.on, #flash.off { transition: none; }
     .stamp { animation: none; }
     .psheet.anim, .pbackdrop.anim { animation: none; }
@@ -364,7 +371,7 @@ const I18N = {
     camStarting: "Iniciando cámara…",
     close: "Cerrar",
     checking: "Revisando…",
-    checkingPhotos: (done, total) => `Revisando tus fotos: ${done} de ${total}`,
+    checkingPhotos: (done, total) => `Revisando tus fotos: ${done} de ${total}`, checkingRetake: "Revisando tu foto nueva… normalmente menos de un minuto",
     photosDone: "Fotos listas ✓",
     repeat: "Repetir",
     take: "Fotografiar",
@@ -439,7 +446,7 @@ const I18N = {
     camStarting: "Starting camera…",
     close: "Close",
     checking: "Checking…",
-    checkingPhotos: (done, total) => `Checking your photos: ${done} of ${total}`,
+    checkingPhotos: (done, total) => `Checking your photos: ${done} of ${total}`, checkingRetake: "Checking your new photo… usually under a minute",
     photosDone: "Photos done ✓",
     repeat: "Repeat",
     take: "Take photo",
@@ -514,7 +521,7 @@ const I18N = {
     camStarting: "Включаем камеру…",
     close: "Закрыть",
     checking: "Проверяем…",
-    checkingPhotos: (done, total) => `Проверяем ваши фото: ${done} из ${total}`,
+    checkingPhotos: (done, total) => `Проверяем ваши фото: ${done} из ${total}`, checkingRetake: "Проверяем ваше новое фото… обычно меньше минуты",
     photosDone: "Фото готовы ✓",
     repeat: "Повторить",
     take: "Сфотографировать",
@@ -584,15 +591,28 @@ function storeSet(key, value) {
   try { localStorage.setItem(key, value); } catch (e) {}
 }
 
+const GET_TIMEOUT_MS = 12000;
 async function api(path, opts) {
-  const r = await fetch(path, opts || {});
-  if (r.status === 401) throw new Error("auth");
-  if (!r.ok) {
-    let detail = r.statusText;
-    try { detail = (await r.json()).detail || detail; } catch (e) {}
-    throw new Error(detail);
+  opts = opts || {};
+  let signal = opts.signal;
+  let timer = null;
+  if (!signal && (!opts.method || opts.method === "GET")) {
+    const ctrl = new AbortController();
+    signal = ctrl.signal;
+    timer = setTimeout(() => ctrl.abort(), GET_TIMEOUT_MS);
   }
-  return r.json();
+  try {
+    const r = await fetch(path, {...opts, signal: signal});
+    if (r.status === 401) throw new Error("auth");
+    if (!r.ok) {
+      let detail = r.statusText;
+      try { detail = (await r.json()).detail || detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    return r.json();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 const UPLOAD_TIMEOUT_MS = 30000;
@@ -1484,6 +1504,7 @@ function renderKey() {
     cardPanel, cardNoteId, cardNoteText,
     cardOrder.length, cardsTotal,
     total - left, total,
+    Object.values(retakePhotos).join(","),
     toast,
     !shown && !left,
     photoError, !!recorder, transcribing, noteMsg,
@@ -2014,7 +2035,7 @@ function renderCards(app) {
     + `</div>` + uncheckedLineHtml();
   const skippedCount = (status.skipped_shots || []).length;
   if (skippedCount) {
-    html += `<div class="small">${esc(T().skippedLine(takenSet.size, skippedCount))}</div>`;
+    html += `<div class="small centerline">${esc(T().skippedLine(takenSet.size, skippedCount))}</div>`;
   }
   const total = status.progress.photos;
   const left = status.checking.length;
@@ -2053,7 +2074,16 @@ function renderCards(app) {
     }
   } else {
     lastShownCard = null;
-    if (!left) html += `<button class="btn" id="finish">${esc(T().sendToHost)}</button>`;
+    const checkingEntry = Object.entries(retakePhotos).find(
+      ([id, pid]) => pid && (status.checking || []).indexOf(pid) >= 0);
+    if (checkingEntry) {
+      const pid = checkingEntry[1];
+      const thumb = `/api/runs/${encodeURIComponent(RUN)}/photos/${encodeURIComponent(pid)}/overview`;
+      html += `<div class="card checkingcard"><div class="instruction">${esc(T().checkingRetake)}</div>`
+        + `<img class="photo" src="${thumb}" alt=""><div class="spinner" aria-hidden="true"></div></div>`;
+    } else if (!left) {
+      html += `<button class="btn" id="finish">${esc(T().sendToHost)}</button>`;
+    }
   }
   if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
   if (toast) html += `<div class="toast">${esc(toast)}</div>`;
@@ -2643,14 +2673,22 @@ function startPoll() {
   if (pollTimer) return;
   const tick = async () => {
     pollTimer = null;
-    try { await refresh(); renderMaybe(); } catch (e) {}
-    if (!RUN) return;
-    let busy = false;
-    for (const entry of optimistic.values()) {
-      if (entry.state !== "failed") { busy = true; break; }
+    try {
+      await refresh();
+      renderMaybe();
+    } catch (e) {
+      // A hung GET aborts after GET_TIMEOUT_MS; scheduling in finally
+      // means the loop always recovers by itself.
+    } finally {
+      if (RUN) {
+        let busy = false;
+        for (const entry of optimistic.values()) {
+          if (entry.state !== "failed") { busy = true; break; }
+        }
+        if (!busy && status && status.checking && status.checking.length) busy = true;
+        pollTimer = setTimeout(tick, busy ? 500 : 2000);
+      }
     }
-    if (!busy && status && status.checking && status.checking.length) busy = true;
-    pollTimer = setTimeout(tick, busy ? 500 : 2000);
   };
   pollTimer = setTimeout(tick, 2000);
 }

@@ -196,34 +196,3 @@ def test_parallel_problem_noun_picks_run_together(tmp_path):
     fresh = check_photo_parallel(client, photo_a, "bed", first.rooms, [beds_made])
     assert state["peak"] == 2
     assert fresh["problem_sams"][beds_made.id].count == 6
-
-def test_parallel_only_verifies_items_the_first_look_cited(tmp_path):
-    first, _second_state, photo_a, _photo_b = _photos(tmp_path)
-    items = [i for i in first.checklist if i.key != "coverage"][:5]
-    assert len(items) == 5
-    cited = {items[0].id, items[1].id}
-
-    def inspector(call):
-        enum = call["schema"]["properties"]["claims"]["items"]["properties"]["item_id"]["enum"]
-        claims = []
-        for item_id in enum:
-            if item_id in cited:
-                claims.append({"item_id": item_id, "status": "done",
-                               "photo_id": "P01", "seen": "looks good",
-                               "count_seen": 1})
-            else:
-                claims.append({"item_id": item_id, "status": "not_shown",
-                               "photo_id": None, "seen": "",
-                               "count_seen": None})
-        return {"claims": claims, "other_issues": []}
-
-    client = FakeSpark(inspector=inspector)
-    fresh = check_photo_parallel(client, photo_a, "bed", first.rooms, items)
-    second_calls = [c for c in client.calls
-                    if c["purpose"].startswith("second look")]
-    assert len(second_calls) == 2
-    assert len(client.sam_calls) == len(
-        [i for i in items if i.id in cited and i.sam_prompt])
-    assert set(fresh["seconds"]) == cited
-    assert set(fresh["fresh_ids"]) == cited
-

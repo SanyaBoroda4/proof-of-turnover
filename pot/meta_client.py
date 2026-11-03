@@ -365,6 +365,10 @@ class MetaClient:
         # photos in flight still send at most POT_MAX_CALLS at once.
         if live_checks_active():
             max_retries = LIVE_MAX_RETRIES
+            if purpose.startswith("pick problem"):
+                # One attempt only during live checks: the pick falls
+                # back to keeping all boxes, so a retry only adds delay.
+                max_retries = 0
         else:
             max_retries = MAX_RETRIES
         with self._slots:

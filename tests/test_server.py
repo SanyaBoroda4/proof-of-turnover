@@ -730,6 +730,31 @@ def test_full_tour_proves_and_finishes():
     assert done.status_code == 200, done.text
 
 
+def test_retake_reuses_existing_request_text():
+    test, code, run_id = _problem_run()
+    status = _wait_idle(test, code, run_id)
+    item_id = "master-bedroom.beds_made"
+    item = _status_item(status, item_id)
+    assert item["request"] and item["request"]["cleaner"]
+    fake = test.app.state.server.client
+
+    def request_calls():
+        return [
+            c for c in fake.calls
+            if "requests" in ((c.get("schema") or {}).get("properties") or {})
+        ]
+
+    assert len(request_calls()) == 1
+    first_text = item["request"]["cleaner"]
+    # Retake: the item still fails, but no new requests call is made.
+    assert _upload(test, code, run_id, "master-bedroom-1").status_code == 200
+    status = _wait_idle(test, code, run_id)
+    item = _status_item(status, item_id)
+    assert item["status"] != "proven"
+    assert item["request"]["cleaner"] == first_text
+    assert len(request_calls()) == 1
+
+
 def test_before_image_served_after_fix():
     test, code, run_id = _problem_run()
     _wait_idle(test, code, run_id)
@@ -853,7 +878,7 @@ class _FlakySpark(FakeSpark):
 
 
 def test_api_failure_retries_once_automatically():
-    fake = _FlakySpark(fails=1, inspector=_done)
+    fake = _FlakySpark(fails=2, inspector=_done)
     test = TestClient(create_app(fake))
     code = test.app.state.server.code
     run_id = _create_run(test, code)
