@@ -822,6 +822,39 @@ def test_all_proven_retake_makes_no_model_call():
     assert len(fake.sam_calls) == sam_before
 
 
+def test_closeup_waits_for_slow_overview_and_skips_what_it_proved():
+    import threading
+
+    release = threading.Event()
+    overview_started = threading.Event()
+    captured = []
+
+    def inspector(call):
+        pid = photo_ids_in(call["content"])[0]
+        enum = call["schema"]["properties"]["claims"]["items"]["properties"]["item_id"]["enum"]
+        captured.append((pid, list(enum)))
+        if pid == "P01":
+            overview_started.set()
+            release.wait(15)
+        return _done(call)
+
+    test, code = _client(inspector=inspector)
+    run_id = _create_run(test, code, property="rental-1")
+    assert _upload(test, code, run_id, "kitchen-10").status_code == 200
+    assert overview_started.wait(10)
+    assert _upload(test, code, run_id, "kitchen-01").status_code == 200
+    time.sleep(1.0)
+    # The close-up's first look has not started: it waits for P01.
+    assert all(pid != "P02" for pid, _enum in captured), captured
+    release.set()
+    status = _wait_idle(test, code, run_id, timeout=30)
+    coffee = _status_item(status, "kitchen.coffee_beans")
+    assert coffee["status"] == "proven"
+    assert coffee["photo_id"] == "P01"
+    # The close-up was asked about nothing the overview already proved.
+    assert all(enum == [] for pid, enum in captured if pid == "P02"), captured
+
+
 def test_card_groups_and_card_image_endpoint():
     from PIL import Image as _Image
 

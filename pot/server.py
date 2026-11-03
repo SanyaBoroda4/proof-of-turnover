@@ -482,6 +482,49 @@ def _usage_summary(usage):
     return summary or None
 
 
+def _wait_for_prior_overview(state, photo_id, timeout=120.0):
+    """Wait while an earlier overview photo of the same room checks.
+
+    Only overview photos taken before this one (smaller photo_seq)
+    block; on timeout, or when the overview photo leaves checking
+    (checked or unchecked), the caller proceeds as usual.
+    """
+    deadline = time.monotonic() + timeout
+    announced = False
+    while True:
+        with state.lock:
+            seq = state.photo_seq.get(photo_id, 0)
+            shot_id = state.photo_shot.get(photo_id, "")
+            shot = next(
+                (s for s in state.tour["shots"] if s["shot_id"] == shot_id),
+                None,
+            )
+            if shot is None or shot.get("overview"):
+                return
+            room_id = shot.get("room_id", "")
+            overview_shots = {
+                s["shot_id"] for s in state.tour["shots"]
+                if s.get("overview") and s.get("room_id") == room_id
+            }
+            blockers = [
+                pid for pid in state.checking
+                if state.photo_seq.get(pid, 0) < seq
+                and state.photo_shot.get(pid, "") in overview_shots
+            ]
+        if not blockers:
+            return
+        if not announced:
+            announced = True
+            state.timeline(
+                "overview_wait", photo_id=photo_id,
+                waiting_for=",".join(sorted(blockers)),
+            )
+        if time.monotonic() >= deadline:
+            state.timeline("overview_wait_timeout", photo_id=photo_id)
+            return
+        time.sleep(0.5)
+
+
 def _check_worker(server, state, photo_id):
     """Background check for one uploaded photo (parallel tour mode)."""
     token = call_context.set({
@@ -489,6 +532,12 @@ def _check_worker(server, state, photo_id):
     })
     started = time.monotonic()
     try:
+        with state.lock:
+            is_retake = bool(state.photo_retake.get(photo_id))
+        if not is_retake:
+            # Close-ups wait for their room's earlier overview photo,
+            # so what the overview proved is never re-checked.
+            _wait_for_prior_overview(state, photo_id)
         with state.lock:
             shot_id = state.photo_shot.get(photo_id, "")
             retake_items = list(state.photo_retake.get(photo_id, []))
