@@ -20,8 +20,15 @@ def _by_id(items):
 def test_rental_1_v6_checklist():
     prop = load_property("rental-1")
     items = _by_id(build_checklist(prop))
-    assert len(items) == 83
+    assert len(items) == 88
     assert "living-room.ceiling_fan" not in items
+    assert items["master-bathroom.hand_towel"].min_count == 2
+    assert items["hall-bathroom.hand_towel"].min_count == 1
+    assert items["powder-room.hand_towel"].min_count == 1
+    assert items["master-bathroom.hand_towel"].requirement == (
+        "2 clean hand towels hanging, one at each sink")
+    assert items["master-bathroom.hand_soap"].sam_prompt == "soap dispenser"
+    assert items["master-bathroom.hand_soap"].min_count == 1
     napkins = items["kitchen.napkins"]
     assert napkins.critical is True
     assert napkins.sam_prompt == "napkin"
@@ -81,11 +88,33 @@ def test_rental_1_tour_has_no_ceiling_fan_shot():
     assert "napkin holder" in by_id["kitchen-12"]["instruction_en"]
     powder = by_id["powder-00"]
     assert len(powder["item_ids"]) >= 5
+    for overview_id, closeup_id in (
+        ("powder-00", "powder-03"),
+        ("master-bathroom-00", "master-bathroom-03"),
+        ("hall-bathroom-00", "hall-bathroom-03"),
+    ):
+        room = by_id[overview_id]["room_id"]
+        for shot_id in (overview_id, closeup_id):
+            assert f"{room}.hand_towel" in by_id[shot_id]["item_ids"], shot_id
+            assert f"{room}.hand_soap" in by_id[shot_id]["item_ids"], shot_id
+    assert "both sinks" in by_id["master-bathroom-03"]["instruction_en"]
+    # fixup_tour keeps the new items (no extra shots, no notes).
+    from pot.checklist import build_checklist as _build, load_property as _load
+    from pot.tour import fixup_tour
+
+    _prop = _load("rental-1")
+    fixed, notes = fixup_tour(_prop, _build(_prop), tour["shots"])
+    assert notes == []
+    fixed_by_id = {s["shot_id"]: s for s in fixed}
+    assert "master-bathroom.hand_towel" in fixed_by_id["master-bathroom-00"]["item_ids"]
+    assert "master-bathroom.hand_soap" in fixed_by_id["master-bathroom-03"]["item_ids"]
 
 
 def test_demo_house_checklist():
     items = _by_id(build_checklist(load_property("demo-house")))
-    assert len(items) == 30
+    assert len(items) == 34
+    assert items["master-bathroom.hand_towel"].min_count == 1
+    assert items["hall-bathroom.hand_soap"].critical is True
     assert items["master-bedroom.beds_made"].min_count == 1
     assert items["guest-bedroom.beds_made"].min_count == 2
     assert items["master-bathroom.towels"].min_count == 4
@@ -175,13 +204,14 @@ def test_new_room_types_build_with_coverage_first(tmp_path):
     items = build_checklist(load_property("test-house", properties_dir=base))
     by_id = {item.id: item for item in items}
     assert [item.key for item in items if item.room_id == "wc"] == [
-        "coverage", "toilet", "toilet_paper", "sink", "hand_towel",
+        "coverage", "toilet", "toilet_paper", "sink", "hand_towel", "hand_soap",
     ]
     assert by_id["wc.toilet"].min_count == 1
     assert by_id["wc.toilet"].sam_prompt == "toilet"
     assert by_id["wc.toilet_paper"].min_count == 1
     assert by_id["wc.hand_towel"].min_count == 1
-    assert by_id["wc.hand_towel"].sam_prompt == "towel"
+    assert by_id["wc.hand_towel"].sam_prompt == "hand towel"
+    assert by_id["wc.hand_soap"].sam_prompt == "soap dispenser"
     assert [item.key for item in items if item.room_id == "dining"] == [
         "coverage", "table", "chairs", "floor_clear",
     ]

@@ -91,6 +91,7 @@ def test_sam_runs_only_for_sam_prompt_items(tmp_path):
     sam_ids = {call["purpose"].split()[1] for call in client.sam_calls}
     assert sam_ids == {
         "bed.beds_made", "bath.towels", "bath.toilet_paper", "bath.toilet",
+        "bath.hand_towel", "bath.hand_soap",
     }
     assert all(call["prompt"] for call in client.sam_calls)
     assert result.sams["bed.beds_made"].count == 3  # fixture has 3 boxes
@@ -115,7 +116,7 @@ def test_failed_calls_degrade_and_run_continues(tmp_path):
     assert result.second_looks["bath.towels"].verdict == "done"
     assert result.sams["bed.beds_made"].count == 0
     assert result.sams["bed.beds_made"].boxes == []
-    assert sum("check failed" in note for note in result.notes) == 1 + 4
+    assert sum("check failed" in note for note in result.notes) == 1 + 6
 
 
 def test_room_decision_asks_citing_rooms_only(tmp_path):

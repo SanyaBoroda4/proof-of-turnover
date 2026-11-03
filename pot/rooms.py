@@ -99,6 +99,26 @@ TEMPLATES = {
             "min_count": None,
             "critical": True,
         },
+        {
+            "key": "hand_towel",
+            "label": "Hand towels hanging",
+            "requirement": lambda room: (
+                f"{_sinks(room)} clean "
+                f"{_plural(_sinks(room), 'hand towel', 'hand towels')} "
+                "hanging, one at each sink"
+            ),
+            "sam_prompt": "hand towel",
+            "min_count": "sinks",
+            "critical": True,
+        },
+        {
+            "key": "hand_soap",
+            "label": "Hand soap at the sink",
+            "requirement": "A hand soap dispenser at the sink",
+            "sam_prompt": "soap dispenser",
+            "min_count": 1,
+            "critical": True,
+        },
     ],
     "kitchen": [
         {
@@ -193,9 +213,21 @@ TEMPLATES = {
         },
         {
             "key": "hand_towel",
-            "label": "Hand towel in place",
-            "requirement": "A hand towel is in place",
-            "sam_prompt": "towel",
+            "label": "Hand towels hanging",
+            "requirement": lambda room: (
+                f"{_sinks(room)} clean "
+                f"{_plural(_sinks(room), 'hand towel', 'hand towels')} "
+                "hanging, one at each sink"
+            ),
+            "sam_prompt": "hand towel",
+            "min_count": "sinks",
+            "critical": True,
+        },
+        {
+            "key": "hand_soap",
+            "label": "Hand soap at the sink",
+            "requirement": "A hand soap dispenser at the sink",
+            "sam_prompt": "soap dispenser",
             "min_count": 1,
             "critical": True,
         },
@@ -310,9 +342,15 @@ COVERAGE_ITEM = {
 }
 
 
+def _sinks(room):
+    return room.get("sinks") or 1
+
+
 def _resolve_min_count(spec, room):
     value = spec["min_count"]
     if isinstance(value, str):
+        if value == "sinks":
+            return _sinks(room)
         return room[value]
     return value
 

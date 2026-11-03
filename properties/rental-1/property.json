@@ -44,7 +44,8 @@
       "type": "half_bathroom",
       "name": "Powder room",
       "floor": 1,
-      "description": "white sink top with chrome faucet, grey framed mirror, towel ring, toilet with a bidet seat"
+      "description": "white sink top with chrome faucet, grey framed mirror, towel ring, toilet with a bidet seat",
+      "sinks": 1
     },
     {
       "id": "patio",
@@ -77,7 +78,8 @@
       "name": "Master bathroom",
       "floor": 2,
       "towels": 2,
-      "description": "white and brown granite double vanity with a makeup counter, white tub with subway tile, separate toilet room with floating wood shelves"
+      "description": "white and brown granite double vanity with a makeup counter, white tub with subway tile, separate toilet room with floating wood shelves",
+      "sinks": 2
     },
     {
       "id": "bedroom-1",
@@ -101,7 +103,8 @@
       "name": "Hall bathroom",
       "floor": 2,
       "towels": 2,
-      "description": "shared upstairs bath: speckled grey granite vanity with two towel rings, tub with subway tile and a white shower curtain, floating wood shelves over the toilet"
+      "description": "shared upstairs bath: speckled grey granite vanity with two towel rings, tub with subway tile and a white shower curtain, floating wood shelves over the toilet",
+      "sinks": 1
     }
   ],
   "extra_items": [

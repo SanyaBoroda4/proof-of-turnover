@@ -42,6 +42,7 @@ def test_each_room_call_gets_own_photos_and_items(tmp_path):
     assert photo_ids_in(bath_call["content"]) == ["P03", "P04"]
     assert set(_item_enum(bath_call)) == {
         "bath.towels", "bath.toilet_paper", "bath.toilet", "bath.shower", "bath.sink",
+        "bath.hand_towel", "bath.hand_soap",
     }
     assert "Bed" in bed_call["instructions"]
     assert "oak headboard" in bed_call["instructions"]

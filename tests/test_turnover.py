@@ -63,7 +63,7 @@ def test_run_turnover_writes_first_look_json(tmp_path):
         "master-bedroom", "guest-bedroom", "master-bathroom", "hall-bathroom",
         "kitchen", "living-room", "patio",
     }
-    assert len(saved["claims"]) == 30 - 7  # no coverage items sent to the model
+    assert len(saved["claims"]) == 34 - 7  # no coverage items sent to the model
     assert set(saved) == {"property", "photos", "coverage", "claims", "other_issues", "notes"}
     assert outcome["match"].coverage["master-bedroom"] == "covered"
     assert outcome["look"].claims["master-bedroom.beds_made"].status == "done"

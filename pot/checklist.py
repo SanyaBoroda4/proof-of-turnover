@@ -88,7 +88,7 @@ def _validate_room(data, index, property_id, seen_ids):
         raise PropertyError(f"{where}: field 'towels' is required for a bathroom")
     if data.get("beds") is not None:
         _need_beds(data, where)
-    for field in ("towels", "coffee_pods"):
+    for field in ("towels", "coffee_pods", "sinks"):
         if data.get(field) is not None:
             _need_positive_int(data, field, where)
     if data.get("description") is not None:
