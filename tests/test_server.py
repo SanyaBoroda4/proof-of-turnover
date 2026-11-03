@@ -755,6 +755,24 @@ def test_retake_reuses_existing_request_text():
     assert len(request_calls()) == 1
 
 
+def test_upload_rejects_unknown_retake_items():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    bad = test.post(
+        f"/api/runs/{run_id}/photos?code={code}",
+        data={"shot_id": "master-bedroom-1",
+              "retake_items": "master-bedroom.nope"},
+        files={"image": ("pic.jpg", _jpeg(), "image/jpeg")},
+    )
+    assert bad.status_code == 400, bad.text
+    bad_id = test.post(
+        f"/api/runs/{run_id}/photos?code={code}",
+        data={"shot_id": "master-bedroom-1", "retake_items": "bad id!"},
+        files={"image": ("pic.jpg", _jpeg(), "image/jpeg")},
+    )
+    assert bad_id.status_code == 400, bad_id.text
+
+
 def test_before_image_served_after_fix():
     test, code, run_id = _problem_run()
     _wait_idle(test, code, run_id)
@@ -765,7 +783,12 @@ def test_before_image_served_after_fix():
         "this_room": "yes", "verdict": "done", "count_seen": 5,
         "reason": "looks good", "problem_object": "",
     }
-    assert _upload(test, code, run_id, "master-bedroom-1").status_code == 200
+    retake = test.post(
+        f"/api/runs/{run_id}/photos?code={code}",
+        data={"shot_id": "master-bedroom-1", "retake_items": item_id},
+        files={"image": ("pic.jpg", _jpeg(), "image/jpeg")},
+    )
+    assert retake.status_code == 200, retake.text
     status = _wait_idle(test, code, run_id)
     item = _status_item(status, item_id)
     assert item["status"] == "proven"

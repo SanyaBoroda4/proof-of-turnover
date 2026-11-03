@@ -515,6 +515,23 @@ def test_retake_proving_item_clears_resolution(tmp_path):
     assert _status_item(state.status(), item)["resolution"] is None
 
 
+def test_tour_photo_proven_after_problem_creates_no_before(tmp_path):
+    # Overview PROBLEM, then a later tour (close-up) photo proves it:
+    # nobody "fixed" anything, so no before image.
+    state = _state(tmp_path)
+    item = _bed_item(state)
+    photo, _ = state.claim_photo(str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item, "mess"))
+    state.finish_photo(photo.id)
+    second, _ = state.claim_photo(str(_photo_file(tmp_path / "u2", "b.jpg")), "bed-1")
+    state.merge_result(second.id, _fresh_done(second.id, [item]))
+    state.finish_photo(second.id)
+    assert state.proofs[item].status == PROVEN
+    before_path = state.run_dir / "evidence" / f"{item}.before.jpg"
+    assert not before_path.exists()
+    assert _status_item(state.status(), item)["has_before"] is False
+
+
 def test_before_image_kept_once_on_problem_to_proven(tmp_path):
     state = _state(tmp_path)
     item = _bed_item(state)
@@ -523,7 +540,9 @@ def test_before_image_kept_once_on_problem_to_proven(tmp_path):
     state.finish_photo(photo.id)
     before_path = state.run_dir / "evidence" / f"{item}.before.jpg"
     assert not before_path.exists()
-    second, _ = state.claim_photo(str(_photo_file(tmp_path / "u2", "b.jpg")), "bed-1")
+    second, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u2", "b.jpg")), "bed-1",
+        retake_items=[item])
     state.merge_result(second.id, _fresh_done(second.id, [item]))
     state.finish_photo(second.id)
     assert state.proofs[item].status == PROVEN
@@ -532,10 +551,32 @@ def test_before_image_kept_once_on_problem_to_proven(tmp_path):
     third, _ = state.claim_photo(str(_photo_file(tmp_path / "u3", "c.jpg")), "bed-1")
     state.merge_result(third.id, _fresh_problem(third.id, item, "mess again"))
     state.finish_photo(third.id)
-    fourth, _ = state.claim_photo(str(_photo_file(tmp_path / "u4", "d.jpg")), "bed-1")
+    fourth, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u4", "d.jpg")), "bed-1",
+        retake_items=[item])
     state.merge_result(fourth.id, _fresh_done(fourth.id, [item]))
     state.finish_photo(fourth.id)
     assert before_path.read_bytes() == first_bytes  # never overwritten
+
+
+def test_retake_items_survive_load(tmp_path):
+    from pot.checklist import load_property
+    from pot.tour import load_tour
+
+    run_dir = tmp_path / "run"
+    state = RunState.create(
+        run_dir, "demo-house", tour={"shots": load_tour("demo-house")})
+    item = "master-bedroom.beds_made"
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u1", "a.jpg")), "master-bedroom-1",
+        retake_items=[item])
+    assert state.photo_retake[photo.id] == [item]
+    loaded = RunState.load(state.run_dir)
+    assert loaded.photo_retake[photo.id] == [item]
+    saved = json.loads(
+        (state.run_dir / "first_look.json").read_text(encoding="utf-8"))
+    entry = next(e for e in saved["photos"] if e["id"] == photo.id)
+    assert entry["retake_items"] == [item]
 
 
 def test_shot_without_critical_items_finishes(tmp_path):

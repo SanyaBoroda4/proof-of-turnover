@@ -115,6 +115,7 @@ class RunState:
         self.photos_by_id = {}
         self.photo_seq = {}
         self.photo_shot = {}
+        self.photo_retake = {}
         self.assignments = {}
         self.coverage = {}
         self.claims = {}
@@ -207,6 +208,12 @@ class RunState:
             state.photo_seq[photo.id] = len(state.photos) - 1
             if entry.get("shot_id"):
                 state.photo_shot[photo.id] = entry["shot_id"]
+            retake_items = entry.get("retake_items")
+            if isinstance(retake_items, list) and retake_items:
+                state.photo_retake[photo.id] = [
+                    item_id for item_id in retake_items
+                    if isinstance(item_id, str)
+                ]
             state.assignments[photo.id] = Assignment(
                 photo_id=entry["id"],
                 room_id=entry.get("room_id", "unknown"),
@@ -334,7 +341,7 @@ class RunState:
                 taken.add(int(photo.id[1:]))
         return f"P{(max(taken) + 1) if taken else 1:02d}"
 
-    def claim_photo(self, upload_path, shot_id):
+    def claim_photo(self, upload_path, shot_id, retake_items=None):
         """Number and save an uploaded tour photo; returns (photo, seq).
 
         Runs under the lock, so two uploads at the same moment get
@@ -352,7 +359,8 @@ class RunState:
                     "foto antigua: this photo was taken before the tour started, "
                     "take a new one"
                 )
-            return self._ingest_locked(upload_path, room_id, shot_id)
+            return self._ingest_locked(upload_path, room_id, shot_id,
+                                       retake_items=retake_items)
 
     def claim_photo_for_room(self, upload_path, room_id):
         """Number and save a photo for a room (batch/CLI path, no tour)."""
@@ -361,7 +369,7 @@ class RunState:
                 raise ValueError(f"Unknown room '{room_id}'")
             return self._ingest_locked(upload_path, room_id, "")
 
-    def _ingest_locked(self, upload_path, room_id, shot_id):
+    def _ingest_locked(self, upload_path, room_id, shot_id, retake_items=None):
         photo_id = self._next_photo_id()
         photo = ingest_file(
             upload_path, self.run_dir / "photos", photo_id, keep_bytes=self.demo
@@ -372,6 +380,8 @@ class RunState:
         self.photo_seq[photo_id] = seq
         if shot_id:
             self.photo_shot[photo_id] = shot_id
+        if retake_items:
+            self.photo_retake[photo_id] = list(retake_items)
         self.assignments[photo_id] = Assignment(photo_id, room_id, "high", "")
         self.coverage[room_id] = "covered"
         coverage_id = f"{room_id}.coverage"
@@ -500,8 +510,9 @@ class RunState:
                 self.notes.append(f"Photo {photo_id} checked in {elapsed:.1f} s")
             if changes:
                 evidence_dir = self.run_dir / "evidence"
+                is_retake = bool(self.photo_retake.get(photo_id))
                 for item_id, (old, new) in changes.items():
-                    if old == PROBLEM and new == PROVEN:
+                    if is_retake and old == PROBLEM and new == PROVEN:
                         before = evidence_dir / f"{item_id}.before.jpg"
                         current = evidence_dir / f"{item_id}.jpg"
                         if not before.exists() and current.is_file():
@@ -1225,6 +1236,7 @@ class RunState:
                     "id": photo.id,
                     "file": photo.original_name,
                     "shot_id": self.photo_shot.get(photo.id, ""),
+                    "retake_items": list(self.photo_retake.get(photo.id, [])),
                     "room_id": self.assignments[photo.id].room_id,
                     "confidence": self.assignments[photo.id].confidence,
                     "seen": self.assignments[photo.id].seen,

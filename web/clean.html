@@ -2482,6 +2482,7 @@ function cardSnap(itemId, file) {
   (async () => {
     const form = new FormData();
     form.append("shot_id", shot.shot_id);
+    form.append("retake_items", itemId);
     form.append("image", file);
     try {
       const res = await uploadWithRetry(`/api/runs/${encodeURIComponent(RUN)}/photos`, form);

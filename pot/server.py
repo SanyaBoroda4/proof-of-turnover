@@ -710,15 +710,27 @@ def create_app(client=None):
         return {"shots": shots, "notes": notes}
 
     @app.post("/api/runs/{run_id}/photos")
-    def _upload_photo(run_id: str, shot_id: str = Form(...), image: UploadFile = File(...)):
+    def _upload_photo(run_id: str, shot_id: str = Form(...), image: UploadFile = File(...),
+                      retake_items: str | None = Form(default=None)):
         state = need_state(run_id)
         _checked_id(shot_id, "shot")
+        retake_list = []
+        if retake_items:
+            for item_id in retake_items.split(","):
+                item_id = item_id.strip()
+                if not item_id:
+                    continue
+                _checked_id(item_id, "item")
+                if item_id not in state.items_by_id:
+                    raise HTTPException(400, f"Unknown item '{item_id}'")
+                retake_list.append(item_id)
         suffix = Path(image.filename or "upload.jpg").suffix.lower() or ".jpg"
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         try:
             _spool_capped(image.file, tmp)
             tmp.close()
-            photo, _seq = state.claim_photo(tmp.name, shot_id)
+            photo, _seq = state.claim_photo(tmp.name, shot_id,
+                                            retake_items=retake_list or None)
         except OldPhotoError as exc:
             raise HTTPException(400, str(exc))
         except ValueError as exc:
