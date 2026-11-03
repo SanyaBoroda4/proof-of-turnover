@@ -138,6 +138,52 @@ def test_overview_problem_stays_and_detail_proven_beats_it(tmp_path):
     assert state.proofs[item_id].photo_id == photo2.id
 
 
+def test_older_overview_finishing_last_keeps_closeup_boxes(tmp_path):
+    state, item_id = _overview_state(tmp_path)
+    overview = _photo_file(tmp_path / "up1", "a.jpg", "blue")
+    closeup = _photo_file(tmp_path / "up2", "b.jpg", "green")
+    overview_photo, _ = state.claim_photo(str(overview), "bed-overview")
+    closeup_photo, _ = state.claim_photo(str(closeup), "bed-detail")
+    closeup_boxes = [{"left": 1, "top": 2, "right": 3, "bottom": 4}]
+    overview_boxes = [{"left": 9, "top": 9, "right": 10, "bottom": 10}]
+    # The newer close-up finishes first: PROBLEM citing the close-up.
+    fresh_close = _fresh_problem(closeup_photo.id, item_id, "mess close")
+    fresh_close["problem_sams"][item_id] = SamCheck(
+        item_id, closeup_photo.id, "mess", 1, closeup_boxes)
+    state.merge_result(closeup_photo.id, fresh_close)
+    assert state.proofs[item_id].photo_id == closeup_photo.id
+    assert state.problem_sams[item_id].boxes == closeup_boxes
+    # The older overview finishes last: it must not move the proof
+    # or replace the close-up's boxes with its own.
+    fresh_over = _fresh_problem(overview_photo.id, item_id, "mess wide")
+    fresh_over["problem_sams"][item_id] = SamCheck(
+        item_id, overview_photo.id, "mess", 1, overview_boxes)
+    state.merge_result(overview_photo.id, fresh_over)
+    assert state.proofs[item_id].status == PROBLEM
+    assert state.proofs[item_id].photo_id == closeup_photo.id
+    assert state.problem_sams[item_id].photo_id == closeup_photo.id
+    assert state.problem_sams[item_id].boxes == closeup_boxes
+
+
+def test_problem_boxes_dropped_when_proof_moves_to_boxless_photo(tmp_path):
+    state, item_id = _overview_state(tmp_path)
+    first = _photo_file(tmp_path / "up1", "a.jpg", "blue")
+    photo1, _ = state.claim_photo(str(first), "bed-overview")
+    fresh1 = _fresh_problem(photo1.id, item_id, "mess")
+    fresh1["problem_sams"][item_id] = SamCheck(
+        item_id, photo1.id, "mess", 1,
+        [{"left": 1, "top": 1, "right": 2, "bottom": 2}])
+    state.merge_result(photo1.id, fresh1)
+    assert state.problem_sams[item_id].boxes
+    second = _photo_file(tmp_path / "up2", "b.jpg", "green")
+    photo2, _ = state.claim_photo(str(second), "bed-detail")
+    fresh2 = _fresh_problem(photo2.id, item_id, "mess again")
+    fresh2["problem_sams"] = {}
+    state.merge_result(photo2.id, fresh2)
+    assert state.proofs[item_id].photo_id == photo2.id
+    assert item_id not in state.problem_sams
+
+
 def test_concurrent_claims_get_distinct_ids_and_both_survive(tmp_path):
     state = _state(tmp_path)
     first = _photo_file(tmp_path / "up1", "a.jpg", "blue")

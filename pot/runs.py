@@ -493,12 +493,21 @@ class RunState:
                         self.proofs[item_id] = ProofItem(
                             item_id, NEEDS_PROOF, "No photo shows it", photo_id
                         )
+            # Problem boxes belong to the photo the proof cites: take
+            # this photo's boxes only for items citing this photo, and
+            # drop a stale photo's boxes when the proof moves on.
             for item_id, sam in fresh.get("problem_sams", {}).items():
-                if self.proofs.get(item_id) is not None and self.proofs[item_id].status == PROBLEM:
+                proof = self.proofs.get(item_id)
+                if (
+                    proof is not None and proof.status == PROBLEM
+                    and proof.photo_id == photo_id
+                    and sam.photo_id == proof.photo_id
+                ):
                     self.problem_sams[item_id] = sam
             self.problem_sams = {
                 item_id: sam for item_id, sam in self.problem_sams.items()
                 if self.proofs[item_id].status == PROBLEM
+                and sam.photo_id == self.proofs[item_id].photo_id
             }
             self.other_issues = prune_other_issues(
                 self.other_issues + fresh.get("issues", []), self.proofs, self.claims
