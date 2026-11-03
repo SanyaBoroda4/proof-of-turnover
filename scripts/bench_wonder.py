@@ -156,7 +156,8 @@ def main():
                     stats["flex_fail"] += 1
             rows.append((
                 f"{case['run'][-6:]} {case['item_id']} {case['photo_id']}",
-                case["truth"], model, effort, str(met), f"{seconds:.1f}",
+                case["truth"].replace("|", "/"), model, effort, str(met),
+                f"{seconds:.1f}",
                 "ok" if guard_ok else "GUARD",
             ))
     print("| Case | Truth | Model | Effort | Answer | Sec | Guard |")
