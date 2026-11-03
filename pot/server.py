@@ -18,6 +18,7 @@ import socket
 import tempfile
 import threading
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -182,12 +183,38 @@ WONDER_OPINIONS = ("agree_with_cleaner", "still_a_problem", "unclear")
 WONDER_SCHEMA = {
     "type": "object",
     "properties": {
-        "opinion": {"type": "string", "enum": list(WONDER_OPINIONS)},
-        "reason": {"type": "string"},
+        "evidence": {"type": "string"},
+        "requirement_met": {
+            "type": "string", "enum": ["met", "not_met", "cannot_tell"],
+        },
     },
-    "required": ["opinion", "reason"],
+    "required": ["evidence", "requirement_met"],
     "additionalProperties": False,
 }
+
+WONDER_MAP = {
+    "met": "agree_with_cleaner",
+    "not_met": "still_a_problem",
+    "cannot_tell": "unclear",
+}
+
+
+def wonder_guard(evidence):
+    """Guard reason when evidence is unusable, else None (-> unclear)."""
+    text = (evidence or "").strip()
+    if not text:
+        return "empty evidence"
+    if len(text.split()) > 40:
+        return "evidence over 40 words"
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return "evidence has no letters"
+    latin = sum(
+        1 for c in letters if "LATIN" in unicodedata.name(c, "")
+    )
+    if latin / len(letters) < 0.5:
+        return "evidence mostly non-Latin"
+    return None
 
 WONDER_REASONS = ("broken", "before", "wont_clean", "other")
 
@@ -200,25 +227,19 @@ def _wonder_eligible(action, reason):
 
 
 def _wonder_snapshot(state, item_id, body):
+    # Independent opinion: only room, item, requirement and the photo.
+    # The cleaner's answer and both earlier looks are deliberately absent.
     with state.lock:
         item = state.items_by_id[item_id]
         proof = state.proofs[item_id]
-        claim = state.claims.get(item_id)
-        second = state.seconds.get(item_id)
         photo = next(
             (p for p in state.photos if p.id == proof.photo_id), None)
-        note = next(
-            (n for n in state.voice_notes if n["id"] == body.note_id), None)
         return {
             "photo_id": proof.photo_id,
+            "room_name": item.room_name,
             "label": item.label,
             "requirement": item.requirement,
-            "first_reason": (claim.seen if claim is not None else "")
-            or proof.reason,
-            "second_reason": second.reason if second is not None else "",
-            "action": body.action,
-            "reason": body.reason,
-            "note_english": (note or {}).get("english", ""),
+            "min_count": item.min_count,
             "overview_path": str(photo.overview_path) if photo is not None else "",
         }
 
@@ -241,45 +262,41 @@ def _wonder_job(server, state, item_id, snapshot):
     })
     try:
         raw = Path(snapshot["overview_path"]).read_bytes()
-        text = (
-            f"Item: {snapshot['label']}\n"
-            f"Requirement: {snapshot['requirement']}\n"
-            f"First look: {snapshot['first_reason']}\n"
-            f"Second look: {snapshot['second_reason']}\n"
-            f"Cleaner answered: {snapshot['action']}"
-            + (f" ({snapshot['reason']})" if snapshot["reason"] else "")
-            + "\n"
-        )
-        if snapshot["note_english"]:
-            text += f"Cleaner's voice note: {snapshot['note_english']}\n"
         answer = server.client.respond(
             f"second opinion {item_id} {snapshot['photo_id']}",
             [
-                {"type": "input_text", "text": text},
                 {"type": "input_image",
                  "image_url": "data:image/jpeg;base64,"
                  + base64.b64encode(raw).decode("ascii")},
             ],
-            instructions=(
-                "You are the senior inspector for vacation-rental "
-                "turnovers. A fast checker flagged this item and the "
-                "cleaner disagrees or can't fix it. Look at the photo "
-                "and tell the host what you see and what to do, in one "
-                "or two short sentences."
+            instructions=prompts.second_opinion_instructions(
+                snapshot["room_name"], snapshot["label"],
+                snapshot["requirement"], snapshot.get("min_count"),
             ),
             schema=WONDER_SCHEMA,
             model=config.WONDER_MODEL,
             effort=config.WONDER_EFFORT,
         )
-        opinion = answer.get("opinion") if isinstance(answer, dict) else None
-        if opinion not in WONDER_OPINIONS:
+        if not isinstance(answer, dict):
             raise ValueError(f"bad second opinion {answer!r}")
-        state.store_wonder(item_id, {
+        evidence = str(answer.get("evidence", "") or "").strip()
+        met = answer.get("requirement_met")
+        if met not in WONDER_MAP:
+            raise ValueError(f"bad second opinion {answer!r}")
+        guard = wonder_guard(evidence)
+        opinion = "unclear" if guard else WONDER_MAP[met]
+        wonder = {
             "status": "done",
             "opinion": opinion,
-            "reason": str(answer.get("reason", "")),
+            "reason": evidence,
+            "evidence": evidence,
+            "requirement_met": met,
             "model": config.WONDER_MODEL,
-        })
+        }
+        if guard:
+            wonder["notes"] = f"guard: {guard}"
+            wonder["guard"] = guard
+        state.store_wonder(item_id, wonder)
     except Exception:  # noqa: BLE001 - an opinion never breaks a run
         state.store_wonder(item_id, {"status": "failed"})
     finally:

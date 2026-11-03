@@ -162,6 +162,24 @@ Rules:
 - problem_object: the first noun of problem_objects, or "" when it is empty."""
 
 
+def second_opinion_instructions(room_name, item_label, requirement, min_count=None):
+    """Independent Muse Wonder opinion: photo + requirement only.
+
+    No cleaner answer and no first/second-look wording is included, so
+    this judgment cannot be anchored by what anyone said before.
+    """
+    need = f" Minimum number: {min_count}." if min_count is not None else ""
+    return f"""Look only at this photo.
+
+Room: {room_name}
+Item: {item_label}
+Requirement: {requirement}.{need}
+
+Task: Look only at this photo. In one sentence (max 25 words, English) describe what is visible that matters for this requirement. Then decide: met / not_met / cannot_tell. If the object the requirement is about is not visible, answer not_met if the photo shows where it should be and it is absent, otherwise cannot_tell.
+- evidence: that one sentence, first.
+- requirement_met: "met", "not_met" or "cannot_tell" after the evidence."""
+
+
 def room_decision_instructions(rooms):
     room_lines = "\n".join(_room_line(room) for room in rooms)
     return f"""You decide which room a single photo shows. Look only at the photo below.

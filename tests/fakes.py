@@ -126,7 +126,10 @@ def _not_shown_everything(call):
 
 
 def _default_opinion(call):
-    return {"opinion": "still_a_problem", "reason": "It looks unfinished."}
+    return {
+        "evidence": "The photo shows the item is not done.",
+        "requirement_met": "not_met",
+    }
 
 
 def _confirm_everything(call):
@@ -282,7 +285,7 @@ class FakeSpark:
             return self._drafter(call)
         if "english" in props:
             return self._ruler(call)
-        if "opinion" in props:
+        if "requirement_met" in props or "opinion" in props:
             return self._opinion(call)
         return self._inspector(call)
 

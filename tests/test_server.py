@@ -887,10 +887,47 @@ def test_second_opinion_for_its_fine_uses_wonder_model():
     assert wonder.get("status") == "done"
     assert wonder.get("model") == "muse-wonder-1.0"
     assert wonder.get("opinion") == "still_a_problem"
+    assert wonder.get("requirement_met") == "not_met"
+    assert wonder.get("evidence") == "The photo shows the item is not done."
+    assert wonder.get("reason") == wonder.get("evidence")
     calls = [c for c in test.app.state.server.client.calls
              if (c.get("purpose") or "").startswith("second opinion")]
     assert len(calls) == 1
     assert calls[0]["model"] == "muse-wonder-1.0"
+    # Schema order: evidence first, then the decision.
+    assert list(calls[0]["schema"]["properties"]) == [
+        "evidence", "requirement_met"]
+    # Independent: no cleaner answer, no first/second look in the prompt.
+    prompt = (calls[0]["instructions"] or "") + " " + " ".join(
+        part.get("text", "") for part in calls[0]["content"])
+    assert "its_fine" not in prompt and "Cleaner answered" not in prompt
+    assert "First look" not in prompt and "Second look:" not in prompt
+    assert "Master bedroom" in prompt or "Beds made" in prompt
+
+
+def test_second_opinion_guard_forces_unclear():
+    from pot.server import wonder_guard
+
+    assert wonder_guard("") == "empty evidence"
+    assert wonder_guard("word " * 41) == "evidence over 40 words"
+    assert wonder_guard("Полки пустые, полотенец нет совсем") is not None
+    assert wonder_guard("The shelves are empty and no towels are visible.") is None
+
+    def bad_opinion(call):
+        return {"evidence": "word " * 41, "requirement_met": "met"}
+
+    test, code = _client(
+        inspector=_problem, verifier=_not_done, opinion=bad_opinion)
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    _wait_idle(test, code, run_id)
+    item_id = "master-bedroom.beds_made"
+    assert _resolve(test, code, run_id, item_id,
+                    action="its_fine", reason=None).status_code == 200
+    wonder = _await_wonder(test, code, run_id, item_id)
+    assert wonder.get("opinion") == "unclear"
+    assert wonder.get("guard") == "evidence over 40 words"
+    assert "guard" in (wonder.get("notes") or "")
 
 
 class _ContextSpark(FakeSpark):
@@ -902,7 +939,7 @@ class _ContextSpark(FakeSpark):
 
     def respond(self, purpose, content, instructions=None, schema=None,
                 max_output_tokens=16000, effort="medium", model=None):
-        if schema and "opinion" in (schema.get("properties") or {}):
+        if schema and "requirement_met" in (schema.get("properties") or {}):
             self.contexts.append(dict(call_context.get() or {}))
         return super().respond(
             purpose, content, instructions, schema,
