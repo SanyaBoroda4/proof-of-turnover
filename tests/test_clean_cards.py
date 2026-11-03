@@ -35,6 +35,15 @@ def test_shot_of_item_prefers_fewest_items_shot():
     assert "status.recent.find" in html
 
 
+def test_two_button_row_shrinks_and_wraps_at_360px():
+    html = _clean()
+    row_rule = html[html.index(".btnrow .btn {"):html.index("}", html.index(".btnrow .btn {"))]
+    assert "flex: 1 1 0" in row_rule
+    assert "min-width: 0" in row_rule
+    assert "white-space: normal" in row_rule
+    # The long Russian labels rely on wrapping, not overflow.
+
+
 def test_spare_roll_instructions_show_holder_and_tank():
     tour = json.loads(
         (ROOT / "properties/rental-1/tour.json").read_text(encoding="utf-8"))
