@@ -498,6 +498,15 @@
       "sam_prompt": "trash bag",
       "min_count": 1,
       "critical": true
+    },
+    {
+      "room": "kitchen",
+      "key": "napkins",
+      "label": "Napkins in the holder",
+      "requirement": "Napkins in the holder on the counter, not empty",
+      "sam_prompt": "napkin",
+      "min_count": 1,
+      "critical": true
     }
   ]
 }

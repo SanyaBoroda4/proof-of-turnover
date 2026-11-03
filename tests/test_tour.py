@@ -160,6 +160,24 @@ def test_fixup_keeps_overview_flag():
     assert "overview" not in item_schema["required"]
 
 
+def test_fixup_overview_shot_carries_all_room_items():
+    property = tiny_property()
+    checklist = build_checklist(property)
+    bed_items = [i.id for i in checklist if i.room_id == "bed" and i.key != "coverage"]
+    bath_items = [i.id for i in checklist if i.room_id == "bath" and i.key != "coverage"]
+    given = [_shot("bed-1", "bed", bed_items[:1]),
+             _shot("bed-2", "bed", bed_items[1:]),
+             _shot("bath-1", "bath", bath_items)]
+    given[0]["overview"] = True
+    shots, notes = fixup_tour(property, checklist, given)
+    assert notes == []
+    by_id = {s["shot_id"]: s for s in shots}
+    assert by_id["bed-1"]["item_ids"] == bed_items
+    # Detail shots keep their own items only.
+    assert by_id["bed-2"]["item_ids"] == bed_items[1:]
+    assert by_id["bath-1"]["item_ids"] == bath_items
+
+
 def test_tour_schema_requires_all_three_languages():
     from pot.tour import tour_schema
 

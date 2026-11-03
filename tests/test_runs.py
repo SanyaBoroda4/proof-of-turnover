@@ -99,6 +99,45 @@ def _bath_item(state):
     return next(i.id for i in state.checklist if i.room_id == "bath" and i.key != "coverage")
 
 
+def _overview_state(directory):
+    property = tiny_property()
+    checklist = build_checklist(property)
+    bed_item = next(
+        i.id for i in checklist if i.room_id == "bed" and i.key != "coverage")
+    tour = {"shots": [
+        {"shot_id": "bed-overview", "room_id": "bed",
+         "item_ids": [bed_item], "overview": True,
+         "instruction_es": "Foto", "instruction_en": "Photo"},
+        {"shot_id": "bed-detail", "room_id": "bed",
+         "item_ids": [bed_item],
+         "instruction_es": "Foto", "instruction_en": "Photo"},
+    ]}
+    run_dir = Path(directory) / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return RunState(run_dir, property, checklist, tour=tour), bed_item
+
+
+def test_overview_problem_stays_and_detail_proven_beats_it(tmp_path):
+    # Problem flagged on the overview photo, detail never proves it.
+    state, item_id = _overview_state(tmp_path / "a")
+    overview = _photo_file(tmp_path / "up-a", "a.jpg", "blue")
+    photo, _ = state.claim_photo(str(overview), "bed-overview")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item_id, "messy"))
+    assert state.proofs[item_id].status == PROBLEM
+
+    # Same, but the detail photo proves it afterwards: proven wins.
+    state, item_id = _overview_state(tmp_path / "b")
+    overview = _photo_file(tmp_path / "up-b", "a.jpg", "blue")
+    photo, _ = state.claim_photo(str(overview), "bed-overview")
+    state.merge_result(photo.id, _fresh_problem(photo.id, item_id, "messy"))
+    assert state.proofs[item_id].status == PROBLEM
+    detail = _photo_file(tmp_path / "up-b2", "b.jpg", "green")
+    photo2, _ = state.claim_photo(str(detail), "bed-detail")
+    state.merge_result(photo2.id, _fresh_done(photo2.id, [item_id]))
+    assert state.proofs[item_id].status == PROVEN
+    assert state.proofs[item_id].photo_id == photo2.id
+
+
 def test_concurrent_claims_get_distinct_ids_and_both_survive(tmp_path):
     state = _state(tmp_path)
     first = _photo_file(tmp_path / "up1", "a.jpg", "blue")

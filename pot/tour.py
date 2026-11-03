@@ -126,6 +126,22 @@ def fixup_tour(property, checklist, shots):
                         f"Tour: shot {shot_id!r} has no {key}, English used"
                     )
         fixed.append(shot)
+    # An overview shot checks the whole room: its items become every
+    # non-coverage item of its room (detail shots keep their own items).
+    # Whole-house items already placed on the shot stay on it.
+    room_items = {}
+    for item in checklist:
+        if item.key != "coverage" and item.room_id != "house":
+            room_items.setdefault(item.room_id, []).append(item.id)
+    for shot in fixed:
+        if shot.get("overview"):
+            expanded = list(room_items.get(shot["room_id"], []))
+            for item_id in shot["item_ids"]:
+                item = by_id.get(item_id)
+                if item is not None and item.room_id == "house" \
+                        and item_id not in expanded:
+                    expanded.append(item_id)
+            shot["item_ids"] = expanded
     covered = set()
     for shot in fixed:
         covered.update(shot["item_ids"])

@@ -20,8 +20,13 @@ def _by_id(items):
 def test_rental_1_v6_checklist():
     prop = load_property("rental-1")
     items = _by_id(build_checklist(prop))
-    assert len(items) == 82
+    assert len(items) == 83
     assert "living-room.ceiling_fan" not in items
+    napkins = items["kitchen.napkins"]
+    assert napkins.critical is True
+    assert napkins.sam_prompt == "napkin"
+    assert napkins.min_count == 1
+    assert "not empty" in napkins.requirement
     assert items["kitchen.coffee_beans"].critical is True
     assert items["kitchen.trash"].min_count == 1
     assert items["kitchen.trash"].label == "Trash bin emptied, new liner"
@@ -69,6 +74,13 @@ def test_rental_1_tour_has_no_ceiling_fan_shot():
     assert all(
         "living-room.ceiling_fan" not in s.get("item_ids", [])
         for s in tour["shots"])
+    by_id = {s["shot_id"]: s for s in tour["shots"]}
+    # Overview shots carry all their room's items; kitchen-12 too.
+    assert "kitchen.napkins" in by_id["kitchen-10"]["item_ids"]
+    assert "kitchen.napkins" in by_id["kitchen-12"]["item_ids"]
+    assert "napkin holder" in by_id["kitchen-12"]["instruction_en"]
+    powder = by_id["powder-00"]
+    assert len(powder["item_ids"]) >= 5
 
 
 def test_demo_house_checklist():
