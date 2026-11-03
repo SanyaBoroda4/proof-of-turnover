@@ -595,13 +595,20 @@ def _check_worker(server, state, photo_id):
                 ]
         count = 0
         if merged["failed"]:
-            # A retake reuses the item's existing request text when it
-            # is still not proven; only new failures need a requests call.
+            # An item's request text is reused only when it was written
+            # for the item's current status; a status change (overview
+            # could not see it -> close-up shows a problem) rewrites it.
+            # Same-status retakes keep reusing.
             with state.lock:
-                fresh_failed = [
-                    item_id for item_id in merged["failed"]
-                    if item_id not in state.requests
-                ]
+                fresh_failed = []
+                for item_id in merged["failed"]:
+                    request = state.requests.get(item_id)
+                    if (
+                        request is None
+                        or request.get("status")
+                        != state.proofs[item_id].status
+                    ):
+                        fresh_failed.append(item_id)
             if fresh_failed:
                 requests, notes = write_requests(
                     server.client, state.property, state.checklist, state.proofs,

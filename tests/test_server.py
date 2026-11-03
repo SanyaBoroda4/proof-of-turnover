@@ -930,6 +930,39 @@ def test_card_groups_and_card_image_endpoint():
         f"?items=bad%20id&code={code}").status_code == 400
 
 
+def test_needs_photo_request_rewritten_when_item_becomes_problem():
+    def unclear(call):
+        return {"this_room": "yes", "verdict": "unclear", "count_seen": None,
+                "reason": "cannot tell", "problem_object": ""}
+
+    test, code = _client(inspector=_done, verifier=unclear)
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id)
+    item_id = "master-bedroom.beds_made"
+    item = _status_item(status, item_id)
+    assert item["status"] == "needs photo"
+    assert item["request"]["status"] == "needs proof"
+    fake = test.app.state.server.client
+
+    def request_calls():
+        return [
+            c for c in fake.calls
+            if "requests" in ((c.get("schema") or {}).get("properties") or {})
+        ]
+
+    assert len(request_calls()) == 1
+    fake._inspector = _problem
+    fake._verifier = _not_done
+    retake = _upload_retake(test, code, run_id, "master-bedroom-1", [item_id])
+    assert retake.status_code == 200, retake.text
+    status = _wait_idle(test, code, run_id)
+    item = _status_item(status, item_id)
+    assert item["status"] == "problem"
+    assert item["request"]["status"] == "problem"
+    assert len(request_calls()) == 2
+
+
 def test_before_image_served_after_fix():
     test, code, run_id = _problem_run()
     _wait_idle(test, code, run_id)
