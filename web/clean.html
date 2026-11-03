@@ -1382,11 +1382,13 @@ function skippedKey() {
 }
 
 function renderReminder(app) {
-  const rows = skippedAreas().map(a =>
-    `<div class="skiprow"><div class="skipmeta"><strong>${esc(a.room_name)}</strong>` +
-    `<span class="small">${esc(T().photosCount(a.shots))}</span></div>` +
-    `<button class="btn secondary" data-unskip="${esc(a.room_id)}">${esc(T().takePhotos)}</button></div>`
-  ).join("");
+  const rows = skippedAreas().map(a => {
+    const checks = (a.items || a.checks || []).join(", ");
+    return `<div class="skiprow"><div class="skipmeta"><strong>${esc(a.room_name)}</strong>` +
+    `<span class="small">${esc(T().photosCount(a.shots))}</span>` +
+    (checks ? `<span class="small">${esc(checks)}</span>` : "") + `</div>` +
+    `<button class="btn secondary" data-unskip="${esc(a.room_id)}">${esc(T().takePhotos)}</button></div>`;
+  }).join("");
   app.innerHTML = `<div class="wrap"><h1>${esc(T().skippedTitle)}</h1>` +
     `<p class="centerline">${esc(T().skippedTakeLine)}</p>${rows}` +
     `<button class="btn" id="skipContinue">${esc(T().continueWithout)}</button></div>`;

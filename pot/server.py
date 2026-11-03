@@ -779,7 +779,6 @@ def create_app(client=None):
                         if item.critical
                         and state.proofs[item.id].status != PROVEN
                         and item.id not in state.resolutions
-                        and item.id not in state._skipped_only_locked()
                     ])
                     checking_count = len(state.checking)
                 raise HTTPException(

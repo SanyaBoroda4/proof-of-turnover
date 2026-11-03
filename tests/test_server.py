@@ -1132,6 +1132,13 @@ def test_unskip_room_restores_shots_on_normal_run():
     assert status["skipped_areas"] == [{
         "room_id": "master-bedroom", "room_name": "Master bedroom",
         "shots": 1,
+        "items": ["Beds made", "No guest belongings left", "Floor clear"],
+        "item_ids": [
+            "master-bedroom.beds_made",
+            "master-bedroom.no_belongings",
+            "master-bedroom.floor_clear",
+        ],
+        "checks": ["Beds made", "No guest belongings left", "Floor clear"],
     }]
     restored = test.post(
         f"/api/runs/{run_id}/unskip-room?code={code}",
@@ -1144,6 +1151,43 @@ def test_unskip_room_restores_shots_on_normal_run():
     assert status["skipped_areas"] == []
     # The tour continues: the restored shot can be photographed.
     assert _upload(test, code, run_id, "master-bedroom-1").status_code == 200
+
+
+def test_skipped_area_items_stay_needs_proof_not_done():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    skipped = test.post(
+        f"/api/runs/{run_id}/skip-room?code={code}",
+        json={"room_id": "master-bedroom"},
+    )
+    assert skipped.status_code == 200, skipped.text
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["agent_state"] == "needs_input"
+    assert status["not_photographed_count"] == 4
+    assert status["not_photographed_areas"] == ["Master bedroom"]
+    assert "master-bedroom.beds_made" in status["not_photographed_items"]
+    assert status["verdict"]["ready"] is False
+    assert "master-bedroom.beds_made" in status["verdict"]["need_photo"]
+    # No problem cards for never-photographed items.
+    assert "master-bedroom.beds_made" not in status["cards"]
+    room = next(r for r in status["rooms"] if r["id"] == "master-bedroom")
+    by_id = {item["id"]: item for item in room["items"]}
+    assert by_id["master-bedroom.beds_made"]["status"] == "needs photo"
+    assert by_id["master-bedroom.beds_made"]["reason"] == (
+        "Skipped by cleaner — not photographed"
+    )
+    assert by_id["master-bedroom.coverage"]["reason"] == (
+        "Skipped by cleaner — not photographed"
+    )
+    assert status["skipped_areas"][0]["items"] == [
+        "Beds made", "No guest belongings left", "Floor clear",
+    ]
+    # Host page shows the Not ready banner text for this case.
+    host = test.get(f"/host?code={_host(test)}").text
+    assert "critical items were not photographed (skipped:" in host
+    # Cleaner reminder lists the checks (clean page renders skipped_areas).
+    clean = test.get(f"/clean?code={code}").text
+    assert "a.items || a.checks" in clean
 
 
 def test_end_round_skips_untaken_shots_and_finish_allows_them():
@@ -1169,7 +1213,10 @@ def test_end_round_skips_untaken_shots_and_finish_allows_them():
     for item_id in taken_cards:
         assert _resolve(test, code, run_id, item_id).status_code == 200
     status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
-    assert status["agent_state"] == "awaiting_signoff"
+    # Skipped shots are not done: the run stays needs_input, but the
+    # cleaner can still send it to the host (approve uses the confirm).
+    assert status["agent_state"] == "needs_input"
+    assert status["not_photographed_count"] > 0
     done = test.post(f"/api/runs/{run_id}/finish?code={code}")
     assert done.status_code == 200, done.text
 
@@ -1322,7 +1369,7 @@ def test_skip_shot_skips_cards_and_finish_allows_them():
     for item_id in list(status["cards"]):
         assert _resolve(test, code, run_id, item_id).status_code == 200
     status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
-    assert status["agent_state"] == "awaiting_signoff"
+    assert status["agent_state"] == "needs_input"
     done = test.post(f"/api/runs/{run_id}/finish?code={code}")
     assert done.status_code == 200, done.text
 

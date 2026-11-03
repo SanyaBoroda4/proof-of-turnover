@@ -40,6 +40,7 @@ NEEDS_PHOTO = "needs photo"
 NEEDS_INPUT = "needs_input"
 AWAITING_SIGNOFF = "awaiting_signoff"
 DONE = "done"
+SKIPPED_REASON = "Skipped by cleaner — not photographed"
 
 
 class OldPhotoError(ValueError):
@@ -963,13 +964,13 @@ class RunState:
             return self._agent_state_locked()
 
     def _agent_state_locked(self):
-        skipped_only = self._skipped_only_locked()
+        # Skipped-only items are NOT excused: they stay needs-proof, so
+        # the run is needs_input while any critical item is unproven.
         for item in self.checklist:
             if (
                 item.critical
                 and self.proofs[item.id].status != PROVEN
                 and item.id not in self.resolutions
-                and item.id not in skipped_only
             ):
                 return NEEDS_INPUT
         return AWAITING_SIGNOFF
@@ -981,6 +982,11 @@ class RunState:
     def _skipped_areas_locked(self, skipped):
         """Skipped shots grouped into areas, in tour order."""
         names = {room["id"]: room["name"] for room in self.property["rooms"]}
+        skipped_only = self._skipped_only_locked()
+        checks_by_room = {}
+        for item in self.checklist:
+            if item.id in skipped_only and item.key != "coverage":
+                checks_by_room.setdefault(item.room_id, []).append(item)
         areas = []
         by_room = {}
         for shot in self.tour["shots"]:
@@ -988,14 +994,35 @@ class RunState:
                 continue
             room_id = shot.get("room_id", "")
             if room_id not in by_room:
+                checks = checks_by_room.get(room_id, [])
                 by_room[room_id] = {
                     "room_id": room_id,
                     "room_name": names.get(room_id, room_id),
                     "shots": 0,
+                    "items": [item.label for item in checks],
+                    "item_ids": [item.id for item in checks],
+                    "checks": [item.label for item in checks],
                 }
                 areas.append(by_room[room_id])
             by_room[room_id]["shots"] += 1
         return areas
+
+    def _not_photographed_locked(self):
+        """Critical items never photographed because their shots were skipped."""
+        skipped_only = self._skipped_only_locked()
+        items = [
+            item for item in self.checklist
+            if item.id in skipped_only
+            and self.proofs[item.id].status != PROVEN
+            and item.id not in self.resolutions
+        ]
+        names = {room["id"]: room["name"] for room in self.property["rooms"]}
+        areas = []
+        for item in items:
+            name = names.get(item.room_id, item.room_name)
+            if name not in areas:
+                areas.append(name)
+        return items, areas
 
     def status(self):
         """Everything both pages need, built from memory under the lock."""
@@ -1029,6 +1056,7 @@ class RunState:
                 shot_id for shot_id in self.skipped_shots
                 if shot_id not in taken
             ]
+            np_items, np_areas = self._not_photographed_locked()
             current = next(
                 (shot for shot in self.tour["shots"] if shot["shot_id"] not in taken),
                 None,
@@ -1079,6 +1107,9 @@ class RunState:
                 "round_ended": self.round_ended,
                 "skipped_shots": list(skipped),
                 "skipped_areas": self._skipped_areas_locked(skipped),
+                "not_photographed_count": len(np_items),
+                "not_photographed_items": [item.id for item in np_items],
+                "not_photographed_areas": np_areas,
                 "photo_seconds": dict(self.photo_seconds),
                 "recent": recent,
                 "news": list(reversed(self.events[-8:])),
@@ -1088,10 +1119,14 @@ class RunState:
 
     def _item_status_locked(self, item, shot_of_item, taken):
         proof = self.proofs[item.id]
+        skipped_only = self._skipped_only_locked()
+        is_skipped = item.id in skipped_only and proof.status == NEEDS_PROOF
         if proof.status == PROVEN:
             display = PROVEN
         elif proof.status == PROBLEM:
             display = PROBLEM
+        elif is_skipped:
+            display = NEEDS_PHOTO
         else:
             shots = shot_of_item.get(item.id)
             if shots is None:
@@ -1110,7 +1145,7 @@ class RunState:
             "label": item.label,
             "critical": item.critical,
             "status": display,
-            "reason": proof.reason,
+            "reason": SKIPPED_REASON if is_skipped else proof.reason,
             "photo_id": proof.photo_id,
             "has_evidence": item.id in self.evidence,
             "has_before": f"{item.id}.before" in self.evidence,
