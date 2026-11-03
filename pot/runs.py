@@ -423,6 +423,17 @@ class RunState:
                 "assignments": dict(self.assignments),
             }
 
+    def _shot_of_photo_locked(self, photo_id):
+        shot_id = self.photo_shot.get(photo_id, "")
+        for shot in self.tour["shots"]:
+            if shot["shot_id"] == shot_id:
+                return shot
+        return None
+
+    def _is_overview_photo_locked(self, photo_id):
+        shot = self._shot_of_photo_locked(photo_id)
+        return bool(shot and shot.get("overview"))
+
     def merge_result(self, photo_id, fresh):
         """Merge one photo's results; returns {changes, failed}.
 
@@ -457,11 +468,55 @@ class RunState:
             )
             self.decisions.update(fresh.get("decisions", {}))
             changes = {}
+            is_retake_photo = bool(self.photo_retake.get(photo_id))
+            this_shot = self._shot_of_photo_locked(photo_id)
             for item_id in fresh_ids:
                 new = computed[item_id]
                 current = self.proofs[item_id]
-                if seq < self.decided_seq.get(item_id, -1):
+                item = self.items_by_id[item_id]
+                # Overview priority: a tour PROBLEM from the room's
+                # overview photo owns the item (reason + boxes), over
+                # any close-up PROBLEM, whichever finishes first.
+                # Card retakes are untouched: the retake decides.
+                new_overview_problem = (
+                    not is_retake_photo
+                    and new.status == PROBLEM
+                    and self._is_overview_photo_locked(photo_id)
+                    and this_shot is not None
+                    and this_shot.get("room_id") == item.room_id
+                )
+                current_shot = (
+                    self._shot_of_photo_locked(current.photo_id)
+                    if current.photo_id else None
+                )
+                current_overview_problem = (
+                    not is_retake_photo
+                    and current.status == PROBLEM
+                    and bool(current.photo_id)
+                    and self._is_overview_photo_locked(current.photo_id)
+                    and current_shot is not None
+                    and current_shot.get("room_id") == item.room_id
+                )
+                if (
+                    new.status == PROBLEM and current.status == PROBLEM
+                    and current_overview_problem and not new_overview_problem
+                ):
                     continue
+                if seq < self.decided_seq.get(item_id, -1):
+                    # Only PROVEN/PROBLEM verdicts block older results:
+                    # a newer NEEDS_PROOF never blocks an older photo's
+                    # verdict, and an overview PROBLEM overwrites a
+                    # close-up PROBLEM that finished first.
+                    overview_overwrite = (
+                        new_overview_problem and current.status == PROBLEM
+                        and not current_overview_problem
+                    )
+                    older_verdict = (
+                        new.status in (PROVEN, PROBLEM)
+                        and current.status not in (PROVEN, PROBLEM)
+                    )
+                    if not (overview_overwrite or older_verdict):
+                        continue
                 if new.status in (PROVEN, PROBLEM) or current.status not in (PROVEN, PROBLEM):
                     if item_id in fresh["claims"]:
                         self.claims[item_id] = fresh["claims"][item_id]
@@ -474,10 +529,15 @@ class RunState:
                     if new.status == PROVEN:
                         # A retake that proves the item clears its resolution.
                         self.resolutions.pop(item_id, None)
-                    if new.status != current.status:
+                    if (
+                        new.status != current.status
+                        or new.photo_id != current.photo_id
+                    ):
                         changes[item_id] = (current.status, new.status)
-                        self._event_locked("status", item_id, new.status,
-                                           new.photo_id, new.reason)
+                        if new.status != current.status:
+                            self._event_locked(
+                                "status", item_id, new.status,
+                                new.photo_id, new.reason)
             shot_id = self.photo_shot.get(photo_id, "")
             if shot_id:
                 try:

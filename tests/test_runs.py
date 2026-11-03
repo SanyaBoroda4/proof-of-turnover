@@ -140,6 +140,7 @@ def test_overview_problem_stays_and_detail_proven_beats_it(tmp_path):
 
 def test_older_overview_finishing_last_keeps_closeup_boxes(tmp_path):
     state, item_id = _overview_state(tmp_path)
+    state.tour["shots"][0]["overview"] = False  # plain shots: Step 52 rule
     overview = _photo_file(tmp_path / "up1", "a.jpg", "blue")
     closeup = _photo_file(tmp_path / "up2", "b.jpg", "green")
     overview_photo, _ = state.claim_photo(str(overview), "bed-overview")
@@ -167,6 +168,7 @@ def test_older_overview_finishing_last_keeps_closeup_boxes(tmp_path):
 
 def test_problem_boxes_dropped_when_proof_moves_to_boxless_photo(tmp_path):
     state, item_id = _overview_state(tmp_path)
+    state.tour["shots"][0]["overview"] = False  # plain shots: Step 52 rule
     first = _photo_file(tmp_path / "up1", "a.jpg", "blue")
     photo1, _ = state.claim_photo(str(first), "bed-overview")
     fresh1 = _fresh_problem(photo1.id, item_id, "mess")
@@ -245,6 +247,73 @@ def test_card_groups_no_photo_item_is_alone_and_order_by_tour(tmp_path):
     alone = [g for g in groups if len(g["item_ids"]) == 1 and not g["photo_id"]]
     assert alone
     assert all(g["key"] == g["item_ids"][0] for g in alone)
+
+
+def _problem_with_boxes(photo_id, item_id, reason, boxes):
+    fresh = _fresh_problem(photo_id, item_id, reason)
+    fresh["problem_sams"][item_id] = SamCheck(
+        item_id, photo_id, "mess", 1, boxes)
+    return fresh
+
+
+def test_overview_problem_wins_citation_in_both_orders(tmp_path):
+    overview_boxes = [{"left": 1, "top": 1, "right": 5, "bottom": 5}]
+    closeup_boxes = [{"left": 9, "top": 9, "right": 12, "bottom": 12}]
+    for first in ("overview", "closeup"):
+        state, item_id = _overview_state(tmp_path / first)
+        over_file = _photo_file(tmp_path / f"o-{first}", "a.jpg", "blue")
+        close_file = _photo_file(tmp_path / f"c-{first}", "b.jpg", "green")
+        over, _ = state.claim_photo(str(over_file), "bed-overview")
+        close, _ = state.claim_photo(str(close_file), "bed-detail")
+        merges = [
+            (over, _problem_with_boxes(over.id, item_id, "wide mess", overview_boxes)),
+            (close, _problem_with_boxes(close.id, item_id, "close mess", closeup_boxes)),
+        ]
+        if first == "closeup":
+            merges.reverse()
+        for photo, fresh in merges:
+            state.merge_result(photo.id, fresh)
+        state.finish_photo(over.id)
+        state.finish_photo(close.id)
+        assert state.proofs[item_id].status == PROBLEM
+        assert state.proofs[item_id].photo_id == over.id, first
+        assert state.proofs[item_id].reason == "wide mess", first
+        assert state.problem_sams[item_id].boxes == overview_boxes, first
+        groups = [
+            g for g in state.status()["card_groups"]
+            if item_id in g["item_ids"]
+        ]
+        assert len(groups) == 1
+        assert groups[0]["photo_id"] == over.id
+
+
+def test_overview_problem_then_closeup_proven_no_before(tmp_path):
+    state, item_id = _overview_state(tmp_path)
+    over, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-overview")
+    state.merge_result(over.id, _fresh_problem(over.id, item_id, "wide mess"))
+    close, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u2", "b.jpg")), "bed-detail")
+    state.merge_result(close.id, _fresh_done(close.id, [item_id]))
+    assert state.proofs[item_id].status == PROVEN
+    assert state.proofs[item_id].photo_id == close.id
+    before = state.run_dir / "evidence" / f"{item_id}.before.jpg"
+    assert not before.exists()
+
+
+def test_newer_needs_proof_does_not_block_older_proven(tmp_path):
+    state, item_id = _overview_state(tmp_path)
+    over, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-overview")
+    close, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u2", "b.jpg")), "bed-detail")
+    # The newer close-up finishes first with NEEDS_PROOF...
+    state.merge_result(close.id, _fresh_unclear(close.id, item_id))
+    assert state.proofs[item_id].status == NEEDS_PROOF
+    # ...then the older overview's PROVEN arrives: it must win.
+    state.merge_result(over.id, _fresh_done(over.id, [item_id]))
+    assert state.proofs[item_id].status == PROVEN
+    assert state.proofs[item_id].photo_id == over.id
 
 
 def test_concurrent_claims_get_distinct_ids_and_both_survive(tmp_path):
