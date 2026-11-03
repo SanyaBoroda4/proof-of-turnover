@@ -38,6 +38,28 @@ def test_language_and_choice_links_open_screens_directly():
     assert 'navPush("choice")' in choice
 
 
+def test_setup_next_room_on_own_full_width_row():
+    script = _script("setup.html")
+    # Next room is no longer inside the Back/Skip rowbtns row.
+    assert 'id="rnext"' in script
+    row_start = script.index('<div class="rowbtns">\n    <button class="btn secondary grow" id="rback">')
+    row = script[row_start:script.index("</div>", row_start)]
+    assert 'id="rback"' in row and 'id="rskip"' in row
+    assert 'id="rnext"' not in row
+
+
+def test_host_follow_mode_does_not_pin_run_in_url():
+    script = _script("host.html")
+    assert 'params.get("follow") === "1"' in script
+    use_run = script[script.index("function useRun"):script.index("async function fetchRunsList")]
+    assert "if (FOLLOW) return;" in use_run
+
+
+def test_clean_taken_line_is_centered():
+    html = (ROOT / "web" / "clean.html").read_text(encoding="utf-8")
+    assert 'class="small centerline">${esc(T().skippedLine' in html
+
+
 def test_setup_room_back_goes_straight_to_previous_room():
     script = _script("setup.html")
     assert "history.back" not in script

@@ -36,6 +36,7 @@
   .btn svg { flex: none; }
   .rowbtns { display: flex; gap: 10px; }
   .rowbtns .btn { margin: 10px 0; font-size: 16px; }
+  .rowbtns .btn.grow { flex: 1; }
   .result { border-radius: 20px; padding: 14px 16px; margin: 12px 0; font-size: 17px; }
   .result.ok { background: var(--haint); color: var(--ink); }
   .result.bad { background: #F3E1DD; }
@@ -559,10 +560,10 @@ function renderRoom(app) {
   }
   const canNext = room.status === "ready" || room.status === "skipped";
   html += `<div class="rowbtns">
-    <button class="btn secondary" id="rback">${esc(t.back)}</button>
-    <button class="btn secondary" id="rskip">${esc(room.status === "skipped" ? t.unskip : t.skip)}</button>
-    <button class="btn" id="rnext" ${canNext ? "" : "disabled"}>${esc(roomIdx + 1 >= n ? t.review : t.nextRoom)}</button>
-  </div>`;
+    <button class="btn secondary grow" id="rback">${esc(t.back)}</button>
+    <button class="btn secondary grow" id="rskip">${esc(room.status === "skipped" ? t.unskip : t.skip)}</button>
+  </div>
+  <button class="btn" id="rnext" ${canNext ? "" : "disabled"}>${esc(roomIdx + 1 >= n ? t.review : t.nextRoom)}</button>`;
   app.innerHTML = html;
 
   document.getElementById("rname").onchange = async ev => {

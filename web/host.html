@@ -91,7 +91,7 @@ const params = new URLSearchParams(location.search);
 const CODE = params.get("code") || "";
 const DEMO = params.get("demo") === "1";
 const TEST = params.get("test") === "1";
-const FOLLOW = !params.get("run");
+const FOLLOW = params.get("follow") === "1" || !params.get("run");
 let RUN = params.get("run") || "";
 let status = null, calls = [], runsList = [], lastKey = null, cleanerUrl = "";
 let cleanerCode = CODE;
@@ -416,6 +416,7 @@ function fail(app, e) {
 
 function useRun(runId) {
   RUN = runId;
+  if (FOLLOW) return; // follow mode: keep URL unchanged (no &run= pin)
   const url = new URL(location.href);
   url.searchParams.set("run", RUN);
   history.replaceState(null, "", url);
