@@ -20,7 +20,8 @@ def _by_id(items):
 def test_rental_1_v6_checklist():
     prop = load_property("rental-1")
     items = _by_id(build_checklist(prop))
-    assert len(items) == 83
+    assert len(items) == 82
+    assert "living-room.ceiling_fan" not in items
     assert items["kitchen.coffee_beans"].critical is True
     assert items["kitchen.trash"].min_count == 1
     assert items["kitchen.trash"].label == "Trash bin emptied, new liner"
@@ -56,6 +57,18 @@ def test_rental_1_v6_checklist():
         assert "throw blanket" in seats.requirement
     assert "judge the inside" in items["kitchen.fridge"].requirement
     assert "a few specks are fine" in items["laundry.lint_filter"].requirement
+
+
+def test_rental_1_tour_has_no_ceiling_fan_shot():
+    from pathlib import Path
+
+    tour = json.loads(
+        Path("properties/rental-1/tour.json").read_text(encoding="utf-8"))
+    assert len(tour["shots"]) == 42
+    assert "living-03" not in [s["shot_id"] for s in tour["shots"]]
+    assert all(
+        "living-room.ceiling_fan" not in s.get("item_ids", [])
+        for s in tour["shots"])
 
 
 def test_demo_house_checklist():

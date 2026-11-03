@@ -382,15 +382,6 @@
     },
     {
       "room": "living-room",
-      "key": "ceiling_fan",
-      "label": "Ceiling fan dusted",
-      "requirement": "Ceiling fan blades free of dust",
-      "sam_prompt": null,
-      "min_count": null,
-      "critical": false
-    },
-    {
-      "room": "living-room",
       "key": "sofa_bed_linens",
       "label": "Sofa-bed linens in the TV stand",
       "requirement": "TV stand doors opened for this photo: bed linens and a pillow for the sofa bed are inside (close the doors again after the photo)",
