@@ -490,10 +490,16 @@ def _check_worker(server, state, photo_id):
     try:
         with state.lock:
             shot_id = state.photo_shot.get(photo_id, "")
-            wanted = set()
-            for shot in state.tour["shots"]:
-                if shot["shot_id"] == shot_id:
-                    wanted = set(shot.get("item_ids", []))
+            retake_items = list(state.photo_retake.get(photo_id, []))
+            if retake_items:
+                # A card retake checks exactly the card's items, never
+                # the whole shot (an overview shot lists a whole room).
+                wanted = set(retake_items)
+            else:
+                wanted = set()
+                for shot in state.tour["shots"]:
+                    if shot["shot_id"] == shot_id:
+                        wanted = set(shot.get("item_ids", []))
             items = [
                 state.items_by_id[item_id] for item_id in wanted
                 if item_id in state.items_by_id
@@ -501,6 +507,12 @@ def _check_worker(server, state, photo_id):
                 and state.proofs[item_id].status != "proven"
             ]
         state.timeline("checks_started", photo_id=photo_id)
+        if retake_items and not items:
+            # Everything on the card is already proven: no model calls.
+            state.timeline("checks_done", photo_id=photo_id)
+            state.timeline("requests_done", photo_id=photo_id, items=0)
+            state.finish_photo(photo_id)
+            return
         calls_before = state.call_count()
         fresh = run_photo_checks(
             server.client, state, photo_id, items,
@@ -523,6 +535,14 @@ def _check_worker(server, state, photo_id):
                 return
         fresh["elapsed_seconds"] = round(time.monotonic() - started, 1)
         merged = state.merge_result(photo_id, fresh)
+        if retake_items:
+            with state.lock:
+                merged["failed"] = [
+                    item_id for item_id in retake_items
+                    if item_id in state.items_by_id
+                    and state.items_by_id[item_id].critical
+                    and state.proofs[item_id].status != "proven"
+                ]
         count = 0
         if merged["failed"]:
             # A retake reuses the item's existing request text when it

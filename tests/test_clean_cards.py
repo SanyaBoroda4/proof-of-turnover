@@ -29,6 +29,12 @@ def test_needs_photo_cards_say_not_visible():
     assert "T().notVisible" in html
 
 
+def test_shot_of_item_prefers_fewest_items_shot():
+    html = _clean()
+    assert "(s.item_ids || []).length < (best.item_ids || []).length" in html
+    assert "status.recent.find" in html
+
+
 def test_spare_roll_instructions_show_holder_and_tank():
     tour = json.loads(
         (ROOT / "properties/rental-1/tour.json").read_text(encoding="utf-8"))

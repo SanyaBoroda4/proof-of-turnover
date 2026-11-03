@@ -1280,10 +1280,14 @@ function instruction(shot) {
 }
 
 function shotOfItem(itemId) {
+  // Fewest-items shot listing the item (ties: tour order), so a card
+  // shows the close-up shot, not the room overview that lists it too.
+  let best = null;
   for (const s of tour.shots) {
-    if ((s.item_ids || []).indexOf(itemId) >= 0) return s;
+    if ((s.item_ids || []).indexOf(itemId) < 0) continue;
+    if (!best || (s.item_ids || []).length < (best.item_ids || []).length) best = s;
   }
-  return null;
+  return best;
 }
 
 function itemsById() {
@@ -1321,6 +1325,16 @@ function allTaken() {
 }
 
 function shotForCard(itemId) {
+  // Prefer the shot of the photo the card shows; fall back to the
+  // fewest-items shot listing the item, then the room's first shot.
+  const item = itemsById()[itemId];
+  if (item && item.photo_id && status && status.recent) {
+    const entry = status.recent.find(e => e.photo_id === item.photo_id);
+    if (entry) {
+      const shown = tour.shots.find(s => s.shot_id === entry.shot_id);
+      if (shown) return shown;
+    }
+  }
   const direct = shotOfItem(itemId);
   if (direct) return direct;
   const roomId = itemId.split(".")[0];

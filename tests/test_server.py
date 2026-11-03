@@ -773,6 +773,55 @@ def test_upload_rejects_unknown_retake_items():
     assert bad_id.status_code == 400, bad_id.text
 
 
+def _upload_retake(test, code, run_id, shot_id, item_ids):
+    return test.post(
+        f"/api/runs/{run_id}/photos?code={code}",
+        data={"shot_id": shot_id, "retake_items": ",".join(item_ids)},
+        files={"image": ("pic.jpg", _jpeg(), "image/jpeg")},
+    )
+
+
+def test_retake_checks_only_the_card_item():
+    captured = []
+
+    def inspector(call):
+        enum = call["schema"]["properties"]["claims"]["items"]["properties"]["item_id"]["enum"]
+        captured.append(list(enum))
+        return _problem(call)
+
+    test, code = _client(inspector=inspector, verifier=_not_done)
+    run_id = _create_run(test, code)
+    item_id = "master-bedroom.beds_made"
+    retake = _upload_retake(test, code, run_id, "master-bedroom-1", [item_id])
+    assert retake.status_code == 200, retake.text
+    status = _wait_idle(test, code, run_id)
+    # The model was asked only about the card's item, not the whole shot.
+    assert captured == [[item_id]]
+    item = _status_item(status, item_id)
+    assert item["request"] is not None
+    # Failed/requests are limited to the retake item.
+    other = _status_item(status, "master-bedroom.no_belongings")
+    assert other["request"] is None
+
+
+def test_all_proven_retake_makes_no_model_call():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    _upload(test, code, run_id, "master-bedroom-1")
+    status = _wait_idle(test, code, run_id)
+    item_id = "master-bedroom.beds_made"
+    assert _status_item(status, item_id)["status"] == "proven"
+    fake = test.app.state.server.client
+    calls_before = len(fake.calls)
+    sam_before = len(fake.sam_calls)
+    retake = _upload_retake(test, code, run_id, "master-bedroom-1", [item_id])
+    assert retake.status_code == 200, retake.text
+    status = _wait_idle(test, code, run_id)
+    assert status["checking"] == []
+    assert len(fake.calls) == calls_before
+    assert len(fake.sam_calls) == sam_before
+
+
 def test_before_image_served_after_fix():
     test, code, run_id = _problem_run()
     _wait_idle(test, code, run_id)
