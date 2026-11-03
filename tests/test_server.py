@@ -1000,6 +1000,24 @@ def test_second_opinion_for_its_fine_uses_wonder_model():
     assert "its_fine" not in prompt and "Cleaner answered" not in prompt
     assert "First look" not in prompt and "Second look:" not in prompt
     assert "Master bedroom" in prompt or "Beds made" in prompt
+    # Muse Wonder receives the check image (1600 px), as benchmarked.
+    import base64 as _b64
+
+    from pot import config as _config
+
+    image_part = next(
+        part for part in calls[0]["content"] if part.get("type") == "input_image")
+    sent = _b64.b64decode(image_part["image_url"].split(",", 1)[1])
+    photo_id = wonder and _status_item(
+        test.get(f"/api/runs/{run_id}/status?code={code}").json(),
+        item_id)["photo_id"]
+    check_bytes = (
+        _config.RUNS_DIR / run_id / "photos" / f"{photo_id}_check.jpg"
+    ).read_bytes()
+    overview_bytes = (
+        _config.RUNS_DIR / run_id / "photos" / f"{photo_id}_overview.jpg"
+    ).read_bytes()
+    assert sent == check_bytes
 
 
 def test_second_opinion_guard_forces_unclear():

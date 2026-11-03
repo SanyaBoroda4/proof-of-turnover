@@ -240,7 +240,7 @@ def _wonder_snapshot(state, item_id, body):
             "label": item.label,
             "requirement": item.requirement,
             "min_count": item.min_count,
-            "overview_path": str(photo.overview_path) if photo is not None else "",
+            "check_path": str(photo.check_path) if photo is not None else "",
         }
 
 
@@ -249,7 +249,7 @@ def _maybe_start_wonder(server, state, item_id, body):
     if not server.wonder or not _wonder_eligible(body.action, body.reason):
         return
     snapshot = _wonder_snapshot(state, item_id, body)
-    if not snapshot["photo_id"] or not snapshot["overview_path"]:
+    if not snapshot["photo_id"] or not snapshot["check_path"]:
         return
     state.mark_wonder_pending(item_id)
     server.executor.submit(_wonder_job, server, state, item_id, snapshot)
@@ -261,7 +261,8 @@ def _wonder_job(server, state, item_id, snapshot):
         "photo_id": snapshot["photo_id"],
     })
     try:
-        raw = Path(snapshot["overview_path"]).read_bytes()
+        # Same picture the benchmark measured: the 1600 px check image.
+        raw = Path(snapshot["check_path"]).read_bytes()
         answer = server.client.respond(
             f"second opinion {item_id} {snapshot['photo_id']}",
             [
