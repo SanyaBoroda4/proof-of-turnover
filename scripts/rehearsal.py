@@ -142,6 +142,63 @@ def items_by_id(status):
     return found
 
 
+def plan_from_map(tour, photo_map):
+    """Decide mapped shots and rooms to skip from a rehearsal map.
+
+    Returns (mapped shot ids in tour order, room ids to skip in tour
+    order). A room must be mapped completely or not at all.
+    """
+    tour_ids = [shot["shot_id"] for shot in tour]
+    unknown = [sid for sid in photo_map if sid not in set(tour_ids)]
+    if unknown:
+        raise SystemExit(
+            f"rehearsal map lists unknown shots: {', '.join(unknown)}")
+    rooms = []
+    for shot in tour:
+        if shot["room_id"] not in rooms:
+            rooms.append(shot["room_id"])
+    mapped, skip_rooms, partial = [], [], []
+    for room_id in rooms:
+        room_shots = [s["shot_id"] for s in tour if s["room_id"] == room_id]
+        have = [sid for sid in room_shots if sid in photo_map]
+        if len(have) == len(room_shots):
+            mapped.extend(have)
+        elif have:
+            partial.append(
+                f"{room_id} ({len(have)}/{len(room_shots)} shots mapped)")
+        else:
+            skip_rooms.append(room_id)
+    if partial:
+        raise SystemExit(
+            "rehearsal map must cover a room completely or not at all; "
+            f"partially mapped rooms: {', '.join(partial)}")
+    return mapped, skip_rooms
+
+
+def print_card_groups(status):
+    groups = status.get("card_groups") or []
+    if not groups:
+        groups = [
+            {"photo_id": "", "shot_id": "", "item_ids": [item_id]}
+            for item_id in status.get("cards", [])
+        ]
+    by_id = items_by_id(status)
+    print(f"--- {len(groups)} card groups ---")
+    for group in groups:
+        item_ids = group.get("item_ids", [])
+        print(f"  photo={group.get('photo_id') or '-'} "
+              f"shot={group.get('shot_id') or '-'} "
+              f"items={', '.join(item_ids)}")
+        for item_id in item_ids:
+            item = by_id.get(item_id, {})
+            request = (item.get("request") or {}).get("cleaner",
+                                                      "(no request yet)")
+            print(f"    {item_id} [{item.get('status', '?')}] "
+                  f"reason: {item.get('reason') or '-'}")
+            print(f"      request: {request}")
+    return groups
+
+
 def print_cards(status):
     cards = status.get("cards", [])
     by_id = items_by_id(status)
@@ -183,20 +240,27 @@ def main(argv):
                         help="seconds between upload starts")
     parser.add_argument("--wait-timeout", type=float, default=3600.0,
                         help="max seconds to wait for all photos checked")
+    parser.add_argument("--map", default="data/inputs/rehearsal_map.json",
+                        help="photo map JSON (may cover only whole rooms)")
+    parser.add_argument("--leave-cards", action="store_true",
+                        help="stop after printing the card groups; no "
+                             "retake, resolve or finish")
     args = parser.parse_args(argv)
 
     tour = json.loads((ROOT / "properties" / "rental-1" / "tour.json")
                        .read_text(encoding="utf-8"))["shots"]
-    photo_map = json.loads((ROOT / "data" / "inputs" / "rehearsal_map.json")
-                            .read_text(encoding="utf-8"))["shots"]
-    missing = [shot["shot_id"] for shot in tour if shot["shot_id"] not in photo_map]
-    if missing:
-        raise SystemExit(f"rehearsal map misses shots: {', '.join(missing)}")
+    map_path = Path(args.map)
+    if not map_path.is_absolute():
+        map_path = ROOT / map_path
+    photo_map = json.loads(map_path.read_text(encoding="utf-8"))["shots"]
+    mapped, skip_rooms = plan_from_map(tour, photo_map)
 
     with tempfile.TemporaryDirectory(prefix="rehearsal-") as tmp:
         staged = {}
         for shot in tour:
             shot_id = shot["shot_id"]
+            if shot_id not in mapped:
+                continue
             source = ROOT / photo_map[shot_id]["file"]
             if not source.is_file():
                 raise SystemExit(f"photo not found: {source}")
@@ -205,8 +269,11 @@ def main(argv):
             staged[shot_id] = (dest, source.name)
         retake_src = ROOT / FRIDGE_RETAKE
         retake_path = Path(tmp) / f"retake{retake_src.suffix.lower()}"
-        strip_metadata(retake_src, retake_path)
-        print(f"Staged {len(staged)} photos + retake in {tmp} (metadata removed)")
+        if not args.leave_cards:
+            strip_metadata(retake_src, retake_path)
+        print(f"Staged {len(staged)} photos"
+              f"{'' if args.leave_cards else ' + retake'} "
+              f"in {tmp} (metadata removed)")
 
         created = _post_json(args.base, args.code, "/api/runs",
                              {"property": "rental-1", "demo": False,
@@ -218,10 +285,15 @@ def main(argv):
         server_tour = _get(args.base, args.code, f"/api/runs/{run_id}/tour")["shots"]
         if [s["shot_id"] for s in server_tour] != [s["shot_id"] for s in tour]:
             raise SystemExit("server tour order differs from tour.json; aborting")
+        for room_id in skip_rooms:
+            _post_json(args.base, args.code,
+                       f"/api/runs/{run_id}/skip-room", {"room_id": room_id})
+            print(f"Skipped room {room_id} (no mapped photos)", flush=True)
+        upload_tour = [s for s in server_tour if s["shot_id"] in mapped]
 
         try:
             start = time.time()
-            for index, shot in enumerate(server_tour):
+            for index, shot in enumerate(upload_tour):
                 shot_id = shot["shot_id"]
                 wait = start + index * args.pace - time.time()
                 if wait > 0:
@@ -232,8 +304,8 @@ def main(argv):
                                           shot_id, path, original)
                 except RehearsalError as exc:
                     raise SystemExit(f"upload {shot_id} ({index + 1}/"
-                                     f"{len(server_tour)}) failed: {exc}")
-                print(f"[{index + 1}/{len(server_tour)}] {datetime.now():%H:%M:%S} "
+                                     f"{len(upload_tour)}) failed: {exc}")
+                print(f"[{index + 1}/{len(upload_tour)}] {datetime.now():%H:%M:%S} "
                       f"{shot_id} -> {result.get('photo_id')}", flush=True)
             print(f"Last upload at {datetime.now():%H:%M:%S.%f}"[:-3])
 
@@ -253,6 +325,12 @@ def main(argv):
                     f"photos still unchecked after 3 retries: "
                     f"{status['unchecked']}")
             print(f"agent_state={status.get('agent_state')}")
+            if args.leave_cards:
+                print_card_groups(status)
+                print(f"Run left open: {run_id}")
+                print(f"Pages: {args.base}/clean and "
+                      f"{args.base}/host?run={run_id}")
+                return 0
             cards = print_cards(status)
 
             fridge_shot = next(
