@@ -220,6 +220,43 @@ def _fit_text(draw, text, font, max_width):
     return text + "..." if text else ""
 
 
+def _draw_boxes(draw, boxes, color, width, y_offset=0):
+    """Draw box rectangles on a PIL draw (shared by evidence + cards)."""
+    for box in boxes:
+        left, top = int(box["left"]), int(box["top"])
+        right, bottom = int(box["right"]), int(box["bottom"])
+        draw.rectangle(
+            [left, top + y_offset, right, bottom + y_offset],
+            outline=color, width=width,
+        )
+
+
+def card_image_bytes(check_path, boxes, frame=False):
+    """One photo with red problem boxes, as JPEG bytes (phone cards).
+
+    With frame and no boxes, the whole photo gets a thick red frame,
+    exactly like a problem evidence photo without boxes.
+    """
+    import io
+
+    with Image.open(check_path) as source:
+        source.load()
+        image = Image.new("RGB", (source.width, source.height), "white")
+        image.paste(source, (0, 0))
+    draw = ImageDraw.Draw(image)
+    if frame:
+        width = max(3 * BOX_WIDTH, min(image.width, image.height) // 60)
+        _draw_boxes(draw, [{
+            "left": 0, "top": 0,
+            "right": image.width - 1, "bottom": image.height - 1,
+        }], (220, 0, 0), width)
+    else:
+        _draw_boxes(draw, boxes, (220, 0, 0), BOX_WIDTH)
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=90)
+    return buffer.getvalue()
+
+
 def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams=None,
                   item_ids=None):
     """Save one annotated photo per proven/problem item under evidence/.
@@ -283,17 +320,8 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
             }]
             box_width = max(3 * BOX_WIDTH, min(source.width, source.height) // 60)
         card_draw = ImageDraw.Draw(card)
-        for box in boxes:
-            left, top = int(box["left"]), int(box["top"])
-            right, bottom = int(box["right"]), int(box["bottom"])
-            draw.rectangle(
-                [left, top + bar_height, right, bottom + bar_height],
-                outline=color,
-                width=box_width,
-            )
-            card_draw.rectangle(
-                [left, top, right, bottom], outline=color, width=box_width
-            )
+        _draw_boxes(draw, boxes, color, box_width, y_offset=bar_height)
+        _draw_boxes(card_draw, boxes, color, box_width)
         path = evidence_dir / f"{item_id}.jpg"
         _save_jpeg_atomic(canvas, path)
         _save_jpeg_atomic(card, evidence_dir / f"{item_id}.card.jpg")

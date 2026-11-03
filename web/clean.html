@@ -1357,11 +1357,49 @@ function cardText(item) {
   return shot ? instruction(shot) : item.label;
 }
 
-function shownCard() {
+function cardGroups() {
+  if (status && Array.isArray(status.card_groups) && status.card_groups.length) {
+    return status.card_groups;
+  }
+  const byId = itemsById();
+  return ((status && status.cards) || []).map(id => ({
+    key: id, photo_id: byId[id] ? byId[id].photo_id : "",
+    shot_id: "", item_ids: [id],
+  }));
+}
+
+function groupOf(itemId) {
+  return cardGroups().find(g => (g.item_ids || []).indexOf(itemId) >= 0) || null;
+}
+
+function shownGroup() {
   for (const id of cardOrder) {
-    if (!(id in retakePhotos)) return id;
+    if (id in retakePhotos) continue;
+    const g = groupOf(id) || {key: id, photo_id: "", shot_id: "", item_ids: [id]};
+    const ids = (g.item_ids || []).filter(
+      x => cardOrder.indexOf(x) >= 0 && !(x in retakePhotos));
+    if (ids.length) {
+      return {key: g.key, photo_id: g.photo_id, shot_id: g.shot_id, item_ids: ids};
+    }
   }
   return null;
+}
+
+function shownCard() {
+  const g = shownGroup();
+  return g ? g.item_ids[0] : null;
+}
+
+function groupsRemaining() {
+  const seen = new Set();
+  let count = 0;
+  for (const id of cardOrder) {
+    if (id in retakePhotos) continue;
+    const g = groupOf(id);
+    const key = g ? g.key : id;
+    if (!seen.has(key)) { seen.add(key); count++; }
+  }
+  return count;
 }
 
 function navPush(name, url) {
@@ -1508,15 +1546,18 @@ function renderKey() {
     ]));
   }
   const byId = itemsById();
-  const shown = shownCard();
+  const group = shownGroup();
+  const shown = group ? group.item_ids[0] : null;
   const item = shown ? byId[shown] : null;
   const total = status.progress.photos, left = status.checking.length;
   return JSON.stringify(base.concat([
     shown,
+    group ? group.item_ids.join(",") : null,
+    group ? group.item_ids.map(id => byId[id] ? byId[id].status : "").join(",") : null,
     item ? cardText(item) : null,
     item ? cardPhotoUrl(item) : null,
     cardPanel, cardNoteId, cardNoteText,
-    cardOrder.length, cardsTotal,
+    cardOrder.length, cardsTotal, groupsRemaining(),
     total - left, total,
     Object.values(retakePhotos).join(","),
     toast,
@@ -2041,9 +2082,51 @@ function cardHtml(item, animate, pos, total) {
   </div>`;
 }
 
+function groupCardHtml(group, animate, pos, total) {
+  const byId = itemsById();
+  const items = group.item_ids.map(id => byId[id]).filter(Boolean);
+  if (!items.length) return "";
+  if (items.length === 1) return cardHtml(items[0], animate, pos, total);
+  const anyProblem = items.some(i => i.status === "problem");
+  const groupShot = group.shot_id
+    ? tour.shots.find(s => s.shot_id === group.shot_id) : null;
+  const ex = groupShot ? exampleUrl(groupShot) : exampleUrl(shotOfItem(items[0].id));
+  let img = "";
+  if (group.photo_id) {
+    const ids = group.item_ids.map(encodeURIComponent).join(",");
+    const url = `/api/runs/${encodeURIComponent(RUN)}/photos/${encodeURIComponent(group.photo_id)}/card?items=${ids}&v=${encodeURIComponent(group.photo_id)}`;
+    img = `<div class="photowrap"><img class="photo" src="${url}" data-full="${url}" alt=""></div>`
+      + (ex ? `<button class="exrow" data-full="${esc(ex)}" data-cap="${esc(T().howShould)}"><img src="${esc(ex)}" alt=""><span>${esc(T().shouldLook)}</span></button>` : "");
+  } else if (ex) {
+    img = `<div class="photowrap"><img class="photo" src="${esc(ex)}" data-full="${esc(ex)}" data-cap="${esc(T().shouldLook)}" alt=""></div>`;
+  }
+  const lines = items.map(i =>
+    `<div class="instruction">${esc(cardText(i))}</div>`
+    + (i.status === "needs photo"
+      ? `<div><span class="tag missing">${esc(T().notVisible)}</span></div>` : "")
+  ).join("");
+  const first = items[0];
+  const fixed = shotForCard(first.id)
+    ? `<button class="btn" id="cardFixed">${ICONS.camera}${esc(T().fixed)}</button>` : "";
+  return `<div class="card${animate ? " slide" : ""}">
+    <div class="tagrow"><span class="tag ${anyProblem ? "fix" : "missing"}">${esc(anyProblem ? T().fixTag : T().notVisible)}</span><span class="of">${esc(T().ofTotal(pos, total))}</span></div>
+    ${lines}
+    <div class="small">${esc(T().newPhotoHint)}</div>
+    ${img}
+    <div class="cardactions">
+      ${fixed}
+      <div class="btnrow">
+        <button class="btn secondary" id="cardCant">${esc(T().cantFix)}</button>
+        <button class="btn secondary" id="cardFine">${esc(T().itsFine)}</button>
+      </div>
+    </div>
+    <button class="link" id="cardLater">${esc(T().later)}</button>
+  </div>`;
+}
+
 function renderCards(app) {
   const byId = itemsById();
-  const remaining = cardOrder.length;
+  const remaining = groupsRemaining();
   if (remaining > cardsTotal) cardsTotal = remaining;
   const pos = Math.max(1, cardsTotal - remaining + 1);
   let html = `<div class="wrap"><div class="cardshead"><h1>${esc(T().photosDone)}</h1>`
@@ -2071,7 +2154,8 @@ function renderCards(app) {
     lastShownCard = shown;
     const peek1 = remaining > 1 ? `<div class="peek p1"></div>` : "";
     const peek2 = remaining > 2 ? `<div class="peek p2"></div>` : "";
-    html += `<div class="stack">${peek2}${peek1}${cardHtml(byId[shown], animate, pos, cardsTotal)}</div>`;
+    const group = shownGroup();
+    html += `<div class="stack">${peek2}${peek1}${group ? groupCardHtml(group, animate, pos, cardsTotal) : cardHtml(byId[shown], animate, pos, cardsTotal)}</div>`;
     if (cardPanel && cardPanel.action === "retake" &&
         (!cardPanel.item || cardPanel.item !== shown)) {
       cardPanel = null;
@@ -2135,8 +2219,13 @@ function wireCard(item) {
   document.getElementById("cardLater").onclick = () => {
     stopSpeech();
     spokenCard = null;
-    const i = cardOrder.indexOf(item.id);
-    if (i >= 0) cardOrder.push(cardOrder.splice(i, 1)[0]);
+    const grp = shownGroup();
+    const ids = grp && grp.item_ids.indexOf(item.id) >= 0
+      ? grp.item_ids.slice() : [item.id];
+    for (const id of ids) {
+      const i = cardOrder.indexOf(id);
+      if (i >= 0) cardOrder.push(cardOrder.splice(i, 1)[0]);
+    }
     renderMaybe();
   };
   const mic = document.getElementById("cardMic");
@@ -2148,10 +2237,12 @@ function wireCard(item) {
   const micStop = document.getElementById("cardMicStop");
   if (micStop) micStop.onclick = stopRec;
   app_query("[data-reason]").forEach(b => {
-    b.onclick = () => resolveCard(item.id, "cant_fix", b.getAttribute("data-reason"));
+    b.onclick = () => resolveGroup(
+      groupIdsFor(item.id), "cant_fix", b.getAttribute("data-reason"));
   });
   const confirm = document.getElementById("cardConfirm");
-  if (confirm) confirm.onclick = () => resolveCard(item.id, "its_fine", null);
+  if (confirm) confirm.onclick = () => resolveGroup(
+    groupIdsFor(item.id), "its_fine", null);
   wireDemo("demoPickCard", "snapDemoCard", file => cardSnap(item.id, file));
   const panelX = document.getElementById("panelX");
   if (panelX) panelX.onclick = closePanel;
@@ -2406,9 +2497,13 @@ function startCardRetake(itemId) {
 function openSheet(itemId) {
   camSheet = {item: itemId};
   const byId = itemsById();
-  const item = byId[itemId];
-  const text = item ? cardText(item) : "";
-  const ex = exampleUrl(shotOfItem(itemId));
+  const grp = groupOf(itemId);
+  const text = grp && grp.item_ids.length > 1
+    ? grp.item_ids.map(id => byId[id] ? cardText(byId[id]) : "").filter(Boolean).join(" ")
+    : (byId[itemId] ? cardText(byId[itemId]) : "");
+  const groupShot = grp && grp.shot_id
+    ? tour.shots.find(s => s.shot_id === grp.shot_id) : null;
+  const ex = exampleUrl(groupShot || shotOfItem(itemId));
   const sheet = document.getElementById("sheet");
   const nocam = camMode !== "live";
   const center = nocam ? `<div class="novid">${esc(T().camHint)}</div>` : "";
@@ -2471,16 +2566,24 @@ async function sheetSnap(itemId) {
 }
 
 function cardSnap(itemId, file) {
-  const shot = shotForCard(itemId);
+  const grp = groupOf(itemId);
+  let itemIds = grp
+    ? grp.item_ids.filter(id => cardOrder.indexOf(id) >= 0) : [itemId];
+  if (!itemIds.length) itemIds = [itemId];
+  const shot = (grp && grp.shot_id
+    ? tour.shots.find(s => s.shot_id === grp.shot_id) : null)
+    || shotForCard(itemId);
   if (!shot) return;
   let settled = false;
   const btn = document.getElementById("cardFixed");
   if (btn) btn.disabled = true;
   const remove = () => {
-    if (!settled) retakePhotos[itemId] = null;
-    if (itemId in retakePhotos) {
-      const i = cardOrder.indexOf(itemId);
-      if (i >= 0) cardOrder.splice(i, 1);
+    for (const id of itemIds) {
+      if (!settled) retakePhotos[id] = null;
+      if (id in retakePhotos) {
+        const i = cardOrder.indexOf(id);
+        if (i >= 0) cardOrder.splice(i, 1);
+      }
     }
     cardPanel = null;
     renderMaybe();
@@ -2496,18 +2599,20 @@ function cardSnap(itemId, file) {
   (async () => {
     const form = new FormData();
     form.append("shot_id", shot.shot_id);
-    form.append("retake_items", itemId);
+    form.append("retake_items", itemIds.join(","));
     form.append("image", file);
     try {
       const res = await uploadWithRetry(`/api/runs/${encodeURIComponent(RUN)}/photos`, form);
       settled = true;
-      retakePhotos[itemId] = res.photo_id;
+      for (const id of itemIds) retakePhotos[id] = res.photo_id;
       photoError = "";
       await refresh();
     } catch (e) {
       settled = true;
-      delete retakePhotos[itemId];
-      if (cardOrder.indexOf(itemId) < 0) cardOrder.unshift(itemId);
+      for (const id of itemIds) delete retakePhotos[id];
+      for (let i = itemIds.length - 1; i >= 0; i--) {
+        if (cardOrder.indexOf(itemIds[i]) < 0) cardOrder.unshift(itemIds[i]);
+      }
       photoError = e.name === "AbortError" ? T().notSent
         : e.message.indexOf("foto antigua") >= 0 ? T().oldPhoto : e.message;
     }
@@ -2530,6 +2635,39 @@ async function resolveCard(itemId, action, reason) {
   } catch (e) {
     photoError = e.message;
   }
+  renderMaybe();
+}
+
+function groupIdsFor(itemId) {
+  const grp = shownGroup();
+  if (grp && grp.item_ids.indexOf(itemId) >= 0) return grp.item_ids.slice();
+  const g = groupOf(itemId);
+  return g ? g.item_ids.slice() : [itemId];
+}
+
+async function resolveGroup(itemIds, action, reason) {
+  stopSpeech();
+  let failed = false;
+  for (const id of itemIds) {
+    try {
+      await api(`/api/runs/${encodeURIComponent(RUN)}/items/${encodeURIComponent(id)}/resolve`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({action: action, reason: reason, note_id: cardNoteId}),
+      });
+    } catch (e) {
+      // Show the message and keep the rest as cards.
+      photoError = e.message;
+      failed = true;
+      break;
+    }
+  }
+  if (!failed) {
+    cardPanel = null;
+    cardNoteId = null;
+    cardNoteText = "";
+    photoError = "";
+  }
+  try { await refresh(); } catch (e) {}
   renderMaybe();
 }
 
@@ -2602,16 +2740,33 @@ function showToast(text) {
 }
 
 function reconcileCards() {
-  const server = status.cards || [];
+  const server = [];
+  for (const g of cardGroups()) {
+    for (const id of (g.item_ids || [])) {
+      if (server.indexOf(id) < 0) server.push(id);
+    }
+  }
+  const serverCards = status.cards || [];
+  for (const id of serverCards) {
+    if (server.indexOf(id) < 0) server.push(id);
+  }
+  // One toast per retake photo, only when none of its items is back.
+  const byPid = {};
   for (const id of Object.keys(retakePhotos)) {
     const pid = retakePhotos[id];
-    const done = !!pid && (status.checking || []).indexOf(pid) < 0;
-    if (!done) continue;
-    delete retakePhotos[id];
-    if (server.indexOf(id) < 0) {
+    if (pid) (byPid[pid] = byPid[pid] || []).push(id);
+  }
+  for (const pid of Object.keys(byPid)) {
+    if ((status.checking || []).indexOf(pid) >= 0) continue;
+    const ids = byPid[pid];
+    for (const id of ids) delete retakePhotos[id];
+    const back = ids.filter(id => server.indexOf(id) >= 0);
+    if (!back.length) {
       showToast(T().fixedToast);
-    } else if (cardOrder.indexOf(id) < 0) {
-      cardOrder.push(id);
+    } else {
+      for (const id of back) {
+        if (cardOrder.indexOf(id) < 0) cardOrder.push(id);
+      }
     }
   }
   for (let i = cardOrder.length - 1; i >= 0; i--) {
@@ -2648,11 +2803,18 @@ function announce() {
     sayNow(T().photosDone);
   }
   const byId = itemsById();
-  const shown = shownCard();
-  if (shown && shown !== spokenCard && byId[shown]) {
-    spokenCard = shown;
-    if (justPhotosDone) say(cardText(byId[shown]));
-    else sayNow(cardText(byId[shown]));
+  const group = shownGroup();
+  const shown = group ? group.item_ids[0] : null;
+  if (shown && byId[shown]) {
+    const gkey = group.item_ids.join(",");
+    if (gkey !== spokenCard) {
+      spokenCard = gkey;
+      const lines = group.item_ids
+        .map(id => byId[id] ? cardText(byId[id]) : "").filter(Boolean)
+        .join(". ");
+      if (justPhotosDone) say(lines);
+      else sayNow(lines);
+    }
   }
   if (status.finished_at && !saidFinal) {
     saidFinal = true;

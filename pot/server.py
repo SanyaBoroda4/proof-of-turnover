@@ -785,6 +785,25 @@ def create_app(client=None):
         # Pages add ?v=<photo id>: cache long, retakes change the URL.
         return Response(blob, media_type="image/jpeg", headers=dict(LONG_CACHE))
 
+    @app.get("/api/runs/{run_id}/photos/{photo_id}/card")
+    def _card_photo(run_id: str, photo_id: str, items: str = ""):
+        _checked_id(photo_id, "photo")
+        state = need_state(run_id)
+        item_ids = []
+        for item_id in (items or "").split(","):
+            item_id = item_id.strip()
+            if not item_id:
+                continue
+            _checked_id(item_id, "item")
+            if item_id not in state.items_by_id:
+                raise HTTPException(400, f"Unknown item '{item_id}'")
+            item_ids.append(item_id)
+        blob = state.read_card_photo(photo_id, item_ids)
+        if blob is None:
+            raise HTTPException(404, f"No photo '{photo_id}'")
+        # Pages add ?v=<photo id>: cache long like evidence.
+        return Response(blob, media_type="image/jpeg", headers=dict(LONG_CACHE))
+
     @app.get("/api/runs/{run_id}/photos/{photo_id}/overview")
     def _get_overview(run_id: str, photo_id: str):
         _checked_id(photo_id, "photo")

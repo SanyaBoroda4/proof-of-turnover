@@ -27,6 +27,7 @@ from pot.proof import (
     PROBLEM,
     PROVEN,
     ProofItem,
+    card_image_bytes,
     prove_all,
     prune_other_issues,
     save_evidence,
@@ -715,6 +716,71 @@ class RunState:
                     cards.append(item.id)
         return cards
 
+    def _card_groups_locked(self):
+        """Cards grouped by cited photo (callers hold the lock).
+
+        Items whose proof cites the same photo share one group; an
+        item with no photo is its own group (key = item id). Groups
+        are ordered by the tour index of the group's shot, ties by
+        the first item's card order.
+        """
+        cards = self._cards_locked()
+        shot_index = {
+            shot["shot_id"]: i for i, shot in enumerate(self.tour["shots"])
+        }
+
+        def fallback_shot(item_id):
+            listing = [
+                shot for shot in self.tour["shots"]
+                if item_id in shot.get("item_ids", [])
+            ]
+            if listing:
+                best = min(
+                    listing,
+                    key=lambda s: (
+                        len(s.get("item_ids", [])),
+                        shot_index[s["shot_id"]],
+                    ),
+                )
+                return best["shot_id"]
+            item = self.items_by_id.get(item_id)
+            if item is not None:
+                for shot in self.tour["shots"]:
+                    if shot.get("room_id") == item.room_id:
+                        return shot["shot_id"]
+            return ""
+
+        groups = []
+        by_key = {}
+        for card_pos, item_id in enumerate(cards):
+            photo_id = self.proofs[item_id].photo_id or ""
+            key = photo_id or item_id
+            if key not in by_key:
+                shot_id = (
+                    self.photo_shot.get(photo_id, "") if photo_id
+                    else fallback_shot(item_id)
+                )
+                by_key[key] = {
+                    "key": key,
+                    "photo_id": photo_id,
+                    "shot_id": shot_id,
+                    "item_ids": [],
+                    "_pos": card_pos,
+                    "_shot": shot_index.get(shot_id, len(shot_index)),
+                }
+                groups.append(by_key[key])
+            by_key[key]["item_ids"].append(item_id)
+        groups.sort(key=lambda g: (g["_shot"], g["_pos"]))
+        return [
+            {
+                "key": g["key"],
+                "photo_id": g["photo_id"],
+                "shot_id": g["shot_id"],
+                "item_ids": g["item_ids"],
+            }
+            for g in groups
+        ]
+
     def claim_rechecks(self):
         """Unchecked photos to retry: back to checking, with a timeline event."""
         with self.lock:
@@ -1117,6 +1183,7 @@ class RunState:
                 },
                 "open": host_verdict.problems + host_verdict.need_photo,
                 "cards": self._cards_locked(),
+                "card_groups": self._card_groups_locked(),
                 "finished_at": self.finished_at,
                 "checking": sorted(self.checking),
                 "unchecked": sorted(self.unchecked),
@@ -1206,6 +1273,28 @@ class RunState:
             if photo is None or not photo.overview_path.is_file():
                 return None
             return photo.overview_path.read_bytes()
+
+    def read_card_photo(self, photo_id, item_ids):
+        """Combined card JPEG: red boxes of every listed PROBLEM item
+        citing this photo; plain photo when none is PROBLEM."""
+        with self.lock:
+            photo = self.photos_by_id.get(photo_id)
+            if photo is None or not photo.check_path.is_file():
+                return None
+            problem = [
+                item_id for item_id in item_ids
+                if self.proofs[item_id].status == PROBLEM
+                and self.proofs[item_id].photo_id == photo_id
+            ]
+            if not problem:
+                return photo.check_path.read_bytes()
+            boxes = []
+            for item_id in problem:
+                sam = self.problem_sams.get(item_id)
+                if sam is not None:
+                    boxes.extend(sam.boxes)
+            return card_image_bytes(
+                photo.check_path, boxes, frame=not boxes)
 
     def _voice_note_out(self, note):
         """A voice note for /status, newest first, with its audio URL."""

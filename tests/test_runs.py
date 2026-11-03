@@ -184,6 +184,69 @@ def test_problem_boxes_dropped_when_proof_moves_to_boxless_photo(tmp_path):
     assert item_id not in state.problem_sams
 
 
+def _fresh_mixed(photo_id, problems, unclear):
+    claims = {}
+    seconds = {}
+    for item_id in problems:
+        claims[item_id] = Claim(item_id, "problem", photo_id, "mess", None)
+        seconds[item_id] = SecondLook(
+            item_id, photo_id, "yes", "not_done", None, "mess", "mess")
+    for item_id in unclear:
+        claims[item_id] = Claim(item_id, "done", photo_id, "maybe", None)
+        seconds[item_id] = SecondLook(
+            item_id, photo_id, "yes", "unclear", None, "", "")
+    return {
+        "claims": claims, "seconds": seconds, "sams": {},
+        "problem_sams": {
+            i: SamCheck(i, photo_id, "mess", 1, []) for i in problems
+        },
+        "issues": [], "notes": [],
+        "fresh_ids": list(problems) + list(unclear), "decisions": {},
+    }
+
+
+def test_card_groups_merge_problem_and_not_visible_on_one_photo(tmp_path):
+    state = _state(tmp_path)
+    bed_items = [
+        i.id for i in state.checklist
+        if i.room_id == "bed" and i.key != "coverage"
+    ]
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_mixed(
+        photo.id, bed_items[:2], bed_items[2:]))
+    state.finish_photo(photo.id)
+    status = state.status()
+    groups = status["card_groups"]
+    bed_group = next(g for g in groups if g["photo_id"] == photo.id)
+    assert bed_group["item_ids"] == bed_items
+    assert bed_group["shot_id"] == "bed-1"
+    assert set(status["cards"]) == set(bed_items)
+
+
+def test_card_groups_no_photo_item_is_alone_and_order_by_tour(tmp_path):
+    property = tiny_property()
+    checklist = build_checklist(property)
+    beds = next(i.id for i in checklist if i.key == "beds_made")
+    tour = {"shots": [{
+        "shot_id": "bed-1", "room_id": "bed", "item_ids": [beds],
+        "instruction_es": "Foto", "instruction_en": "Photo",
+    }]}
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    state = RunState(run_dir, property, checklist, tour=tour)
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    state.merge_result(photo.id, _fresh_problem(photo.id, beds, "mess"))
+    state.finish_photo(photo.id)
+    groups = state.status()["card_groups"]
+    assert groups[0]["item_ids"] == [beds]
+    assert groups[0]["shot_id"] == "bed-1"
+    alone = [g for g in groups if len(g["item_ids"]) == 1 and not g["photo_id"]]
+    assert alone
+    assert all(g["key"] == g["item_ids"][0] for g in alone)
+
+
 def test_concurrent_claims_get_distinct_ids_and_both_survive(tmp_path):
     state = _state(tmp_path)
     first = _photo_file(tmp_path / "up1", "a.jpg", "blue")

@@ -822,6 +822,81 @@ def test_all_proven_retake_makes_no_model_call():
     assert len(fake.sam_calls) == sam_before
 
 
+def test_card_groups_and_card_image_endpoint():
+    from PIL import Image as _Image
+
+    from pot import config
+    from pot.verifier import SamCheck
+
+    test, code, run_id = _problem_run()
+    status = _wait_idle(test, code, run_id)
+    items = [
+        "master-bedroom.beds_made",
+        "master-bedroom.no_belongings",
+        "master-bedroom.floor_clear",
+    ]
+    groups = status["card_groups"]
+    assert len(groups) == 1, groups
+    group = groups[0]
+    assert group["item_ids"] == items
+    assert group["shot_id"] == "master-bedroom-1"
+    photo_id = group["photo_id"]
+    assert photo_id
+    assert status["cards"] == items
+
+    # Distinct boxes per item, then the combined card photo must
+    # have red pixels inside every item's box.
+    state = test.app.state.server.get_state(run_id)
+    boxes = {
+        items[0]: {"left": 2, "top": 2, "right": 10, "bottom": 10},
+        items[1]: {"left": 20, "top": 2, "right": 30, "bottom": 10},
+        items[2]: {"left": 40, "top": 20, "right": 55, "bottom": 35},
+    }
+    with state.lock:
+        for item_id, box in boxes.items():
+            state.problem_sams[item_id] = SamCheck(
+                item_id, photo_id, "mess", 1, [box])
+    url = (
+        f"/api/runs/{run_id}/photos/{photo_id}/card"
+        f"?items={','.join(items)}&v={photo_id}&code={code}"
+    )
+    response = test.get(url)
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "image/jpeg"
+    import io as _io
+
+    image = _Image.open(_io.BytesIO(response.content)).convert("RGB")
+    for item_id, box in boxes.items():
+        region = [
+            image.getpixel((x, y))
+            for x in range(box["left"], box["right"] + 1, 3)
+            for y in range(box["top"], box["bottom"] + 1, 3)
+        ]
+        assert any(
+            r > 150 and g < 90 and b < 90 for r, g, b in region
+        ), f"no red inside box of {item_id}"
+
+    # No PROBLEM item listed -> the plain photo.
+    plain = test.get(
+        f"/api/runs/{run_id}/photos/{photo_id}/card"
+        f"?items=master-bedroom.coverage&code={code}")
+    assert plain.status_code == 200, plain.text
+    check_bytes = (
+        config.RUNS_DIR / run_id / "photos" / f"{photo_id}_check.jpg"
+    ).read_bytes()
+    assert plain.content == check_bytes
+
+    assert test.get(
+        f"/api/runs/{run_id}/photos/P99/card?items={items[0]}"
+        f"&code={code}").status_code == 404
+    assert test.get(
+        f"/api/runs/{run_id}/photos/{photo_id}/card"
+        f"?items=master-bedroom.nope&code={code}").status_code == 400
+    assert test.get(
+        f"/api/runs/{run_id}/photos/{photo_id}/card"
+        f"?items=bad%20id&code={code}").status_code == 400
+
+
 def test_before_image_served_after_fix():
     test, code, run_id = _problem_run()
     _wait_idle(test, code, run_id)
