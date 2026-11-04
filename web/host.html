@@ -390,6 +390,25 @@ function renderStatus(app) {
   paintQr();
 }
 
+let emptyShown = false;
+
+function emptyHtml() {
+  return `<h1>Turnovers</h1>
+    <p>No turnovers yet.</p>
+    <p>1. Set up your house: <a class="small" href="/setup?code=${esc(CODE)}">Set up a new house</a></p>
+    <p>2. On the cleaner's phone, scan this QR code and tap Start turnover.</p>
+    <img id="qr" alt="QR code for the cleaner page">
+    <div class="small" id="cleanUrl"></div>`;
+}
+
+function showEmpty(app) {
+  // Built once: the 2 s poll must not rebuild the QR (it would flicker).
+  if (emptyShown) return;
+  emptyShown = true;
+  app.innerHTML = emptyHtml();
+  paintQr();
+}
+
 function paintQr() {
   if (!cleanerUrl) return;
   const img = document.getElementById("qr");
@@ -475,15 +494,16 @@ async function boot() {
     } catch (e) {}
     await fetchRunsList();
     if (!(await refresh())) {
-      app.innerHTML = "<h1>Turnovers</h1><p>No turnovers yet — start one from the cleaner page.</p>";
+      showEmpty(app);
     } else {
+      emptyShown = false;
       renderMaybe();
     }
     setInterval(async () => {
       try {
-        if (await refresh()) renderMaybe();
+        if (await refresh()) { emptyShown = false; renderMaybe(); }
         else {
-          app.innerHTML = "<h1>Turnovers</h1><p>No turnovers yet — start one from the cleaner page.</p>";
+          showEmpty(app);
           lastKey = null;
         }
       } catch (e) {}

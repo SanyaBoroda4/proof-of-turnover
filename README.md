@@ -132,7 +132,7 @@ Copy-Item .env.example .env   # then set MODEL_API_KEY in .env
 
 (On macOS/Linux use `python3.13` and `.venv/bin/python`.)
 
-The script prints a laptop link and a QR code. Open the laptop link, choose “Set up a new house” and add photos and rules for each room. Then scan the QR code with your phone and walk the tour in your own house. Keep the laptop on and that window open: the server runs there.
+The script opens the host page in your browser. Click “Set up a new house”, add photos and rules for each room, and save. Then scan the QR code on the host page with your phone, tap Start turnover, pick your house and walk the tour. Keep the laptop on and that window open: the server runs there.
 
 ## Set up your own house
 

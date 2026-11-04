@@ -4,10 +4,10 @@
 
 Starts the server with fresh host/cleaner access codes (or the ones
 from POT_HOST_CODE / POT_ACCESS_CODE), opens a Cloudflare quick tunnel
-when cloudflared is installed, prints the laptop (host) link and an
-ASCII QR code of the phone (cleaner) link. The server reads .env
-itself; this script never reads .env and never prints any key.
-Ctrl+C stops the tunnel and the server.
+when cloudflared is installed, opens the host page in the laptop's
+browser and prints the links (the host page shows the QR code for the
+phone). The server reads .env itself; this script never reads .env
+and never prints any key. Ctrl+C stops the tunnel and the server.
 """
 
 import argparse
@@ -22,6 +22,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import webbrowser
 from pathlib import Path
 
 TUNNEL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
@@ -39,20 +40,6 @@ def host_link(base, code):
 
 def cleaner_link(base, code):
     return f"{base}/clean?code={code}"
-
-
-def ascii_qr(text):
-    """The QR code for text as ASCII art (## per dark module)."""
-    import qrcode
-
-    qr = qrcode.QRCode(border=1)
-    qr.add_data(text)
-    qr.make(fit=True)
-    # Plain ASCII only: block glyphs crash on Windows consoles.
-    return "\n".join(
-        "".join("##" if cell else "  " for cell in row)
-        for row in qr.get_matrix()
-    )
 
 
 def _answers(url, timeout=5):
@@ -87,6 +74,13 @@ def lan_ip():
         return "127.0.0.1"
     finally:
         sock.close()
+
+
+def _open_browser(url):
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
 
 
 def _stop(proc):
@@ -218,12 +212,20 @@ def main(argv=None):
                 time.sleep(10)
                 opened = wait_for_url(base, timeout=180)
                 print(flush=True)
-                print(f"Laptop (host):  {host_link(base, host_code)}",
-                      flush=True)
-                print("Phone (cleaner): scan this QR code", flush=True)
-                print(ascii_qr(cleaner_link(base, cleaner_code)), flush=True)
-                print(cleaner_link(base, cleaner_code), flush=True)
-                if not opened:
+                if opened:
+                    _open_browser(host_link(base, host_code))
+                    print(f"Laptop (host):  {host_link(base, host_code)} "
+                          "(opened in your browser)", flush=True)
+                    print("Phone (cleaner): scan the QR code on the host "
+                          f"page, or open {cleaner_link(base, cleaner_code)}",
+                          flush=True)
+                else:
+                    print(f"Laptop (host):  {host_link(base, host_code)}",
+                          flush=True)
+                    print(f"Phone (cleaner): "
+                          f"{cleaner_link(base, cleaner_code)}", flush=True)
+                    print("Then scan the QR code on the host page with "
+                          "your phone.", flush=True)
                     print("The link did not open from this laptop yet. "
                           "Wait a minute and try it. If it still does not "
                           "open, press Ctrl+C and run go_live.py again.",
@@ -242,9 +244,12 @@ def main(argv=None):
             print("If your computer asks whether to allow incoming "
                   "connections, choose Allow.", flush=True)
             ip = lan_ip()
-            print(f"Laptop (host):  {host_link(f'http://{ip}:{port}', host_code)}",
+            laptop = host_link(f"http://{ip}:{port}", host_code)
+            _open_browser(laptop)
+            print(f"Laptop (host):  {laptop} (opened in your browser)",
                   flush=True)
-            print(f"Phone (cleaner, file picker only): "
+            print("Phone (cleaner, file picker only): scan the QR code "
+                  "on the host page, or open "
                   f"{cleaner_link(f'http://{ip}:{port}', cleaner_code)}",
                   flush=True)
         print(flush=True)

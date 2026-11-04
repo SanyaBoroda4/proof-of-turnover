@@ -69,3 +69,14 @@ def test_setup_room_back_goes_straight_to_previous_room():
     assert "roomIdx--" in back
     assert 'screen = "review"' in back
     assert "navPush()" in back
+
+
+def test_host_empty_page_shows_setup_link_and_qr():
+    script = _script("host.html")
+    assert "No turnovers yet." in script
+    assert "/setup?code=" in script and "Set up a new house" in script
+    assert "scan this QR code and tap Start turnover" in script
+    assert 'id="qr"' in script and 'id="cleanUrl"' in script
+    # The empty block is built once (showEmpty guards it), so the 2 s
+    # poll never rebuilds the QR image and makes it flicker.
+    assert "function showEmpty" in script and "emptyShown" in script

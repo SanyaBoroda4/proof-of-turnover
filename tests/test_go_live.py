@@ -33,14 +33,6 @@ def test_links_carry_the_right_codes():
         "https://brave-otter-1234.trycloudflare.com/clean?code=cleancode")
 
 
-def test_ascii_qr_renders_ascii_art():
-    art = go_live.ascii_qr("https://example.com/clean?code=demo")
-    lines = art.split("\n")
-    assert len(lines) > 10
-    assert "##" in art
-    assert all(len(line) == len(lines[0]) for line in lines)
-
-
 class _FakeStdout:
     def __init__(self, lines):
         self.lines = list(lines)
