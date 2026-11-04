@@ -17,7 +17,7 @@ The US has 1.39 million maids and housekeeping cleaners; 49.8% are Hispanic or L
 1. **The host sets up the house.** On `/setup`, the host answers a few questions about the house, adds 1-3 photos per room, and types or speaks the rules for each room. Muse Spark drafts the checklist from the photos and rules; the host edits it and saves. Saving writes the house plan and plans a guided photo tour: one photo per shot, room by room, each room starting with a wide overview shot.
 2. **The cleaner walks the tour.** On `/clean`, in her language (Spanish, English, or Russian), each shot starts as an instruction card with an example photo of how it should look. “Take photo” opens the live in-page camera; one tap takes and sends the photo, and the next card appears. Instructions are read aloud, and the cleaner can leave voice notes.
 3. **Every photo is checked in the background.** While the cleaner keeps walking, each photo is matched to its shot and checked (see the proof rule below). She never waits for the AI. A room's whole-room (overview) photo is checked first and decides what it can see; close-ups wait for it and only check what the overview could not decide.
-4. **Problem cards, one by one.** After the last photo, anything not proven becomes a card: “New photo”, “Can't fix” with a reason, “It's fine”, or “Later”. There is one card per photo, with every red box for that photo on it and one line per real problem. A card's new photo re-checks only that card's items.
+4. **Problem cards, one by one.** After the last photo, anything not proven becomes a card: “New photo”, “Can't fix” with a reason, “It's fine”, or “Later”. There is one card per photo, with every red box for that photo on it and one line per real problem. A card's new photo re-checks only that card's items. The last card asks “Anything to restock?”: the cleaner says or types what is running low (or “Nothing to restock”), and it lands on the host page as a Restock list.
 5. **The host decides.** On `/host`: “Needs your decision” (things the cleaner reported or disputes, with a Muse Wonder second opinion), “Fixed by cleaner” before/after photos, voice notes translated to English, the model-call log, and Approve or Send back.
 
 ## Why it is a verifiable agent
@@ -79,6 +79,8 @@ What you will see: a real turnover of a real rental (10 photos, 4 rooms: foyer, 
 
 The demo covers 4 rooms, so the cleaner page first says “Some areas were skipped”: press “Continue without them”. The host page then says “Not ready” (9 rooms were skipped) and Approve asks you to confirm; that is the honest verdict — missing evidence is never treated as done.
 
+At the end, the last card asks “Anything to restock?”. Press “Nothing to restock” (or type something; in the no-key demo the text is kept as typed).
+
 ## Run it with your own key
 
 You need Python 3.13 and a Meta Model API key.
@@ -114,6 +116,23 @@ cloudflared tunnel --url http://localhost:8000
 ```
 
 Open `https://<tunnel-url>/host?code=<access-code>` on the laptop, then scan the QR code on the host page with the phone. The phone needs the HTTPS tunnel for the in-page camera, the microphone, and voice playback; a plain-LAN `http://` link only gives the phone's file picker, with no in-page camera or voice notes.
+
+## Do a real walkthrough in your own house
+
+Install Python 3.13 and cloudflared (`winget install --id Cloudflare.cloudflared` on Windows, `brew install cloudflared` on macOS), then:
+
+```powershell
+git clone https://github.com/SanyaBoroda4/proof-of-turnover
+cd proof-of-turnover
+py -3.13 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+Copy-Item .env.example .env   # then set MODEL_API_KEY in .env
+.venv\Scripts\python scripts\go_live.py
+```
+
+(On macOS/Linux use `python3.13` and `.venv/bin/python`.)
+
+The script prints a laptop link and a QR code. Open the laptop link, choose “Set up a new house” and add photos and rules for each room. Then scan the QR code with your phone and walk the tour in your own house. Keep the laptop on and that window open: the server runs there.
 
 ## Set up your own house
 
@@ -158,7 +177,7 @@ Open `/setup` from the “Set up a new house” link on the host page (it needs 
 python -m pytest -q
 ```
 
-The suite (369 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
+The suite (378 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
 
 ## A real run
 
