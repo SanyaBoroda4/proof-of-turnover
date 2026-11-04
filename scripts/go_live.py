@@ -22,6 +22,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 TUNNEL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 
@@ -98,8 +99,58 @@ def _stop(proc):
         proc.kill()
 
 
+CLOUDFLARED_WINDOWS = (
+    Path(r"C:\Program Files (x86)") / "cloudflared" / "cloudflared.exe",
+    Path(r"C:\Program Files") / "cloudflared" / "cloudflared.exe",
+)
+
+
+def find_cloudflared():
+    """cloudflared on PATH, or where winget installs it on Windows."""
+    found = shutil.which("cloudflared")
+    if found:
+        return found
+    if os.name == "nt":
+        for candidate in CLOUDFLARED_WINDOWS:
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+def server_host_for(cloudflared):
+    """Server bind address: local-only with a tunnel, LAN without."""
+    return "127.0.0.1" if cloudflared else "0.0.0.0"
+
+
+def _port_busy(port, bind_host):
+    """Busy: something answers on 127.0.0.1:port, or a test bind fails."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+            return True
+    except OSError:
+        pass
+    probe = socket.socket()
+    try:
+        probe.bind((bind_host, port))
+    except OSError:
+        return True
+    finally:
+        probe.close()
+    return False
+
+
+def find_free_port(start, bind_host="127.0.0.1", tries=20):
+    """First free port at or after start, or None."""
+    for port in range(start, start + tries):
+        if not _port_busy(port, bind_host):
+            return port
+    return None
+
+
 def _watch_tunnel(proc, holder, ready):
     # readline, not iteration: iterating a pipe can stall on Windows.
+    # Keep reading to the end after the link is found: cloudflared
+    # keeps logging, and an unread pipe fills up and freezes it.
     while True:
         line = proc.stdout.readline()
         if not line:
@@ -108,14 +159,12 @@ def _watch_tunnel(proc, holder, ready):
         if url and "url" not in holder:
             holder["url"] = url
             ready.set()
-            return
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
-    port = args.port
 
     env = dict(os.environ)
     host_code = env.get("POT_HOST_CODE") or secrets.token_urlsafe(8)
@@ -123,20 +172,31 @@ def main(argv=None):
     env["POT_HOST_CODE"] = host_code
     env["POT_ACCESS_CODE"] = cleaner_code
 
+    cloudflared = find_cloudflared()
+    host = server_host_for(cloudflared)
+    port = find_free_port(args.port, bind_host=host)
+    if port is None:
+        print(f"No free port found from {args.port} to {args.port + 19}. "
+              "Close another program and run go_live.py again.", flush=True)
+        return 1
+    if port != args.port:
+        print(f"Port {args.port} is busy (another program uses it), "
+              f"using {port}.", flush=True)
+
     server = subprocess.Popen(
-        [sys.executable, "-m", "pot.server", "--port", str(port)], env=env)
+        [sys.executable, "-m", "pot.server", "--host", host,
+         "--port", str(port)], env=env)
     tunnel = None
     try:
         if not wait_for_url(f"http://127.0.0.1:{port}/", timeout=30):
             print("The server did not start; see its messages above.",
                   flush=True)
             return 1
-        cloudflared = shutil.which("cloudflared")
         if cloudflared:
             tunnel = subprocess.Popen(
                 [cloudflared, "tunnel", "--url", f"http://localhost:{port}"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1)
+                text=True, bufsize=1, encoding="utf-8", errors="replace")
             holder, ready = {}, threading.Event()
             watcher = threading.Thread(
                 target=_watch_tunnel, args=(tunnel, holder, ready),
@@ -144,25 +204,46 @@ def main(argv=None):
             watcher.start()
             ready.wait(timeout=90)
             base = holder.get("url")
-            if base and wait_for_url(base, timeout=90):
+            if not base:
+                print("The tunnel did not start (check the internet). "
+                      "Press Ctrl+C and run go_live.py again.", flush=True)
+                print(f"Laptop (host):  "
+                      f"{host_link(f'http://127.0.0.1:{port}', host_code)}",
+                      flush=True)
+            else:
+                # A new trycloudflare name can take minutes to resolve;
+                # asking too early poisons the DNS cache for ~60 s.
+                print("Waiting for the tunnel link to open "
+                      "(can take 1-3 minutes)...", flush=True)
+                time.sleep(10)
+                opened = wait_for_url(base, timeout=180)
                 print(flush=True)
-                print(f"Laptop (host):  {host_link(base, host_code)}", flush=True)
+                print(f"Laptop (host):  {host_link(base, host_code)}",
+                      flush=True)
                 print("Phone (cleaner): scan this QR code", flush=True)
                 print(ascii_qr(cleaner_link(base, cleaner_code)), flush=True)
                 print(cleaner_link(base, cleaner_code), flush=True)
-            else:
-                print("The tunnel did not come up; use the LAN links below.", flush=True)
-                base = None
+                if not opened:
+                    print("The link did not open from this laptop yet. "
+                          "Wait a minute and try it. If it still does not "
+                          "open, press Ctrl+C and run go_live.py again.",
+                          flush=True)
         else:
             print(flush=True)
-            print("cloudflared is not installed, so the phone cannot use", flush=True)
-            print("the in-page camera or voice notes. Install it with:", flush=True)
-            print("  Windows: winget install --id Cloudflare.cloudflared", flush=True)
+            print("cloudflared is not installed, so the phone cannot use",
+                  flush=True)
+            print("the in-page camera or voice notes. Install it with:",
+                  flush=True)
+            print("  Windows: winget install --id Cloudflare.cloudflared",
+                  flush=True)
             print("  macOS:   brew install cloudflared", flush=True)
-            base = None
-        if not base:
+            print("If you just installed it, open a new terminal window "
+                  "and run go_live.py again.", flush=True)
+            print("If your computer asks whether to allow incoming "
+                  "connections, choose Allow.", flush=True)
             ip = lan_ip()
-            print(f"Laptop (host):  {host_link(f'http://{ip}:{port}', host_code)}", flush=True)
+            print(f"Laptop (host):  {host_link(f'http://{ip}:{port}', host_code)}",
+                  flush=True)
             print(f"Phone (cleaner, file picker only): "
                   f"{cleaner_link(f'http://{ip}:{port}', cleaner_code)}",
                   flush=True)

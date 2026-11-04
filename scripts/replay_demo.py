@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -63,6 +64,31 @@ def find_run_id(runs_dir):
     return runs[0]
 
 
+def _port_busy(port, bind_host="127.0.0.1"):
+    """Busy: something answers on 127.0.0.1:port, or a test bind fails."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+            return True
+    except OSError:
+        pass
+    probe = socket.socket()
+    try:
+        probe.bind((bind_host, port))
+    except OSError:
+        return True
+    finally:
+        probe.close()
+    return False
+
+
+def find_free_port(start, bind_host="127.0.0.1", tries=20):
+    """First free port at or after start, or None."""
+    for port in range(start, start + tries):
+        if not _port_busy(port, bind_host):
+            return port
+    return None
+
+
 def wait_for_server(port, proc, timeout=60.0):
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -92,18 +118,27 @@ def main(argv):
               "record them first (Step 55e).", file=sys.stderr)
         return 1
 
+    port = find_free_port(args.port)
+    if port is None:
+        print(f"No free port found from {args.port} to {args.port + 19}; "
+              "close another program and try again.", file=sys.stderr)
+        return 1
+    if port != args.port:
+        print(f"Port {args.port} is busy (another program uses it), "
+              f"using {port}.", flush=True)
+
     runs_dir = Path(tempfile.mkdtemp(prefix="pot-judge-runs-"))
     env = build_env(runs_dir)
     print(f"Replay runs folder: {runs_dir}", flush=True)
     server = subprocess.Popen(
-        [sys.executable, "-m", "pot.server", "--port", str(args.port)],
+        [sys.executable, "-m", "pot.server", "--port", str(port)],
         cwd=str(ROOT), env=env,
     )
     try:
-        wait_for_server(args.port, server)
+        wait_for_server(port, server)
         walk = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "rehearsal.py"),
-             "--base", f"http://127.0.0.1:{args.port}",
+             "--base", f"http://127.0.0.1:{port}",
              "--code", "demo",
              "--map", "replay/map.json",
              "--demo-run",
@@ -115,7 +150,7 @@ def main(argv):
             print("replay walk failed", file=sys.stderr)
             return walk.returncode
         run_id = find_run_id(runs_dir)
-        cleaner, host = judge_links(args.port, run_id)
+        cleaner, host = judge_links(port, run_id)
         print(f"\nCleaner link for this run: {cleaner}")
         print(f"Host link: {host}")
         print("Serving the replay until Ctrl+C.", flush=True)

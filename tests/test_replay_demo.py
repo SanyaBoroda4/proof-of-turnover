@@ -47,3 +47,18 @@ def test_find_run_id(tmp_path):
     (tmp_path / "run-20260101-000001").mkdir()
     with pytest.raises(SystemExit):
         module.find_run_id(tmp_path)
+
+
+def test_find_free_port_skips_a_busy_one():
+    import socket
+
+    module = _load()
+    busy = socket.socket()
+    busy.bind(("127.0.0.1", 0))
+    busy.listen(1)
+    taken = busy.getsockname()[1]
+    try:
+        found = module.find_free_port(taken)
+    finally:
+        busy.close()
+    assert found is not None and found != taken

@@ -177,7 +177,7 @@ Open `/setup` from the “Set up a new house” link on the host page (it needs 
 python -m pytest -q
 ```
 
-The suite (378 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
+The suite (382 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
 
 ## A real run
 
