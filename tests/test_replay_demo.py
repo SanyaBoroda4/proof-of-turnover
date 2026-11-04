@@ -28,6 +28,8 @@ def test_build_env_is_replay_with_demo_codes(tmp_path, monkeypatch):
     assert env["POT_MODEL_CACHE_DIR"].endswith(
         str(Path("replay") / "model_cache"))
     assert "MODEL_API_KEY" not in env
+    assert "127.0.0.1" in env["NO_PROXY"]
+    assert "localhost" in env["NO_PROXY"]
     assert "data" not in Path(env["POT_RUNS_DIR"]).parts[-2:]
 
 

@@ -34,6 +34,14 @@ def build_env(runs_dir):
     env["POT_HOST_CODE"] = "demohost"
     env["POT_RUNS_DIR"] = str(runs_dir)
     env.pop("MODEL_API_KEY", None)
+    # Localhost must never go through a proxy (offline judges may run
+    # with HTTP(S)_PROXY set to a dead address to prove no network).
+    no_proxy = [h for h in env.get("NO_PROXY", "").split(",") if h]
+    for host in ("127.0.0.1", "localhost"):
+        if host not in no_proxy:
+            no_proxy.append(host)
+    env["NO_PROXY"] = ",".join(no_proxy)
+    env["no_proxy"] = env["NO_PROXY"]
     return env
 
 
@@ -99,7 +107,7 @@ def main(argv):
              "--demo-run",
              "--actions", "replay/actions.json",
              "--pace", "0", "--language", "en"],
-            cwd=str(ROOT),
+            cwd=str(ROOT), env=env,
         )
         if walk.returncode != 0:
             print("replay walk failed", file=sys.stderr)
