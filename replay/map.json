@@ -1,0 +1,16 @@
+{
+  "property": "rental-1",
+  "note": "No-key judge replay: a real turnover of a real rental. The laundry card's new photo is photos/11.jpg (see actions.json).",
+  "shots": {
+    "foyer-01": {"file": "replay/photos/01.jpg", "reason": "Foyer and staircase."},
+    "powder-00": {"file": "replay/photos/02.jpg", "reason": "Whole powder room (overview)."},
+    "powder-01": {"file": "replay/photos/03.jpg", "reason": "Powder room toilet."},
+    "powder-02": {"file": "replay/photos/04.jpg", "reason": "Powder room toilet paper and spare rolls."},
+    "powder-03": {"file": "replay/photos/05.jpg", "reason": "Powder room sink, soap and hand towel."},
+    "laundry-04": {"file": "replay/photos/06.jpg", "reason": "Whole laundry room (overview)."},
+    "laundry-01": {"file": "replay/photos/07.jpg", "reason": "Washer."},
+    "laundry-02": {"file": "replay/photos/08.jpg", "reason": "Dryer."},
+    "laundry-03": {"file": "replay/photos/09.jpg", "reason": "Lint filter."},
+    "dining-01": {"file": "replay/photos/10.jpg", "reason": "Dining area."}
+  }
+}
