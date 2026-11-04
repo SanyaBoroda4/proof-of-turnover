@@ -392,14 +392,14 @@ def test_group_one_line_when_overlap_uses_own_sam_boxes(tmp_path):
     assert group["line_item_ids"] == [first, third]
 
 
-def test_group_boxless_problem_adds_no_line(tmp_path):
+def test_group_boxless_problem_keeps_its_line(tmp_path):
     # Second item is a problem but has no boxes at all (its problem SAM
-    # found nothing and it has no SAM prompt of its own): the first
-    # item's red box already points at the problem on this photo.
+    # found nothing and it has no SAM prompt of its own, e.g. a missing
+    # towel): it keeps its own line next to the boxed problem.
     box = {"left": 10, "top": 10, "right": 60, "bottom": 60}
     group, first, second, third = _two_problem_group(
         tmp_path, box, dict(box), boxless_second=True)
-    assert group["line_item_ids"] == [first, third]
+    assert group["line_item_ids"] == [first, second, third]
 
 
 def test_card_photo_falls_back_to_own_sam_boxes(tmp_path):
