@@ -56,3 +56,14 @@ def test_spare_roll_instructions_show_holder_and_tank():
     assert "shelves above it" in hall["instruction_en"]
     assert "toilet paper holder" in hall["instruction_en"]
     assert hall["instruction_es"] and hall["instruction_ru"]
+
+
+def test_restock_last_card_present():
+    html = (ROOT / "web" / "clean.html").read_text(encoding="utf-8")
+    assert "function restockCardHtml" in html
+    assert 'id="restockText"' in html
+    assert 'id="restockSend"' in html
+    assert 'id="restockDone"' in html
+    assert '"/notes/text"' in html or "/notes/text" in html
+    assert "/restock-done" in html
+    assert '"restock"' in html  # kind sent with voice and typed notes

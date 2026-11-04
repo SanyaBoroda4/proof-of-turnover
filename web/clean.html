@@ -246,6 +246,7 @@
                  box-shadow: 0 -12px 16px -14px rgba(31, 35, 40, 0.28); }
   .btnrow { display: flex; gap: 10px; }
   .btnrow .btn { margin: 10px 0; flex: 1 1 0; min-width: 0; white-space: normal; }
+  .btnrow input[type=text] { flex: 2 1 0; width: auto; min-width: 0; margin: 10px 0; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
   .chip { border: 2px solid var(--line); border-radius: 999px; background: var(--white);
           color: var(--ink); font-size: 16px; font-family: inherit;
@@ -326,11 +327,11 @@ let tour = null, tourRun = "", takenSet = new Set(), status = null, demoPhotos =
 let overrideShot = null, selectedDemo = "", photoError = "", lastKey = null;
 let pollTimer = null, pendingShot = null, pendingCard = null;
 let prevShotId = null;
-let recorder = null, recStream = null, recChunks = [], recRoom = null, recItem = null;
+let recorder = null, recStream = null, recChunks = [], recRoom = null, recItem = null, recKind = null;
 let recOnDone = null, recStart = 0, recSeconds = 0, recTimer = null;
 let transcribing = false, noteMsg = "", noteMsgTimer = null;
 let optimistic = new Map();
-let cardOrder = [], retakePhotos = {}, spokenCard = null, lastShownCard = null;
+let cardOrder = [], retakePhotos = {}, spokenCard = null, lastShownCard = null, spokenRestock = false;
 let role = null;
 let skipReminderKey = "", skipReminderSpokenKey = "";
 let cardsTotal = 0;
@@ -393,6 +394,7 @@ const I18N = {
     reasons: ["Roto o dañado", "Ya estaba así", "Faltan suministros", "No sale", "Otro"],
     confirm: "Confirmar",
     sendToHost: "Enviar al anfitrión",
+    restockTitle: "¿Hay que reponer algo?", restockText: "Dile al anfitrión qué se está acabando: café, papel higiénico, jabón... Dilo o escríbelo.", restockSend: "Enviar", restockNothing: "Nada que reponer", restockDoneBtn: "Listo", restockPlaceholder: "Escribe aquí",
     fixedToast: "✓ arreglado",
     oldPhoto: "Foto antigua: esta foto es de antes de empezar. Toma una nueva.",
     authError: "Este enlace no tiene código. Pide el enlace completo.",
@@ -468,6 +470,7 @@ const I18N = {
     reasons: ["Broken or damaged", "Was like this before", "Out of supplies", "Won't come clean", "Other"],
     confirm: "Confirm",
     sendToHost: "Send to host",
+    restockTitle: "Anything to restock?", restockText: "Tell the host what is running low: coffee, toilet paper, soap... Say it or type it.", restockSend: "Send", restockNothing: "Nothing to restock", restockDoneBtn: "Done", restockPlaceholder: "Type here",
     fixedToast: "✓ fixed",
     oldPhoto: "Old photo: this photo is from before the start. Take a new one.",
     authError: "This link has no code. Ask for the full link.",
@@ -543,6 +546,7 @@ const I18N = {
     reasons: ["Сломано", "Так было до меня", "Закончились расходники", "Не отмывается", "Другое"],
     confirm: "Подтвердить",
     sendToHost: "Отправить хозяину",
+    restockTitle: "Что нужно докупить?", restockText: "Скажите хозяину, что заканчивается: кофе, туалетная бумага, мыло... Скажите или напишите.", restockSend: "Отправить", restockNothing: "Ничего не нужно", restockDoneBtn: "Готово", restockPlaceholder: "Напишите здесь",
     fixedToast: "✓ исправлено",
     oldPhoto: "Старое фото: оно сделано до начала. Сделайте новое.",
     authError: "В этой ссылке нет кода. Попросите полную ссылку.",
@@ -1569,6 +1573,9 @@ function renderKey() {
     selectedDemo, (demoPhotos || []).length,
     (status.unchecked || []).join(","),
     retrying,
+    status.restock ? [status.restock.answered, status.restock.nothing,
+      status.restock.note_ids.join(",")].join("|") : "",
+    (status.voice_notes || []).map(n => n.id).join(","),
   ]));
 }
 
@@ -1750,6 +1757,7 @@ function resetRunState() {
   cardOrder = [];
   retakePhotos = {};
   spokenCard = null;
+  spokenRestock = false;
   lastShownCard = null;
   cardsTotal = 0;
   photosDoneSaid = false;
@@ -2187,7 +2195,11 @@ function renderCards(app) {
       html += `<div class="card checkingcard"><div class="instruction">${esc(T().checkingRetake)}</div>`
         + `<img class="photo" src="${thumb}" alt=""><div class="spinner" aria-hidden="true"></div></div>`;
     } else if (!left) {
-      html += `<button class="btn" id="finish">${esc(T().sendToHost)}</button>`;
+      if (status.restock && !status.restock.answered) {
+        html += restockCardHtml();
+      } else {
+        html += `<button class="btn" id="finish">${esc(T().sendToHost)}</button>`;
+      }
     }
   }
   if (photoError) html += `<div class="error">${esc(photoError)}</div>`;
@@ -2199,9 +2211,72 @@ function renderCards(app) {
   if (retryBtn) retryBtn.onclick = retryUnchecked;
   const finish = document.getElementById("finish");
   if (finish) finish.onclick = finishRun;
+  wireRestock();
   app.querySelectorAll("[data-full]").forEach(el => {
     el.onclick = () => showBig(el.getAttribute("data-full"), el.getAttribute("data-cap") || "");
   });
+}
+
+function restockCardHtml() {
+  const notes = (status.voice_notes || []).filter(n => n.kind === "restock");
+  let inner = `<div class="instruction">${esc(T().restockTitle)}</div>`
+    + `<p>${esc(T().restockText)}</p>`;
+  for (const n of notes) {
+    inner += `<div class="result ok">✓ ${esc(n.text)}</div>`;
+  }
+  if (recorder) {
+    inner += `<button class="btn secondary" id="restockMicStop">${esc(T().stop)} (${esc(fmtTime(recSeconds))})</button>`;
+  } else if (transcribing) {
+    inner += `<div class="result wait">${esc(T().transcribing)}</div>`;
+  } else if (micReady()) {
+    inner += `<button class="btn secondary" id="restockMic">${ICONS.mic}<span>${esc(T().mic)}</span></button>`;
+  } else {
+    inner += `<p class="small">${esc(T().insecure)}</p>`;
+  }
+  if (noteMsg) inner += `<div class="result wait">${esc(noteMsg)}</div>`;
+  inner += `<div class="btnrow"><input id="restockText" type="text" maxlength="500" placeholder="${esc(T().restockPlaceholder)}"><button class="btn secondary" id="restockSend">${esc(T().restockSend)}</button></div>`;
+  inner += `<button class="btn" id="restockDone">${esc(notes.length ? T().restockDoneBtn : T().restockNothing)}</button>`;
+  return `<div class="card">${inner}</div>`;
+}
+
+function wireRestock() {
+  const mic = document.getElementById("restockMic");
+  if (mic) mic.onclick = () => startRec("house", null, null, "restock");
+  const micStop = document.getElementById("restockMicStop");
+  if (micStop) micStop.onclick = stopRec;
+  const send = document.getElementById("restockSend");
+  if (send) send.onclick = sendRestockText;
+  const input = document.getElementById("restockText");
+  if (input) input.onkeydown = ev => { if (ev.key === "Enter") sendRestockText(); };
+  const done = document.getElementById("restockDone");
+  if (done) done.onclick = async () => {
+    const notes = (status.voice_notes || []).filter(n => n.kind === "restock");
+    try {
+      await api(`/api/runs/${encodeURIComponent(RUN)}/restock-done`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({nothing: notes.length === 0}),
+      });
+    } catch (e) { photoError = e.message; }
+    await refresh();
+    renderMaybe();
+  };
+}
+
+async function sendRestockText() {
+  const input = document.getElementById("restockText");
+  const text = input ? input.value.trim() : "";
+  if (!text) return;
+  try {
+    await api(`/api/runs/${encodeURIComponent(RUN)}/notes/text`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text: text, kind: "restock"}),
+    });
+  } catch (e) {
+    noteMsg = e.message;
+    scheduleNoteClear();
+  }
+  await refresh();
+  renderMaybe();
 }
 
 function wireCard(item) {
@@ -2338,7 +2413,7 @@ function pickMime() {
 
 function tickRec() {
   recSeconds = Math.floor((Date.now() - recStart) / 1000);
-  for (const id of ["micStop", "cardMicStop"]) {
+  for (const id of ["micStop", "cardMicStop", "restockMicStop"]) {
     const b = document.getElementById(id);
     if (!b) continue;
     const t = b.querySelector(".t");
@@ -2348,10 +2423,11 @@ function tickRec() {
   if (recSeconds >= 60) stopRec();
 }
 
-async function startRec(roomId, itemId, onDone) {
+async function startRec(roomId, itemId, onDone, kind) {
   noteMsg = "";
   recRoom = roomId;
   recItem = itemId || null;
+  recKind = kind || null;
   recOnDone = onDone || null;
   try {
     recStream = await navigator.mediaDevices.getUserMedia({audio: true});
@@ -2400,6 +2476,8 @@ function scheduleNoteClear() {
 }
 
 async function sendRec() {
+  const kind = recKind;
+  recKind = null;
   const chunks = recChunks;
   const mime = (recorder && recorder.mimeType) || "";
   if (recStream) {
@@ -2415,6 +2493,7 @@ async function sendRec() {
   const form = new FormData();
   form.append("room_id", recRoom);
   if (recItem) form.append("item_id", recItem);
+  if (kind) form.append("kind", kind);
   form.append("audio", new Blob(chunks, {type: mime || "audio/webm"}), `note.${ext}`);
   try {
     const res = await api(`/api/runs/${encodeURIComponent(RUN)}/notes`,
@@ -2821,6 +2900,11 @@ function announce() {
       if (justPhotosDone) say(lines);
       else sayNow(lines);
     }
+  }
+  if (!shown && status.restock && !status.restock.answered
+      && !status.checking.length && !spokenRestock) {
+    spokenRestock = true;
+    sayNow(T().restockTitle + ". " + T().restockText);
   }
   if (status.finished_at && !saidFinal) {
     saidFinal = true;
