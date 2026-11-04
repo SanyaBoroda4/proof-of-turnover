@@ -130,14 +130,17 @@ def _remove(path):
 
 
 def add_voice_note(client, state, audio_bytes, filename, room_id, effort=None,
-                   item_id=None):
+                   item_id=None, kind=None):
     """Store one voice note; returns {"status": ...}.
 
     "stored" carries the note record; "no_speech" (empty transcript)
     stores nothing. Temp files are always deleted; the WAV is kept in
     the run folder only when a note is stored.
     """
-    room = state.rooms.get(room_id)
+    if kind == "restock" and room_id == "house":
+        room = {"id": "house", "name": "Whole house"}
+    else:
+        room = state.rooms.get(room_id)
     if room is None:
         raise NotesError(f"Unknown room {room_id!r}")
     if not audio_bytes:
@@ -170,6 +173,8 @@ def add_voice_note(client, state, audio_bytes, filename, room_id, effort=None,
     fields, notes = translate_note(
         client, text, state.language, room["name"], note_id, effort
     )
+    if kind == "restock":
+        fields = {**fields, "category": "supplies"}
     record = {
         "id": note_id,
         "time": datetime.now().isoformat(timespec="seconds"),
@@ -179,6 +184,39 @@ def add_voice_note(client, state, audio_bytes, filename, room_id, effort=None,
         "text": text,
         "audio": wav_name,
         "item_id": item_id,
+        **fields,
+    }
+    if kind == "restock":
+        record["kind"] = "restock"
+    state.store_voice_note(record, notes)
+    return {"status": "stored", "note": record}
+
+
+def add_text_note(client, state, text, kind=None):
+    """Store one typed note; returns {"status": "stored", "note": ...}.
+
+    Goes through the same translate step as a voice note (English for
+    the host). Any model error or replay miss keeps the typed text as
+    is, so a typed note never fails because of the model.
+    """
+    text = (text or "").strip()[:500]
+    if not text:
+        raise NotesError("Empty note")
+    note_id = state.next_note_id()
+    fields, notes = translate_note(
+        client, text, state.language, "Whole house", note_id)
+    if kind == "restock":
+        fields = {**fields, "category": "supplies"}
+    record = {
+        "id": note_id,
+        "time": datetime.now().isoformat(timespec="seconds"),
+        "room_id": "house",
+        "room_name": "Whole house",
+        "language": state.language,
+        "text": text,
+        "audio": "",
+        "item_id": None,
+        "kind": "restock" if kind == "restock" else "text",
         **fields,
     }
     state.store_voice_note(record, notes)

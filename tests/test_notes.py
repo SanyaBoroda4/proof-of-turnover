@@ -10,6 +10,7 @@ from pot.meta_client import MetaClientError
 from pot.notes import (
     MAX_NOTE_BYTES,
     NotesError,
+    add_text_note,
     add_voice_note,
     convert_to_wav,
     transcript_text,
@@ -148,6 +149,66 @@ def test_status_lists_notes_newest_first_with_audio_url(tmp_path):
         f"/api/runs/{state.run_dir.name}/notes/N02/audio"
     )
     assert notes[0]["english"] and notes[0]["title"]
+
+
+def test_voice_restock_note_house_room_is_supplies(tmp_path):
+    state = _state(tmp_path)
+    src = tone_clip(tmp_path / "note.webm")
+    client = FakeSpark(noter=lambda call: {
+        "translation": "We are out of coffee", "title": "Coffee",
+        "category": "damage"})
+    result = add_voice_note(
+        client, state, src.read_bytes(), "note.webm", "house", kind="restock")
+    assert result["status"] == "stored"
+    note = result["note"]
+    assert note["room_id"] == "house" and note["room_name"] == "Whole house"
+    assert note["category"] == "supplies"  # restock is always supplies
+    assert state.status()["restock"]["note_ids"] == [note["id"]]
+
+
+def test_text_restock_note_stored_supplies_no_audio(tmp_path):
+    state = _state(tmp_path)
+    result = add_text_note(
+        FakeSpark(), state, "se acabó el papel", kind="restock")
+    assert result["status"] == "stored"
+    note = result["note"]
+    assert note["category"] == "supplies"
+    assert note["english"] == "EN: se acabó el papel"
+    assert note["audio"] == ""
+    assert note["room_name"] == "Whole house"
+    assert state.status()["restock"]["note_ids"] == [note["id"]]
+    assert not (state.run_dir / "notes" / f"{note['id']}.wav").exists()
+
+
+def test_text_note_model_error_keeps_typed_text(tmp_path):
+    def boom(call):
+        raise MetaClientError("replay miss")
+
+    state = _state(tmp_path)
+    result = add_text_note(
+        FakeSpark(noter=boom), state, "no quedan cápsulas", kind="restock")
+    assert result["status"] == "stored"
+    assert result["note"]["english"] == "no quedan cápsulas"
+    assert result["note"]["text"] == "no quedan cápsulas"
+    assert result["note"]["category"] == "supplies"
+
+
+def test_restock_state_survives_load(tmp_path):
+    from pot.checklist import load_property
+
+    property = load_property("demo-house")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    state = RunState(run_dir, property, build_checklist(property),
+                     tour={"shots": []})
+    note = add_text_note(
+        FakeSpark(), state, "falta café", kind="restock")["note"]
+    state.mark_restock_done(True)
+    status = state.status()
+    assert status["restock"] == {
+        "answered": True, "nothing": True, "note_ids": [note["id"]]}
+    loaded = RunState.load(state.run_dir)
+    assert loaded.status()["restock"] == status["restock"]
 
 
 def test_load_restores_notes_and_seq_continues(tmp_path):

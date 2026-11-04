@@ -32,7 +32,7 @@ from pot import config, examples as examples_mod, prompts, voice as voice_mod
 from pot.checklist import PropertyError, build_checklist, load_property
 from pot.meta_client import MetaClient, MetaClientError, call_context
 from pot import setup as setup_mod
-from pot.notes import MAX_NOTE_BYTES, NotesError, add_voice_note
+from pot.notes import MAX_NOTE_BYTES, NotesError, add_text_note, add_voice_note
 from pot.photos import new_run_dir
 from pot.proof import PROVEN
 from pot.recheck import run_photo_checks
@@ -346,6 +346,15 @@ class SkipShotBody(BaseModel):
 
 class SkipRoomBody(BaseModel):
     room_id: str
+
+
+class TextNoteBody(BaseModel):
+    text: str
+    kind: str | None = None
+
+
+class RestockDoneBody(BaseModel):
+    nothing: bool
 
 
 class VoiceBody(BaseModel):
@@ -874,7 +883,8 @@ def create_app(client=None):
 
     @app.post("/api/runs/{run_id}/notes")
     def _add_note(run_id: str, room_id: str = Form(...), audio: UploadFile = File(...),
-                  item_id: str | None = Form(default=None)):
+                  item_id: str | None = Form(default=None),
+                  kind: str | None = Form(default=None)):
         state = need_state(run_id)
         _checked_id(room_id, "room")
         if item_id is not None:
@@ -888,6 +898,7 @@ def create_app(client=None):
                 return add_voice_note(
                     server.client, state, blob, audio.filename or "note",
                     room_id, effort=prompts.RECHECK_EFFORT, item_id=item_id,
+                    kind=kind,
                 )
             except NotesError as exc:
                 raise HTTPException(400, str(exc))
@@ -895,6 +906,24 @@ def create_app(client=None):
                 raise HTTPException(502, str(exc))
         finally:
             call_context.reset(token)
+
+    @app.post("/api/runs/{run_id}/notes/text")
+    def _add_text_note(run_id: str, body: TextNoteBody):
+        state = need_state(run_id)
+        token = call_context.set({"run_dir": str(state.run_dir), "photo_id": None})
+        try:
+            try:
+                return add_text_note(
+                    server.client, state, body.text, kind=body.kind)
+            except NotesError as exc:
+                raise HTTPException(400, str(exc))
+        finally:
+            call_context.reset(token)
+
+    @app.post("/api/runs/{run_id}/restock-done")
+    def _restock_done(run_id: str, body: RestockDoneBody):
+        state = need_state(run_id)
+        return {"restock": state.mark_restock_done(body.nothing)}
 
     @app.get("/api/runs/{run_id}/notes/{note_id}/audio")
     def _get_note_audio(run_id: str, note_id: str):

@@ -599,6 +599,28 @@ def test_notes_endpoint_stores_and_serves_audio(tmp_path):
     assert any(p.startswith("translate voice note") for p in purposes)
 
 
+def test_text_restock_note_and_restock_done_endpoints():
+    test, code = _client()
+    run_id = _create_run(test, code)
+    response = test.post(
+        f"/api/runs/{run_id}/notes/text?code={code}",
+        json={"text": "se acabó el café", "kind": "restock"})
+    assert response.status_code == 200, response.text
+    note = response.json()["note"]
+    assert note["category"] == "supplies"
+    assert note["audio"] == ""
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["restock"] == {
+        "answered": False, "nothing": False, "note_ids": [note["id"]]}
+    done = test.post(
+        f"/api/runs/{run_id}/restock-done?code={code}", json={"nothing": False})
+    assert done.status_code == 200, done.text
+    assert done.json()["restock"]["answered"] is True
+    status = test.get(f"/api/runs/{run_id}/status?code={code}").json()
+    assert status["restock"]["answered"] is True
+    assert status["voice_notes"][0]["id"] == note["id"]
+
+
 def test_notes_endpoint_no_speech_and_bad_room(tmp_path):
     from tests.fakes import FakeSpark, tone_clip
 

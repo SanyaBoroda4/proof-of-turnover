@@ -134,6 +134,7 @@ class RunState:
         self.other_issues = []
         self.notes = []
         self.voice_notes = []
+        self.restock = {"answered": False, "nothing": False, "note_ids": []}
         self.note_seq = 0
         self.calls = []
         self.checking = set()
@@ -246,6 +247,15 @@ class RunState:
             if isinstance(entry, str)
         ]
         state.voice_notes = [dict(note) for note in first_data.get("voice_notes", [])]
+        saved_restock = first_data.get("restock") or {}
+        state.restock = {
+            "answered": bool(saved_restock.get("answered", False)),
+            "nothing": bool(saved_restock.get("nothing", False)),
+            "note_ids": [
+                entry for entry in saved_restock.get("note_ids", [])
+                if isinstance(entry, str)
+            ],
+        }
         for note in state.voice_notes:
             try:
                 number = int(str(note.get("id", ""))[1:])
@@ -1011,11 +1021,26 @@ class RunState:
         """Store a translated voice note with its news event."""
         with self.lock:
             self.voice_notes.append(dict(record))
+            if record.get("kind") == "restock" \
+                    and record["id"] not in self.restock["note_ids"]:
+                self.restock["note_ids"].append(record["id"])
             self._event_locked("note", text=record["title"],
                                room_id=record["room_id"],
                                room_name=record["room_name"])
             self.notes.extend(notes)
             self._save_locked()
+
+    def mark_restock_done(self, nothing):
+        """The cleaner answered the restock question (persisted)."""
+        with self.lock:
+            self.restock["answered"] = True
+            self.restock["nothing"] = bool(nothing)
+            self._save_locked()
+            return {
+                "answered": True,
+                "nothing": self.restock["nothing"],
+                "note_ids": list(self.restock["note_ids"]),
+            }
 
     def _event_locked(self, kind, item_id=None, status=None, photo_id=None, text="",
                       room_id=None, room_name=None, extra=None):
@@ -1310,6 +1335,11 @@ class RunState:
                 "news": list(reversed(self.events[-8:])),
                 "signoff": dict(self.signoff),
                 "voice_notes": [self._voice_note_out(note) for note in reversed(self.voice_notes)],
+                "restock": {
+                    "answered": self.restock["answered"],
+                    "nothing": self.restock["nothing"],
+                    "note_ids": list(self.restock["note_ids"]),
+                },
             }
 
     def _item_status_locked(self, item, shot_of_item, taken):
@@ -1455,6 +1485,11 @@ class RunState:
             "resolutions": {item_id: dict(entry) for item_id, entry in self.resolutions.items()},
             "finished_at": self.finished_at,
             "voice_notes": [dict(note) for note in self.voice_notes],
+            "restock": {
+                "answered": self.restock["answered"],
+                "nothing": self.restock["nothing"],
+                "note_ids": list(self.restock["note_ids"]),
+            },
             "unchecked": sorted(self.unchecked),
             "round_ended": self.round_ended,
             "skipped_shots": list(self.skipped_shots),
