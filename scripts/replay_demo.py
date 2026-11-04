@@ -69,8 +69,10 @@ def wait_for_server(port, proc, timeout=60.0):
         if proc.poll() is not None:
             raise SystemExit(f"server exited early (code {proc.returncode})")
         try:
-            urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/", timeout=2)
+            # Probe directly: a proxy env must never hijack localhost.
+            opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({}))
+            opener.open(f"http://127.0.0.1:{port}/", timeout=2)
             return
         except urllib.error.HTTPError:
             return  # any HTTP answer means the server is up
