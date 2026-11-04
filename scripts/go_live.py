@@ -41,22 +41,17 @@ def cleaner_link(base, code):
 
 
 def ascii_qr(text):
-    """The QR code for text as terminal block characters."""
+    """The QR code for text as ASCII art (## per dark module)."""
     import qrcode
 
     qr = qrcode.QRCode(border=1)
     qr.add_data(text)
     qr.make(fit=True)
-    matrix = qr.get_matrix()
-    lines = []
-    for i in range(0, len(matrix), 2):
-        top = matrix[i]
-        bottom = matrix[i + 1] if i + 1 < len(matrix) else [False] * len(top)
-        lines.append("".join(
-            "█" if t and b else "▀" if t else "▄" if b else " "
-            for t, b in zip(top, bottom)
-        ))
-    return "\n".join(lines)
+    # Plain ASCII only: block glyphs crash on Windows consoles.
+    return "\n".join(
+        "".join("##" if cell else "  " for cell in row)
+        for row in qr.get_matrix()
+    )
 
 
 def _answers(url, timeout=5):
@@ -104,11 +99,16 @@ def _stop(proc):
 
 
 def _watch_tunnel(proc, holder, ready):
-    for line in proc.stdout:
+    # readline, not iteration: iterating a pipe can stall on Windows.
+    while True:
+        line = proc.stdout.readline()
+        if not line:
+            return
         url = parse_tunnel_url(line)
         if url and "url" not in holder:
             holder["url"] = url
             ready.set()
+            return
 
 
 def main(argv=None):
@@ -128,7 +128,8 @@ def main(argv=None):
     tunnel = None
     try:
         if not wait_for_url(f"http://127.0.0.1:{port}/", timeout=30):
-            print("The server did not start; see its messages above.")
+            print("The server did not start; see its messages above.",
+                  flush=True)
             return 1
         cloudflared = shutil.which("cloudflared")
         if cloudflared:
@@ -144,28 +145,29 @@ def main(argv=None):
             ready.wait(timeout=90)
             base = holder.get("url")
             if base and wait_for_url(base, timeout=90):
-                print()
-                print(f"Laptop (host):  {host_link(base, host_code)}")
-                print("Phone (cleaner): scan this QR code")
-                print(ascii_qr(cleaner_link(base, cleaner_code)))
-                print(cleaner_link(base, cleaner_code))
+                print(flush=True)
+                print(f"Laptop (host):  {host_link(base, host_code)}", flush=True)
+                print("Phone (cleaner): scan this QR code", flush=True)
+                print(ascii_qr(cleaner_link(base, cleaner_code)), flush=True)
+                print(cleaner_link(base, cleaner_code), flush=True)
             else:
-                print("The tunnel did not come up; use the LAN links below.")
+                print("The tunnel did not come up; use the LAN links below.", flush=True)
                 base = None
         else:
-            print()
-            print("cloudflared is not installed, so the phone cannot use")
-            print("the in-page camera or voice notes. Install it with:")
-            print("  Windows: winget install --id Cloudflare.cloudflared")
-            print("  macOS:   brew install cloudflared")
+            print(flush=True)
+            print("cloudflared is not installed, so the phone cannot use", flush=True)
+            print("the in-page camera or voice notes. Install it with:", flush=True)
+            print("  Windows: winget install --id Cloudflare.cloudflared", flush=True)
+            print("  macOS:   brew install cloudflared", flush=True)
             base = None
         if not base:
             ip = lan_ip()
-            print(f"Laptop (host):  {host_link(f'http://{ip}:{port}', host_code)}")
+            print(f"Laptop (host):  {host_link(f'http://{ip}:{port}', host_code)}", flush=True)
             print(f"Phone (cleaner, file picker only): "
-                  f"{cleaner_link(f'http://{ip}:{port}', cleaner_code)}")
-        print()
-        print("Keep this window open; press Ctrl+C to stop.")
+                  f"{cleaner_link(f'http://{ip}:{port}', cleaner_code)}",
+                  flush=True)
+        print(flush=True)
+        print("Keep this window open; press Ctrl+C to stop.", flush=True)
         server.wait()
     except KeyboardInterrupt:
         pass
