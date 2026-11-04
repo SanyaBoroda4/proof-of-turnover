@@ -1438,6 +1438,7 @@ class RunState:
         out = dict(note)
         out["audio_url"] = (
             f"/api/runs/{self.run_dir.name}/notes/{note['id']}/audio"
+            if note.get("audio") else ""
         )
         return out
 

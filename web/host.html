@@ -231,6 +231,23 @@ function resolutionNews(ev) {
   return `${head}cleaner says it's fine`;
 }
 
+function restockHtml() {
+  const r = status.restock;
+  if (!r || (!r.answered && !(r.note_ids || []).length)) return "";
+  const byId = {};
+  for (const n of status.voice_notes || []) byId[n.id] = n;
+  const notes = (r.note_ids || []).map(id => byId[id]).filter(Boolean);
+  if (!notes.length) {
+    return `<h2>Restock</h2><div class="news"><div class="card"><div>Cleaner: nothing to restock</div></div></div>`;
+  }
+  const cards = notes.map(n => {
+    const audio = n.audio
+      ? `<div><audio controls preload="none" src="${esc(n.audio_url)}"></audio></div>` : "";
+    return `<div class="card"><div>${esc(n.english || n.text)}</div>${audio}</div>`;
+  }).join("");
+  return `<h2>Restock</h2><div class="news">${cards}</div>`;
+}
+
 function voiceNotesHtml() {
   const notes = status.voice_notes || [];
   if (!notes.length) return "";
@@ -300,6 +317,7 @@ function renderStatus(app) {
     ${status.finished_at ? `<div class="small">Cleaner finished at ${esc(status.finished_at.slice(11, 19))}</div>` : ""}
     ${status.round_ended ? `<div class="small">Ended early: ${status.skipped_shots.length} shots skipped</div>` : ""}
     ${(status.skipped_areas || []).length ? `<div class="small">Skipped by cleaner: ${esc(status.skipped_areas.map(a => a.room_name).join(", "))}</div>` : ""}
+    ${restockHtml()}
     ${needsDecisionHtml()}
     ${fixedByCleanerHtml()}
     ${newsHtml()}
