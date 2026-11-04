@@ -395,10 +395,11 @@ let emptyShown = false;
 function emptyHtml() {
   return `<h1>Turnovers</h1>
     <p>No turnovers yet.</p>
-    <p>1. Set up your house: <a class="small" href="/setup?code=${esc(CODE)}">Set up a new house</a></p>
-    <p>2. On the cleaner's phone, scan this QR code and tap Start turnover.</p>
+    <p>1. Scan this QR code with your phone.</p>
     <img id="qr" alt="QR code for the cleaner page">
-    <div class="small" id="cleanUrl"></div>`;
+    <div class="small" id="cleanUrl"></div>
+    <p>2. On the phone, tap “Set up a new house”: take or choose 1–3 photos of each clean room and add your rules. (You can also do it here on the laptop: <a class="small" href="/setup?code=${esc(CODE)}">Set up a new house</a>.)</p>
+    <p>3. Then tap “Start turnover” on the phone and walk the tour. The results show up on this page.</p>`;
 }
 
 function showEmpty(app) {

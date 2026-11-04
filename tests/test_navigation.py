@@ -75,7 +75,9 @@ def test_host_empty_page_shows_setup_link_and_qr():
     script = _script("host.html")
     assert "No turnovers yet." in script
     assert "/setup?code=" in script and "Set up a new house" in script
-    assert "scan this QR code and tap Start turnover" in script
+    assert "1. Scan this QR code with your phone." in script
+    assert "tap Start turnover" not in script  # old wording gone
+    assert "Then tap “Start turnover” on the phone" in script
     assert 'id="qr"' in script and 'id="cleanUrl"' in script
     # The empty block is built once (showEmpty guards it), so the 2 s
     # poll never rebuilds the QR image and makes it flicker.

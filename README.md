@@ -132,11 +132,18 @@ Copy-Item .env.example .env   # then set MODEL_API_KEY in .env
 
 (On macOS/Linux use `python3.13` and `.venv/bin/python`.)
 
-The script opens the host page in your browser. Click “Set up a new house”, add photos and rules for each room, and save. Then scan the QR code on the host page with your phone, tap Start turnover, pick your house and walk the tour. Keep the laptop on and that window open: the server runs there.
+1. The script opens the host page in your browser.
+2. Scan the QR code on the host page with your phone.
+3. On the phone, tap “Set up a new house”. Name the house and pick its rooms. For each room, take 1–3 photos of the clean room (or choose them from the gallery), type or say your rules, tap “Make checklist”, check the list and tap “Next room”. At the end tap “Save house”. (The laptop works too: “Set up a new house” on the host page.)
+4. Tap “Start turnover”, check that your house is picked, and walk the tour: one photo per card.
+5. At the end, answer the problem cards and “Anything to restock?”, then tap “Send to host”.
+6. On the laptop, the host page shows what is proven, problems with red boxes, before/after photos and notes. Approve or send back.
+
+Keep the laptop on and that window open the whole time: the server runs there. Press Ctrl+C to stop.
 
 ## Set up your own house
 
-Open `/setup` from the “Set up a new house” link on the host page (it needs the host code; a phone that arrived from the cleaner QR code does not see a setup tile). Answer the house questions, then for each room: add photos of the clean room, type or speak your rules, let the app draft the checklist (“Make checklist”), edit it if needed, and move on. “Save house” writes the house and plans its tour; “Start turnover” opens the cleaner page with the new house.
+Open “Set up a new house” on the phone's start screen (after scanning the QR code on the host page) or on the host page itself. Answer the house questions, then for each room: add photos of the clean room, type or speak your rules, let the app draft the checklist (“Make checklist”), edit it if needed, and move on. “Save house” writes the house and plans its tour; “Start turnover” opens the cleaner page with the new house.
 
 ## Under the hood
 
@@ -170,6 +177,27 @@ Open `/setup` from the “Set up a new house” link on the host page (it needs 
 - The app runs locally and only ever sends the host's own house photos and voice notes to the models. In contributor mode, content sent to the Meta models may be used by Meta.
 - Every page and API route sits behind an access code, and there are two: the host code (`POT_HOST_CODE`) gates approving a turnover, the model-call log and voice-note audio, while the cleaner code (`POT_ACCESS_CODE`) covers the tour, photos, notes and voice; the host page’s QR code carries only the cleaner code. House setup is open to both codes for now. Any cleaner can skip an area (the host sees which areas were skipped), but skipped areas are not done: their critical items stay “needs proof” — skipped by cleaner, not photographed — the run is not ready until they are photographed or the host approves anyway through the confirm, and no problem card is made for an item that was never photographed. “Finish photos now” is test-only.
 - Test data and samples in this repository never show people, door codes, Wi-Fi passwords, or personal documents.
+
+## Known limitations
+
+- **It runs on your laptop.** The phone reaches the laptop through a free Cloudflare quick tunnel: the link changes every run, it has no uptime guarantee, and the laptop must stay on with the window open.
+- **Contributor tier.** Photos and voice notes sent to the Meta models may be used by Meta. Use only your own house photos, with no people, door codes, Wi-Fi passwords or documents.
+- **Checks take time, and models can be wrong.** In the rehearsal, all 13 photos were checked about 30 seconds after the last one. When the checks disagree, the item is “needs proof” and the cleaner gets one more photo request: the app would rather ask for an extra photo than mark something done by mistake.
+- **Simple access.** Two shared access codes (host and cleaner), no user accounts. House setup is open to both codes for now.
+- **Files on one computer.** Houses, turnovers and photos are plain files on the laptop (`properties/`, `data/`). No database, no backup, no sync.
+- **English host page.** The cleaner app speaks Spanish, English and Russian; the host page is in English, and voice notes are translated to English.
+- **Read-aloud needs the internet.** Microsoft's neural voices (edge-tts) need a connection; otherwise the phone's own voice reads the cards.
+- **The no-key demo is partial.** It replays 4 rooms of one real turnover, so the host page says “Not ready” on purpose.
+
+## What's next
+
+- **A hosted version.** A server in the cloud with a permanent link per house, so no laptop or tunnel is needed.
+- **Turnovers that start themselves.** Read the Airbnb/VRBO calendar: when a guest checks out, the cleaner gets a text with the link.
+- **Accounts.** Logins for hosts and cleaners, several houses and cleaners per host, and a history for each house.
+- **Instant messages to the host.** A text when a turnover needs a decision or is ready, and the restock list sent as a shopping list.
+- **Learning each house.** Use the host's decisions (“It's fine”, “Send back”) to tune the checks for each house, and compare with the last turnover to spot new damage.
+- **More cleaner languages.**
+- **Privacy for production.** A plan where photos are not used for training, and automatic blurring of faces and documents before upload.
 
 ## Tests
 
