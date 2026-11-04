@@ -2,7 +2,9 @@
 
 A verifiable AI agent that proves a vacation-rental cleaning is done, photo by photo.
 
-<!-- VIDEO: link added Tuesday -->
+[![Watch the 3-minute demo](https://img.youtube.com/vi/cpu6JtN-wzw/hqdefault.jpg)](https://youtu.be/cpu6JtN-wzw)
+
+**Demo video (3 min):** https://youtu.be/cpu6JtN-wzw
 
 ## Why it matters
 
