@@ -8,8 +8,8 @@ A verifiable AI agent that proves a vacation-rental cleaning is done, photo by p
 
 1. **The host sets up the house.** On `/setup`, the host answers a few questions about the house, adds 1-3 photos per room, and types or speaks the rules for each room. Muse Spark drafts the checklist from the photos and rules; the host edits it and saves. Saving writes the house plan and plans a guided photo tour: one photo per shot, room by room, each room starting with a wide overview shot.
 2. **The cleaner walks the tour.** On `/clean`, in her language (Spanish, English, or Russian), each shot starts as an instruction card with an example photo of how it should look. “Take photo” opens the live in-page camera; one tap takes and sends the photo, and the next card appears. Instructions are read aloud, and the cleaner can leave voice notes.
-3. **Every photo is checked in the background.** While the cleaner keeps walking, each photo is matched to its shot and checked (see the proof rule below). She never waits for the AI.
-4. **Problem cards, one by one.** After the last photo, anything not proven becomes a card: “Fixed — take new photo”, “Can't fix” with a reason, “It's fine”, or “Later”. A retake re-checks only that item.
+3. **Every photo is checked in the background.** While the cleaner keeps walking, each photo is matched to its shot and checked (see the proof rule below). She never waits for the AI. A room's whole-room (overview) photo is checked first and decides what it can see; close-ups wait for it and only check what the overview could not decide.
+4. **Problem cards, one by one.** After the last photo, anything not proven becomes a card: “New photo”, “Can't fix” with a reason, “It's fine”, or “Later”. There is one card per photo, with every red box for that photo on it and one line per real problem. A card's new photo re-checks only that card's items.
 5. **The host decides.** On `/host`: “Needs your decision” (things the cleaner reported or disputes, with a Muse Wonder second opinion), “Fixed by cleaner” before/after photos, voice notes translated to English, the model-call log, and Approve or Send back.
 
 ## Why it is a verifiable agent
@@ -43,9 +43,31 @@ One non-Meta piece: reading text aloud uses Microsoft's neural voices through th
 
 ## Try it without a key
 
-The no-key replay of a demo house is being recorded; instructions land here before submission.
+A recorded real turnover replays with no API key and no network: every model answer comes from the committed cache in `replay/model_cache`. The server runs with demo codes (`demo` / `demohost`) and a fresh temp runs folder.
 
-<!-- REPLAY: finished Tuesday -->
+### Windows (PowerShell)
+
+```powershell
+git clone <this-repo-url>
+cd proof-of-turnover
+py -3.13 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python scripts\replay_demo.py
+```
+
+### macOS / Linux
+
+```bash
+git clone <this-repo-url>
+cd proof-of-turnover
+python3.13 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python scripts/replay_demo.py
+```
+
+It walks the tour, then prints two links (cleaner and host). Open them in your browser; stop with Ctrl+C when done.
+
+What you will see: a real turnover of a real rental (10 photos, 4 rooms: foyer, powder room, laundry, dining), with the whole-room photo deciding first, problem cards with red boxes, the laundry card fixed with a new photo (before/after on the host page), and Muse Wonder second opinions if you answer a card “It's fine”. One card — the powder-room toilet paper — is left open for you: answer it, for example “Can't fix → Out of supplies”, press “Send to host” on the cleaner page, then Approve on the host page.
 
 ## Run it with your own key
 
@@ -126,7 +148,15 @@ Open `/setup` from the “Set up a new house” link on the host page (it needs 
 python -m pytest -q
 ```
 
-The suite (335 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
+The suite (365 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
+
+## A real run
+
+On Nov 2 the full flow rehearsed live with the real models: 13 photos, 69 Meta model calls, everything checked 30 s after the last photo, 4 card groups left for the host. Details: [reports/rehearsal-54.md](reports/rehearsal-54.md). The no-key recording above is documented in [reports/replay-recording.md](reports/replay-recording.md).
+
+## Built during the hackathon
+
+Started Oct 30, 2026 for the Meta Global AI Developer Hackathon (first commit `15b9113`).
 
 ## Built with
 
