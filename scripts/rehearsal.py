@@ -101,6 +101,12 @@ def _post_json(base, code, path, payload):
     )
 
 
+def copy_verbatim(source, dest):
+    """Copy a photo byte for byte (demo runs: recorded calls match)."""
+    Path(dest).write_bytes(Path(source).read_bytes())
+    return dest
+
+
 def strip_metadata(source, dest):
     """Copy an image without metadata (no EXIF camera date); returns dest."""
     with Image.open(source) as handle:
@@ -200,6 +206,68 @@ def print_card_groups(status):
     return groups
 
 
+def find_group(status, selector):
+    """The card group for an action selector (item id or photo id)."""
+    for group in status.get("card_groups") or []:
+        if selector in (group.get("item_ids") or []):
+            return group
+        if selector and selector == group.get("photo_id"):
+            return group
+    return None
+
+
+def apply_actions(base, code, run_id, actions, wait_timeout):
+    """Apply card actions in order, exactly like the phone does."""
+    for action in actions:
+        kind = action.get("action")
+        selector = action.get("item") or action.get("photo_id")
+        status = _get(base, code, f"/api/runs/{run_id}/status")
+        group = find_group(status, selector)
+        if group is None:
+            raise SystemExit(
+                f"action {kind} for {selector}: no such card group")
+        item_ids = group.get("item_ids") or []
+        if kind == "new_photo":
+            source = Path(action["file"])
+            if not source.is_absolute():
+                source = ROOT / source
+            if not source.is_file():
+                raise SystemExit(f"action file not found: {source}")
+            result = upload_photo(base, code, run_id, group["shot_id"],
+                                  source, source.name,
+                                  retake_items=item_ids)
+            print(f"Action new_photo for {', '.join(item_ids)} "
+                  f"(shot {group['shot_id']}, items "
+                  f"{','.join(item_ids)}) -> {result.get('photo_id')}",
+                  flush=True)
+            status = wait_until_checked(base, code, run_id,
+                                         wait_timeout, "retake")
+            for attempt in range(1, 4):
+                if not status.get("unchecked"):
+                    break
+                _post_json(base, code,
+                           f"/api/runs/{run_id}/recheck-unchecked", {})
+                status = wait_until_checked(base, code, run_id,
+                                            wait_timeout, "retake")
+        elif kind in ("its_fine", "cant_fix"):
+            body = {"action": kind,
+                    "reason": action.get("reason") if kind == "cant_fix" else None,
+                    "note_id": None}
+            for item_id in item_ids:
+                _post_json(base, code,
+                           f"/api/runs/{run_id}/items/{item_id}/resolve", body)
+                print(f"Action {kind} for {item_id}", flush=True)
+            status = _get(base, code, f"/api/runs/{run_id}/status")
+        else:
+            raise SystemExit(f"unknown action: {kind}")
+        by_id = items_by_id(status)
+        for item_id in item_ids:
+            item = by_id.get(item_id, {})
+            print(f"  result {item_id} [{item.get('status', '?')}] "
+                  f"photo={item.get('photo_id') or '-'}", flush=True)
+    return status
+
+
 def print_cards(status):
     cards = status.get("cards", [])
     by_id = items_by_id(status)
@@ -212,15 +280,19 @@ def print_cards(status):
     return cards
 
 
-def upload_photo(base, code, run_id, shot_id, path, original_name, tries=3):
+def upload_photo(base, code, run_id, shot_id, path, original_name, tries=3,
+                 retake_items=None):
     payload = Path(path).read_bytes()
+    fields = [("shot_id", shot_id),
+              ("image", (original_name, payload, "image/jpeg"))]
+    if retake_items:
+        fields.insert(1, ("retake_items", ",".join(retake_items)))
     last_error = None
     for attempt in range(tries):
         try:
             return _request(
                 base, code, "POST", f"/api/runs/{run_id}/photos",
-                fields=[("shot_id", shot_id),
-                        ("image", (original_name, payload, "image/jpeg"))],
+                fields=fields,
             )
         except RehearsalError as exc:
             last_error = exc
@@ -246,6 +318,12 @@ def main(argv):
     parser.add_argument("--leave-cards", action="store_true",
                         help="stop after printing the card groups; no "
                              "retake, resolve or finish")
+    parser.add_argument("--demo-run", action="store_true",
+                        help="start the run with demo=true and upload "
+                             "files byte for byte (replay recording)")
+    parser.add_argument("--actions",
+                        help="JSON list of card actions to apply after "
+                             "the round; then stop (no finish)")
     args = parser.parse_args(argv)
 
     tour = json.loads((ROOT / "properties" / "rental-1" / "tour.json")
@@ -266,18 +344,22 @@ def main(argv):
             if not source.is_file():
                 raise SystemExit(f"photo not found: {source}")
             dest = Path(tmp) / f"{shot_id}{source.suffix.lower()}"
-            strip_metadata(source, dest)
+            if args.demo_run:
+                copy_verbatim(source, dest)
+            else:
+                strip_metadata(source, dest)
             staged[shot_id] = (dest, source.name)
         retake_src = ROOT / FRIDGE_RETAKE
         retake_path = Path(tmp) / f"retake{retake_src.suffix.lower()}"
-        if not args.leave_cards:
+        if not args.leave_cards and not args.actions:
             strip_metadata(retake_src, retake_path)
         print(f"Staged {len(staged)} photos"
-              f"{'' if args.leave_cards else ' + retake'} "
+              f"{'' if args.leave_cards or args.actions else ' + retake'} "
               f"in {tmp} (metadata removed)")
 
         created = _post_json(args.base, args.code, "/api/runs",
-                             {"property": "rental-1", "demo": False,
+                             {"property": "rental-1",
+                              "demo": bool(args.demo_run),
                               "language": args.language})
         run_id = created["run_id"]
         print(f"Run {run_id} started ({created.get('shots')} shots, "
@@ -326,6 +408,18 @@ def main(argv):
                     f"photos still unchecked after 3 retries: "
                     f"{status['unchecked']}")
             print(f"agent_state={status.get('agent_state')}")
+            if args.actions:
+                actions_path = Path(args.actions)
+                if not actions_path.is_absolute():
+                    actions_path = ROOT / actions_path
+                actions = json.loads(
+                    actions_path.read_text(encoding="utf-8")).get("actions", [])
+                status = apply_actions(args.base, args.code, run_id,
+                                       actions, args.wait_timeout)
+                print(f"Actions done; run left open: {run_id}")
+                print(f"Pages: {args.base}/clean and "
+                      f"{args.base}/host?run={run_id}")
+                return 0
             if args.leave_cards:
                 print_card_groups(status)
                 print(f"Run left open: {run_id}")
