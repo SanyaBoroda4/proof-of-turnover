@@ -26,7 +26,8 @@ def test_rental_1_v6_checklist():
     assert items["hall-bathroom.hand_towel"].min_count == 1
     assert items["powder-room.hand_towel"].min_count == 1
     assert items["master-bathroom.hand_towel"].requirement == (
-        "2 clean hand towels hanging, one at each sink")
+        "2 clean hand towels hanging, one at each sink "
+        "(a reflection in the mirror does not count)")
     assert items["master-bathroom.hand_soap"].sam_prompt == "soap dispenser"
     assert items["master-bathroom.hand_soap"].min_count == 1
     napkins = items["kitchen.napkins"]

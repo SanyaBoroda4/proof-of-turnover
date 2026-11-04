@@ -105,7 +105,8 @@ TEMPLATES = {
             "requirement": lambda room: (
                 f"{_sinks(room)} clean "
                 f"{_plural(_sinks(room), 'hand towel', 'hand towels')} "
-                "hanging, one at each sink"
+                "hanging, one at each sink "
+                "(a reflection in the mirror does not count)"
             ),
             "sam_prompt": "hand towel",
             "min_count": "sinks",
@@ -217,7 +218,8 @@ TEMPLATES = {
             "requirement": lambda room: (
                 f"{_sinks(room)} clean "
                 f"{_plural(_sinks(room), 'hand towel', 'hand towels')} "
-                "hanging, one at each sink"
+                "hanging, one at each sink "
+                "(a reflection in the mirror does not count)"
             ),
             "sam_prompt": "hand towel",
             "min_count": "sinks",

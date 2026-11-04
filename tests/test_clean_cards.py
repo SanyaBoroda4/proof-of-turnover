@@ -23,8 +23,8 @@ def test_card_button_is_new_photo_with_hint_in_all_languages():
 
 def test_needs_photo_cards_say_not_visible():
     html = _clean()
-    assert 'notVisible: "Not visible in this photo"' in html
-    assert 'notVisible: "No se ve en esta foto"' in html
+    assert 'notVisible: "Not clear in this photo"' in html
+    assert 'notVisible: "No se ve claro en la foto"' in html
     assert 'item.status === "needs photo"' in html
     assert "T().notVisible" in html
 
