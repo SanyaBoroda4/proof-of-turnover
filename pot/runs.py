@@ -862,10 +862,13 @@ class RunState:
 
         One line per real problem: a PROBLEM item whose red box
         overlaps an earlier PROBLEM item's box in the same group
-        (IoU >= 0.6 on any box pair) is the same problem, and identical
+        (IoU >= 0.6 on any box pair) is the same problem, a PROBLEM item
+        with no red box of its own adds no line when an earlier line
+        already points at a problem on this photo, and identical
         request texts also show once. Actions still use item_ids.
         """
         shown, shown_boxes, shown_texts = [], [], set()
+        pointed_problem = False
         for item_id in item_ids:
             text = (self.requests.get(item_id) or {}).get("cleaner") or ""
             if text and text in shown_texts:
@@ -873,6 +876,8 @@ class RunState:
             if self.proofs[item_id].status == PROBLEM:
                 boxes = problem_draw_boxes(
                     self.proofs[item_id], self.sams, self.problem_sams)
+                if not boxes and pointed_problem:
+                    continue
                 same_problem = any(
                     self._box_iou(box, earlier) >= 0.6
                     for earlier_boxes in shown_boxes
@@ -882,6 +887,8 @@ class RunState:
                 if same_problem:
                     continue
                 shown_boxes.append(boxes)
+                if boxes:
+                    pointed_problem = True
             else:
                 shown_boxes.append([])
             shown.append(item_id)

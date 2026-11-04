@@ -317,7 +317,7 @@ def test_newer_needs_proof_does_not_block_older_proven(tmp_path):
 
 
 def _two_problem_group(tmp_path, box_a, box_b, same_text=False,
-                       own_sam_first=False):
+                       own_sam_first=False, boxless_second=False):
     state = _state(tmp_path)
     bed = [i for i in state.checklist if i.room_id == "bed" and i.key != "coverage"]
     first, second = bed[0].id, bed[1].id
@@ -338,7 +338,9 @@ def _two_problem_group(tmp_path, box_a, box_b, same_text=False,
             first: SamCheck(first, photo.id, "mess",
                             0 if own_sam_first else 1,
                             [] if own_sam_first else [box_a]),
-            second: SamCheck(second, photo.id, "mess", 1, [box_b]),
+            second: SamCheck(second, photo.id, "mess",
+                             0 if boxless_second else 1,
+                             [] if boxless_second else [box_b]),
         },
         "issues": [], "notes": [],
         "fresh_ids": [first, second], "decisions": {},
@@ -387,6 +389,16 @@ def test_group_one_line_when_overlap_uses_own_sam_boxes(tmp_path):
     box = {"left": 10, "top": 10, "right": 60, "bottom": 60}
     group, first, second, third = _two_problem_group(
         tmp_path, box, dict(box), own_sam_first=True)
+    assert group["line_item_ids"] == [first, third]
+
+
+def test_group_boxless_problem_adds_no_line(tmp_path):
+    # Second item is a problem but has no boxes at all (its problem SAM
+    # found nothing and it has no SAM prompt of its own): the first
+    # item's red box already points at the problem on this photo.
+    box = {"left": 10, "top": 10, "right": 60, "bottom": 60}
+    group, first, second, third = _two_problem_group(
+        tmp_path, box, dict(box), boxless_second=True)
     assert group["line_item_ids"] == [first, third]
 
 
