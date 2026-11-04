@@ -2100,7 +2100,9 @@ function groupCardHtml(group, animate, pos, total) {
   } else if (ex) {
     img = `<div class="photowrap"><img class="photo" src="${esc(ex)}" data-full="${esc(ex)}" data-cap="${esc(T().shouldLook)}" alt=""></div>`;
   }
-  const lines = items.map(i =>
+  const lineIds = group.line_item_ids && group.line_item_ids.length
+    ? group.line_item_ids : group.item_ids;
+  const lines = lineIds.map(id => byId[id]).filter(Boolean).map(i =>
     `<div class="instruction">${esc(cardText(i))}</div>`
     + (i.status === "needs photo"
       ? `<div><span class="tag missing">${esc(T().notVisible)}</span></div>` : "")
@@ -2809,7 +2811,8 @@ function announce() {
     const gkey = group.item_ids.join(",");
     if (gkey !== spokenCard) {
       spokenCard = gkey;
-      const lines = group.item_ids
+      const lines = (group.line_item_ids && group.line_item_ids.length
+        ? group.line_item_ids : group.item_ids)
         .map(id => byId[id] ? cardText(byId[id]) : "").filter(Boolean)
         .join(". ");
       if (justPhotosDone) say(lines);

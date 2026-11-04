@@ -189,7 +189,8 @@ def print_card_groups(status):
         print(f"  photo={group.get('photo_id') or '-'} "
               f"shot={group.get('shot_id') or '-'} "
               f"items={', '.join(item_ids)}")
-        for item_id in item_ids:
+        line_ids = group.get("line_item_ids") or item_ids
+        for item_id in line_ids:
             item = by_id.get(item_id, {})
             request = (item.get("request") or {}).get("cleaner",
                                                       "(no request yet)")

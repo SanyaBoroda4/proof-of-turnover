@@ -837,9 +837,56 @@ class RunState:
                 "photo_id": g["photo_id"],
                 "shot_id": g["shot_id"],
                 "item_ids": g["item_ids"],
+                "line_item_ids": self._group_line_items_locked(g["item_ids"]),
             }
             for g in groups
         ]
+
+    @staticmethod
+    def _box_iou(a, b):
+        left = max(a["left"], b["left"])
+        top = max(a["top"], b["top"])
+        right = min(a["right"], b["right"])
+        bottom = min(a["bottom"], b["bottom"])
+        if right <= left or bottom <= top:
+            return 0.0
+        inter = (right - left) * (bottom - top)
+        area_a = (a["right"] - a["left"]) * (a["bottom"] - a["top"])
+        area_b = (b["right"] - b["left"]) * (b["bottom"] - b["top"])
+        union = area_a + area_b - inter
+        return inter / union if union > 0 else 0.0
+
+    def _group_line_items_locked(self, item_ids):
+        """Items whose line the group card shows (callers hold the lock).
+
+        One line per real problem: a PROBLEM item whose red box
+        overlaps an earlier PROBLEM item's box in the same group
+        (IoU >= 0.6 on any box pair) is the same problem, and identical
+        request texts also show once. Actions still use item_ids.
+        """
+        shown, shown_boxes, shown_texts = [], [], set()
+        for item_id in item_ids:
+            text = (self.requests.get(item_id) or {}).get("cleaner") or ""
+            if text and text in shown_texts:
+                continue
+            if self.proofs[item_id].status == PROBLEM:
+                sam = self.problem_sams.get(item_id)
+                boxes = list(sam.boxes) if sam is not None else []
+                same_problem = any(
+                    self._box_iou(box, earlier) >= 0.6
+                    for earlier_boxes in shown_boxes
+                    for box in boxes
+                    for earlier in earlier_boxes
+                )
+                if same_problem:
+                    continue
+                shown_boxes.append(boxes)
+            else:
+                shown_boxes.append([])
+            shown.append(item_id)
+            if text:
+                shown_texts.add(text)
+        return shown
 
     def claim_rechecks(self):
         """Unchecked photos to retry: back to checking, with a timeline event."""

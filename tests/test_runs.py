@@ -316,6 +316,67 @@ def test_newer_needs_proof_does_not_block_older_proven(tmp_path):
     assert state.proofs[item_id].photo_id == over.id
 
 
+def _two_problem_group(tmp_path, box_a, box_b, same_text=False):
+    state = _state(tmp_path)
+    bed = [i for i in state.checklist if i.room_id == "bed" and i.key != "coverage"]
+    first, second = bed[0].id, bed[1].id
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    fresh = {
+        "claims": {
+            first: Claim(first, "problem", photo.id, "mess", None),
+            second: Claim(second, "problem", photo.id, "mess", None),
+        },
+        "seconds": {
+            i: SecondLook(i, photo.id, "yes", "not_done", None, "m", "m")
+            for i in (first, second)
+        },
+        "sams": {},
+        "problem_sams": {
+            first: SamCheck(first, photo.id, "mess", 1, [box_a]),
+            second: SamCheck(second, photo.id, "mess", 1, [box_b]),
+        },
+        "issues": [], "notes": [],
+        "fresh_ids": [first, second], "decisions": {},
+    }
+    state.merge_result(photo.id, fresh)
+    state.finish_photo(photo.id)
+    if same_text:
+        for item_id in (first, second):
+            state.requests[item_id] = {
+                "item_id": item_id, "status": "problem",
+                "cleaner": "Clear the mess", "host": "Clear the mess",
+            }
+    groups = [g for g in state.status()["card_groups"]
+              if g["photo_id"] == photo.id]
+    assert len(groups) == 1
+    return groups[0], first, second, bed[2].id
+
+
+def test_group_one_line_when_boxes_overlap(tmp_path):
+    box = {"left": 10, "top": 10, "right": 60, "bottom": 60}
+    group, first, second, third = _two_problem_group(tmp_path, box, dict(box))
+    assert group["item_ids"] == [first, second, third]
+    assert group["line_item_ids"] == [first, third]
+
+
+def test_group_two_lines_when_boxes_far_apart(tmp_path):
+    group, first, second, third = _two_problem_group(
+        tmp_path,
+        {"left": 10, "top": 10, "right": 60, "bottom": 60},
+        {"left": 400, "top": 400, "right": 460, "bottom": 460})
+    assert group["line_item_ids"] == [first, second, third]
+
+
+def test_group_identical_request_texts_show_once(tmp_path):
+    group, first, second, third = _two_problem_group(
+        tmp_path,
+        {"left": 10, "top": 10, "right": 60, "bottom": 60},
+        {"left": 400, "top": 400, "right": 460, "bottom": 460},
+        same_text=True)
+    assert group["line_item_ids"] == [first, third]
+
+
 def test_concurrent_claims_get_distinct_ids_and_both_survive(tmp_path):
     state = _state(tmp_path)
     first = _photo_file(tmp_path / "up1", "a.jpg", "blue")
