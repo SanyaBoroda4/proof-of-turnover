@@ -21,7 +21,8 @@ let retakePhotos = {};
 let status = {
   cards: ["a.x", "a.y", "b.z"],
   card_groups: [
-    {key: "P1", photo_id: "P1", shot_id: "s1", item_ids: ["a.x", "a.y"]},
+    {key: "P1", photo_id: "P1", shot_id: "s1", item_ids: ["a.x", "a.y"],
+     line_item_ids: ["a.x"]},
     {key: "b.z", photo_id: "", shot_id: "s2", item_ids: ["b.z"]},
   ],
 };
@@ -35,11 +36,13 @@ function eq(got, want, msg) {
   }
 }
 eq(shownGroup().item_ids, ["a.x", "a.y"], "shown group");
+eq(shownGroup().line_item_ids, ["a.x"], "group keeps its line items");
 eq(shownGroup().shot_id, "s1", "group shot");
 eq(shownCard(), "a.x", "shown card is first item");
 eq(groupsRemaining(), 2, "two groups remain");
 retakePhotos = {"a.x": "P9"};
 eq(shownGroup().item_ids, ["a.y"], "retaking item is skipped in group");
+eq(shownGroup().line_item_ids, ["a.y"], "line items fall back to shown items");
 eq(groupsRemaining(), 2, "groups still counted with one retaking");
 retakePhotos = {"a.x": "P9", "a.y": "P9"};
 eq(shownGroup().item_ids, ["b.z"], "next group shows");

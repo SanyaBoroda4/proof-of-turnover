@@ -1379,7 +1379,10 @@ function shownGroup() {
     const ids = (g.item_ids || []).filter(
       x => cardOrder.indexOf(x) >= 0 && !(x in retakePhotos));
     if (ids.length) {
-      return {key: g.key, photo_id: g.photo_id, shot_id: g.shot_id, item_ids: ids};
+      const lineIds = (g.line_item_ids || []).filter(
+        x => ids.indexOf(x) >= 0);
+      return {key: g.key, photo_id: g.photo_id, shot_id: g.shot_id,
+        item_ids: ids, line_item_ids: lineIds.length ? lineIds : ids};
     }
   }
   return null;
