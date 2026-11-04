@@ -4,6 +4,12 @@ A verifiable AI agent that proves a vacation-rental cleaning is done, photo by p
 
 <!-- VIDEO: link added Tuesday -->
 
+## Why it matters
+
+Airbnb alone has [9M+ active listings and 5.5M+ hosts](https://news.airbnb.com/about-us) (Airbnb Fast facts, May 2026). Every checkout needs a turnover clean, and the host is usually not there to see it.
+
+The US has 1.39 million maids and housekeeping cleaners; 49.8% are Hispanic or Latino and 86.4% are women ([BLS CPS 2025 annual averages, table 11](https://www.bls.gov/cps/cpsaat11.htm)). That is why the cleaner app speaks Spanish first, reads instructions aloud and takes voice notes.
+
 ## How it works
 
 1. **The host sets up the house.** On `/setup`, the host answers a few questions about the house, adds 1-3 photos per room, and types or speaks the rules for each room. Muse Spark drafts the checklist from the photos and rules; the host edits it and saves. Saving writes the house plan and plans a guided photo tour: one photo per shot, room by room, each room starting with a wide overview shot.
@@ -48,7 +54,7 @@ A recorded real turnover replays with no API key and no network: every model ans
 ### Windows (PowerShell)
 
 ```powershell
-git clone <this-repo-url>
+git clone https://github.com/SanyaBoroda4/proof-of-turnover
 cd proof-of-turnover
 py -3.13 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
@@ -58,7 +64,7 @@ py -3.13 -m venv .venv
 ### macOS / Linux
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/SanyaBoroda4/proof-of-turnover
 cd proof-of-turnover
 python3.13 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
@@ -69,6 +75,8 @@ It walks the tour, then prints two links (cleaner and host). Open them in your b
 
 What you will see: a real turnover of a real rental (10 photos, 4 rooms: foyer, powder room, laundry, dining), with the whole-room photo deciding first, problem cards with red boxes, the laundry card fixed with a new photo (before/after on the host page), and Muse Wonder second opinions if you answer a card “It's fine”. One card — the powder-room toilet paper — is left open for you: answer it, for example “Can't fix → Out of supplies”, press “Send to host” on the cleaner page, then Approve on the host page.
 
+The demo covers 4 rooms, so the cleaner page first says “Some areas were skipped”: press “Continue without them”. The host page then says “Not ready” (9 rooms were skipped) and Approve asks you to confirm; that is the honest verdict — missing evidence is never treated as done.
+
 ## Run it with your own key
 
 You need Python 3.13 and a Meta Model API key.
@@ -76,7 +84,7 @@ You need Python 3.13 and a Meta Model API key.
 ### Windows (PowerShell)
 
 ```powershell
-git clone <this-repo-url>
+git clone https://github.com/SanyaBoroda4/proof-of-turnover
 cd proof-of-turnover
 py -3.13 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
@@ -87,7 +95,7 @@ Copy-Item .env.example .env   # then set MODEL_API_KEY in .env
 ### macOS / Linux (bash)
 
 ```bash
-git clone <this-repo-url>
+git clone https://github.com/SanyaBoroda4/proof-of-turnover
 cd proof-of-turnover
 python3.13 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
@@ -148,11 +156,11 @@ Open `/setup` from the “Set up a new house” link on the host page (it needs 
 python -m pytest -q
 ```
 
-The suite (365 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
+The suite (368 tests) uses a fake Meta client; live-API smoke and rehearsal scripts live in `scripts/`.
 
 ## A real run
 
-On Nov 2 the full flow rehearsed live with the real models: 13 photos, 69 Meta model calls, everything checked 30 s after the last photo, 4 card groups left for the host. Details: [reports/rehearsal-54.md](reports/rehearsal-54.md). The no-key recording above is documented in [reports/replay-recording.md](reports/replay-recording.md).
+The rehearsal ran on Nov 3 with photos from a real Nov 2 turnover: 13 photos, 69 Meta model calls, everything checked 30 s after the last photo, 4 cards for the cleaner. Details: [reports/rehearsal-54.md](reports/rehearsal-54.md). The no-key recording above is documented in [reports/replay-recording.md](reports/replay-recording.md).
 
 ## Built during the hackathon
 
