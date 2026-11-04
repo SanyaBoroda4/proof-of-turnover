@@ -1,0 +1,96 @@
+{
+  "answer": {
+    "has_schema": true,
+    "output_text": "{\"count_seen\": null, \"problem_object\": \"\", \"problem_objects\": [], \"reason\": \"Filter pulled out shows clean screen with no lint layer.\", \"this_room\": \"yes\", \"verdict\": \"done\"}",
+    "parsed": {
+      "count_seen": null,
+      "problem_object": "",
+      "problem_objects": [],
+      "reason": "Filter pulled out shows clean screen with no lint layer.",
+      "this_room": "yes",
+      "verdict": "done"
+    },
+    "usage": {
+      "input_tokens": 2857,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 2801
+      },
+      "output_tokens": 463,
+      "output_tokens_details": {
+        "reasoning_tokens": 409
+      },
+      "total_tokens": 3320
+    }
+  },
+  "model": "muse-spark-1.3-contributor",
+  "purpose": "second look laundry.lint_filter P09",
+  "request": {
+    "content": [
+      {
+        "text": "Photo P09",
+        "type": "input_text"
+      },
+      {
+        "image_url": {
+          "__redacted_sha256__": "288a4f9ec96634f4ebe93de03d2cf5a0c167f33ba3a0a3fb6680c4a9d9d7893a",
+          "size": 312747
+        },
+        "type": "input_image"
+      }
+    ],
+    "effort": "low",
+    "instructions": "You verify one cleaning checklist item from a single photo. Look only at the photo below.\n\nRoom: Laundry room (washer and dryer)\n\nRequirement: Dryer lint filter pulled out and emptied: no layer of lint on the screen (a few specks are fine).\n\nRules:\n- this_room: \"yes\" when the photo clearly shows this room (compare what it shows with the room name and description); \"no\" when it clearly shows another room; \"unclear\" when you cannot tell.\n- verdict: \"done\" only when the photo clearly shows the requirement is met; \"not_done\" only when it clearly shows it is NOT met; otherwise \"unclear\".\n- Never guess. Judge only what is actually visible in this photo.\n- count_seen: how many relevant objects are visible in this photo (an integer, or null when the requirement has no minimum number or you cannot count).\n- reason: why, in English, at most 25 words.\n- problem_objects: up to 3 different simple singular nouns the photo search can find for the different wrong things (\"shoe\", \"bag\", \"towel\"); \"holder\" for an empty holder, \"shelf\" for an empty shelf; [] when nothing is wrong.\n- problem_object: the first noun of problem_objects, or \"\" when it is empty.",
+    "max_output_tokens": 16000,
+    "method": "respond",
+    "model": "muse-spark-1.3-contributor",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "count_seen": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "problem_object": {
+          "type": "string"
+        },
+        "problem_objects": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "this_room": {
+          "enum": [
+            "yes",
+            "no",
+            "unclear"
+          ],
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "done",
+            "not_done",
+            "unclear"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "this_room",
+        "verdict",
+        "count_seen",
+        "reason",
+        "problem_object",
+        "problem_objects"
+      ],
+      "type": "object"
+    }
+  }
+}

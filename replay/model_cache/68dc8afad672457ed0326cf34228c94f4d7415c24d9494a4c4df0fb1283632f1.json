@@ -1,0 +1,29 @@
+{
+  "answer": {
+    "output_text": "<0f>0<|box;x1=303;y1=872;x2=593;y2=1292;w=1200;h=1600;c=0.9532163739204407|><|mask;x=0;y=0;c=0.9532163739204407;data=421,291,!!!!$wBj(k`kKfn1@:ycqfs]&HL1h)[?D:fBAFC2u=ieFqg]5QdwCv/`_0)pEAQWEV)#b:9V:XG.W$i1K(ZU^c']H4YYtU0L@T62WYHX]p]*'C)JE+eBZV/*wO:WVo?xJ7ts{w8iam]K#0Z&Hf*`L-[@VP_Co&DB3E`^pFx7aIPAs5.WU-r]!$LS&Qp+-7dUN&H8UxqW?VHTzphpQ]%42dz7iFeTtv#?0d4V.&_D$:k:ZOSXu!eP5%VD8ARO&+i%//1Ff5RVe)0+YieCZ&04I+Xyl5LBq)/]g*T@{(RQ:?F^Ih?_N[qPLze6.8-J^uO|>\n",
+    "usage": {
+      "images_processed": 1,
+      "input_tokens": 0,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 0,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 0
+    }
+  },
+  "model": "sam-3.1",
+  "purpose": "sam powder-room.toilet P02 (toilet)",
+  "request": {
+    "image": {
+      "__redacted_sha256__": "baaaee78ae64868f74fd781d5144dacfde40398d21dbb3984dc2aab66f6b9b54",
+      "size": 375083
+    },
+    "method": "segment_image",
+    "model": "sam-3.1",
+    "prompt": "toilet"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "answer": {
+    "output_text": "<0f>0<|box;x1=919;y1=936;x2=1165;y2=1097;w=1200;h=1600;c=0.7229437232017517|><|mask;x=0;y=0;c=0.7229437232017517;data=162,247,!!!!#hA8?&_IAwzC+x+D'aZh=J8VV!`6D7Kn=`6A%*N'?JCRFGWGIjk5))$iEiimqGwY#N^/mIAFa&fNWB[pDp:lCA5nRxh+:EznYoWy)%A7moAp-^*ewFFnIw-AIqelc7K1[JVJ9zU4w''`DqG]P0.xx6eLNujbgc8XJw&spcj2@B7rGY9o+gJ)_3BlwXt&Vy|>\n",
+    "usage": {
+      "images_processed": 1,
+      "input_tokens": 0,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 0,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 0
+    }
+  },
+  "model": "sam-3.1",
+  "purpose": "sam problem laundry.floor_clear P06 (cloth)",
+  "request": {
+    "image": {
+      "__redacted_sha256__": "39953a66471ff76c0b6e87a52364f5fc285c3ea6e9bf1a17e1e44279f772f87f",
+      "size": 390195
+    },
+    "method": "segment_image",
+    "model": "sam-3.1",
+    "prompt": "cloth"
+  }
+}

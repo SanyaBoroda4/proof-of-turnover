@@ -1,0 +1,143 @@
+{
+  "answer": {
+    "has_schema": true,
+    "output_text": "{\"claims\": [{\"count_seen\": null, \"item_id\": \"dining-room.table\", \"photo_id\": \"P10\", \"seen\": \"marble table clean and wiped with only wooden tray centered\", \"status\": \"done\"}, {\"count_seen\": null, \"item_id\": \"dining-room.chairs\", \"photo_id\": \"P10\", \"seen\": \"six boucle chairs positioned around dining table by windows\", \"status\": \"done\"}, {\"count_seen\": null, \"item_id\": \"dining-room.floor_clear\", \"photo_id\": \"P10\", \"seen\": \"wood floor and rug clear with no items or spills\", \"status\": \"done\"}], \"other_issues\": []}",
+    "parsed": {
+      "claims": [
+        {
+          "count_seen": null,
+          "item_id": "dining-room.table",
+          "photo_id": "P10",
+          "seen": "marble table clean and wiped with only wooden tray centered",
+          "status": "done"
+        },
+        {
+          "count_seen": null,
+          "item_id": "dining-room.chairs",
+          "photo_id": "P10",
+          "seen": "six boucle chairs positioned around dining table by windows",
+          "status": "done"
+        },
+        {
+          "count_seen": null,
+          "item_id": "dining-room.floor_clear",
+          "photo_id": "P10",
+          "seen": "wood floor and rug clear with no items or spills",
+          "status": "done"
+        }
+      ],
+      "other_issues": []
+    },
+    "usage": {
+      "input_tokens": 3012,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 2929
+      },
+      "output_tokens": 1444,
+      "output_tokens_details": {
+        "reasoning_tokens": 1288
+      },
+      "total_tokens": 4456
+    }
+  },
+  "model": "muse-spark-1.3-contributor",
+  "purpose": "first look dining-room (P10)",
+  "request": {
+    "content": [
+      {
+        "text": "Photo P10",
+        "type": "input_text"
+      },
+      {
+        "image_url": {
+          "__redacted_sha256__": "5ade5f98130124a0ed3921b79c77c45ddcec27ee77260c78de156893289f096a",
+          "size": 528167
+        },
+        "type": "input_image"
+      }
+    ],
+    "effort": "low",
+    "instructions": "You check whether a cleaned place was cleaned properly. Look only at the photos below.\n\nRoom: Dining area (marble-look table with a black wire basket that stays as decor, boucle chairs, big windows to the backyard)\n\nChecklist:\n- dining-room.table: Table clear - Table is clear and wiped\n- dining-room.chairs: Chairs in place - Chairs are in place\n- dining-room.floor_clear: Floor clear - Floor is clean: nothing left on it, no spots, spills or crumbs\n\nRules:\n- For each item give status \"done\" only when one single photo clearly shows it done; \"problem\" only when one photo clearly shows it NOT done (dirty, missing, broken or left behind).\n- Otherwise use \"not_shown\": the item is not in any photo, or the photo is too dark, blurry or far away to tell.\n- Some photos may show other rooms: use only photos that show this room (compare what each photo shows with the room name and description above); never cite a photo of another room as proof for this room.\n- Never guess. Judge only what is actually visible.\n- photo_id is the one photo that shows the item best; leave it empty (\"\") when the status is \"not_shown\".\n- seen: what is actually visible in that photo, in English, at most 25 words.\n- count_seen: for items that need a minimum number, how many are visible in that one photo; count only what is visible in the cited photo; otherwise null.\n- other_issues: damage or problems NOT on the checklist that a photo clearly shows (stain, broken lamp, missing mirror). Leave it empty when there are none.\n- Return one claim for every checklist item above.",
+    "max_output_tokens": 16000,
+    "method": "respond",
+    "model": "muse-spark-1.3-contributor",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "claims": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "count_seen": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "item_id": {
+                "enum": [
+                  "dining-room.table",
+                  "dining-room.chairs",
+                  "dining-room.floor_clear"
+                ],
+                "type": "string"
+              },
+              "photo_id": {
+                "enum": [
+                  "P10",
+                  ""
+                ],
+                "type": "string"
+              },
+              "seen": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "done",
+                  "problem",
+                  "not_shown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id",
+              "status",
+              "photo_id",
+              "seen",
+              "count_seen"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "other_issues": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "photo_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "photo_id",
+              "description"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "claims",
+        "other_issues"
+      ],
+      "type": "object"
+    }
+  }
+}

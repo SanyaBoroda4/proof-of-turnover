@@ -1,0 +1,135 @@
+{
+  "answer": {
+    "has_schema": true,
+    "output_text": "{\"claims\": [{\"count_seen\": 1, \"item_id\": \"powder-room.toilet_paper\", \"photo_id\": \"P04\", \"seen\": \"small partly used toilet paper roll on wall holder\", \"status\": \"problem\"}, {\"count_seen\": null, \"item_id\": \"powder-room.spare_toilet_paper\", \"photo_id\": \"\", \"seen\": \"\", \"status\": \"not_shown\"}], \"other_issues\": []}",
+    "parsed": {
+      "claims": [
+        {
+          "count_seen": 1,
+          "item_id": "powder-room.toilet_paper",
+          "photo_id": "P04",
+          "seen": "small partly used toilet paper roll on wall holder",
+          "status": "problem"
+        },
+        {
+          "count_seen": null,
+          "item_id": "powder-room.spare_toilet_paper",
+          "photo_id": "",
+          "seen": "",
+          "status": "not_shown"
+        }
+      ],
+      "other_issues": []
+    },
+    "usage": {
+      "input_tokens": 3051,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 2929
+      },
+      "output_tokens": 1241,
+      "output_tokens_details": {
+        "reasoning_tokens": 1136
+      },
+      "total_tokens": 4292
+    }
+  },
+  "model": "muse-spark-1.3-contributor",
+  "purpose": "first look powder-room (P04)",
+  "request": {
+    "content": [
+      {
+        "text": "Photo P04",
+        "type": "input_text"
+      },
+      {
+        "image_url": {
+          "__redacted_sha256__": "50979f636b4cc0543dc57544fe24a6fc5eee4add1683bf10a7ffe1aadae192c7",
+          "size": 289119
+        },
+        "type": "input_image"
+      }
+    ],
+    "effort": "low",
+    "instructions": "You check whether a cleaned place was cleaned properly. Look only at the photos below.\n\nRoom: Powder room (white sink top with chrome faucet, grey framed mirror, towel ring, toilet with a bidet seat)\n\nChecklist:\n- powder-room.toilet_paper: New roll on the holder - A new, full toilet paper roll on the holder next to the toilet (a folded end is fine) (need at least 1)\n- powder-room.spare_toilet_paper: Spare roll in the bathroom - Besides the roll on the holder, at least one spare toilet paper roll, for example on the toilet tank (the photo shows at least 2 rolls) (need at least 2)\n\nRules:\n- For each item give status \"done\" only when one single photo clearly shows it done; \"problem\" only when one photo clearly shows it NOT done (dirty, missing, broken or left behind).\n- Otherwise use \"not_shown\": the item is not in any photo, or the photo is too dark, blurry or far away to tell.\n- Some photos may show other rooms: use only photos that show this room (compare what each photo shows with the room name and description above); never cite a photo of another room as proof for this room.\n- Never guess. Judge only what is actually visible.\n- photo_id is the one photo that shows the item best; leave it empty (\"\") when the status is \"not_shown\".\n- seen: what is actually visible in that photo, in English, at most 25 words.\n- count_seen: for items that need a minimum number, how many are visible in that one photo; count only what is visible in the cited photo; otherwise null.\n- other_issues: damage or problems NOT on the checklist that a photo clearly shows (stain, broken lamp, missing mirror). Leave it empty when there are none.\n- Return one claim for every checklist item above.",
+    "max_output_tokens": 16000,
+    "method": "respond",
+    "model": "muse-spark-1.3-contributor",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "claims": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "count_seen": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "item_id": {
+                "enum": [
+                  "powder-room.toilet_paper",
+                  "powder-room.spare_toilet_paper"
+                ],
+                "type": "string"
+              },
+              "photo_id": {
+                "enum": [
+                  "P04",
+                  ""
+                ],
+                "type": "string"
+              },
+              "seen": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "done",
+                  "problem",
+                  "not_shown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id",
+              "status",
+              "photo_id",
+              "seen",
+              "count_seen"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "other_issues": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "photo_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "photo_id",
+              "description"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "claims",
+        "other_issues"
+      ],
+      "type": "object"
+    }
+  }
+}

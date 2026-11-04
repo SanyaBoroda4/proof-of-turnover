@@ -1,0 +1,29 @@
+{
+  "answer": {
+    "output_text": "<0f>0<|box;x1=210;y1=333;x2=410;y2=760;w=1200;h=1600;c=0.9298245906829834|><|mask;x=0;y=0;c=0.9298245906829834;data=428,201,!!!!#k@BcT.PEXEaC'oVLJDLl%.PR8#o$3q2iA]T.cDK6rwtpvO^AG(52@_qa0%)D4xOs$!JF]olJDn/nI8t(De[n(FW'ihVTE-z5s6&#3ii%@nnPQaVTvHQIQ@91JF%WRSC-mF2y09IYbDSNSoa!Z*oYKD:M]jU`Y!B=-X!jX=`?Iz(RR'KvW+@:fj&@pu%RB9s`S|>,1<|box;x1=527;y1=316;x2=635;y2=664;w=1200;h=1600;c=0.9259259104728699|><|mask;x=0;y=0;c=0.9259259104728699;data=349,109,!!!!#9C0Q8QbdfIN9IRZ#KUrfE+_`?We)F(1'@w8Ucwl`_*3wwv2TK&@I[wdaLUHNo^X)vJk5kXwb)CGR!pO4HMrE`pS(EVIy2x)#t!6I?t'31(wZx^D0%d9Ch@&-nDbRw*`HU[K3G9H|>\n",
+    "usage": {
+      "images_processed": 1,
+      "input_tokens": 0,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 0,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 0
+    }
+  },
+  "model": "sam-3.1",
+  "purpose": "sam powder-room.hand_towel P05 (hand towel)",
+  "request": {
+    "image": {
+      "__redacted_sha256__": "2f3d4ec52c6573bda89b5853436388b44d9a0f383b3e8f37a38e66c861b76481",
+      "size": 277919
+    },
+    "method": "segment_image",
+    "model": "sam-3.1",
+    "prompt": "hand towel"
+  }
+}

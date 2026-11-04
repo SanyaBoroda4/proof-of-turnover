@@ -1,0 +1,107 @@
+{
+  "answer": {
+    "has_schema": true,
+    "output_text": "{\"requests\": [{\"cleaner\": \"Put a new full toilet paper roll on the holder next to the toilet in the powder room and send a new photo.\", \"host\": \"Put a new full toilet paper roll on the holder next to the toilet in the powder room and send a new photo.\", \"item_id\": \"powder-room.toilet_paper\"}, {\"cleaner\": \"Send a photo showing the clean sink and mirror in the powder room.\", \"host\": \"Send a photo showing the clean sink and mirror in the powder room.\", \"item_id\": \"powder-room.sink\"}, {\"cleaner\": \"Send a photo of the clean hand towel hanging at the sink in the powder room.\", \"host\": \"Send a photo of the clean hand towel hanging at the sink in the powder room.\", \"item_id\": \"powder-room.hand_towel\"}, {\"cleaner\": \"Send a photo of the hand soap dispenser at the sink in the powder room.\", \"host\": \"Send a photo of the hand soap dispenser at the sink in the powder room.\", \"item_id\": \"powder-room.hand_soap\"}, {\"cleaner\": \"Send a photo showing at least two toilet paper rolls including the spare roll in the powder room.\", \"host\": \"Send a photo showing at least two toilet paper rolls including the spare roll in the powder room.\", \"item_id\": \"powder-room.spare_toilet_paper\"}, {\"cleaner\": \"Send a photo showing the powder room sink and floor with no guest items left.\", \"host\": \"Send a photo showing the powder room sink and floor with no guest items left.\", \"item_id\": \"powder-room.no_guest_items\"}]}",
+    "parsed": {
+      "requests": [
+        {
+          "cleaner": "Put a new full toilet paper roll on the holder next to the toilet in the powder room and send a new photo.",
+          "host": "Put a new full toilet paper roll on the holder next to the toilet in the powder room and send a new photo.",
+          "item_id": "powder-room.toilet_paper"
+        },
+        {
+          "cleaner": "Send a photo showing the clean sink and mirror in the powder room.",
+          "host": "Send a photo showing the clean sink and mirror in the powder room.",
+          "item_id": "powder-room.sink"
+        },
+        {
+          "cleaner": "Send a photo of the clean hand towel hanging at the sink in the powder room.",
+          "host": "Send a photo of the clean hand towel hanging at the sink in the powder room.",
+          "item_id": "powder-room.hand_towel"
+        },
+        {
+          "cleaner": "Send a photo of the hand soap dispenser at the sink in the powder room.",
+          "host": "Send a photo of the hand soap dispenser at the sink in the powder room.",
+          "item_id": "powder-room.hand_soap"
+        },
+        {
+          "cleaner": "Send a photo showing at least two toilet paper rolls including the spare roll in the powder room.",
+          "host": "Send a photo showing at least two toilet paper rolls including the spare roll in the powder room.",
+          "item_id": "powder-room.spare_toilet_paper"
+        },
+        {
+          "cleaner": "Send a photo showing the powder room sink and floor with no guest items left.",
+          "host": "Send a photo showing the powder room sink and floor with no guest items left.",
+          "item_id": "powder-room.no_guest_items"
+        }
+      ]
+    },
+    "usage": {
+      "input_tokens": 536,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 1142,
+      "output_tokens_details": {
+        "reasoning_tokens": 785
+      },
+      "total_tokens": 1678
+    }
+  },
+  "model": "muse-spark-1.3-contributor",
+  "purpose": "requests (6 items)",
+  "request": {
+    "content": [
+      {
+        "text": "Write the re-cleaning requests.",
+        "type": "input_text"
+      }
+    ],
+    "effort": "low",
+    "instructions": "You write short re-cleaning requests for a cleaner. For each item below write one request.\n\nRules:\n- Write each request in English plus an English version for the host.\n- For a problem item: say what to fix and ask for a new photo afterwards.\n- For an item that needs proof: say exactly what to photograph.\n- Keep each request to one sentence.\n- Examples (in English): \"Clean the stain at the back of the microwave and send a new photo.\" / \"Send a photo of the hand towel in the guest bathroom.\"\n\nItems:\n- powder-room.toilet_paper (Powder room): New roll on the holder - A new, full toilet paper roll on the holder next to the toilet (a folded end is fine) [status: problem - Toilet paper roll on holder is partly used, not new and full.]\n- powder-room.sink (Powder room): Sink and mirror clean - Sink and mirror are clean [status: needs proof - No photo shows it]\n- powder-room.hand_towel (Powder room): Hand towels hanging - 1 clean hand towel hanging, one at each sink (a reflection in the mirror does not count) [status: needs proof - No photo shows it]\n- powder-room.hand_soap (Powder room): Hand soap at the sink - A hand soap dispenser at the sink [status: needs proof - No photo shows it]\n- powder-room.spare_toilet_paper (Powder room): Spare roll in the bathroom - Besides the roll on the holder, at least one spare toilet paper roll, for example on the toilet tank (the photo shows at least 2 rolls) [status: needs proof - Checks disagree]\n- powder-room.no_guest_items (Powder room): No guest items left - No guest items left on the sink or the floor [status: needs proof - No photo shows it]",
+    "max_output_tokens": 16000,
+    "method": "respond",
+    "model": "muse-spark-1.3-contributor",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cleaner": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "item_id": {
+                "enum": [
+                  "powder-room.toilet_paper",
+                  "powder-room.sink",
+                  "powder-room.hand_towel",
+                  "powder-room.hand_soap",
+                  "powder-room.spare_toilet_paper",
+                  "powder-room.no_guest_items"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id",
+              "cleaner",
+              "host"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "requests"
+      ],
+      "type": "object"
+    }
+  }
+}

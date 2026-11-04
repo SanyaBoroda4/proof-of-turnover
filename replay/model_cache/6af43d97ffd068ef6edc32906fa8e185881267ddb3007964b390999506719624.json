@@ -1,0 +1,61 @@
+{
+  "answer": {
+    "has_schema": true,
+    "output_text": "{\"evidence\": \"Only one toilet paper roll is visible on the wall holder, and no spare roll appears on the toilet tank or elsewhere around the toilet.\", \"requirement_met\": \"not_met\"}",
+    "parsed": {
+      "evidence": "Only one toilet paper roll is visible on the wall holder, and no spare roll appears on the toilet tank or elsewhere around the toilet.",
+      "requirement_met": "not_met"
+    },
+    "usage": {
+      "input_tokens": 2627,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 418,
+      "output_tokens_details": {
+        "reasoning_tokens": 369
+      },
+      "total_tokens": 3045
+    }
+  },
+  "model": "muse-wonder-1.0",
+  "purpose": "second opinion powder-room.spare_toilet_paper P02",
+  "request": {
+    "content": [
+      {
+        "image_url": {
+          "__redacted_sha256__": "baaaee78ae64868f74fd781d5144dacfde40398d21dbb3984dc2aab66f6b9b54",
+          "size": 375083
+        },
+        "type": "input_image"
+      }
+    ],
+    "effort": "low",
+    "instructions": "Look only at this photo.\n\nRoom: Powder room\nItem: Spare roll in the bathroom\nRequirement: Besides the roll on the holder, at least one spare toilet paper roll, for example on the toilet tank (the photo shows at least 2 rolls). Minimum number: 2.\n\nTask: Look only at this photo. In one sentence (max 25 words, English) describe what is visible that matters for this requirement. Then decide: met / not_met / cannot_tell. If the object the requirement is about is not visible, answer not_met if the photo shows where it should be and it is absent, otherwise cannot_tell.\n- evidence: that one sentence, first.\n- requirement_met: \"met\", \"not_met\" or \"cannot_tell\" after the evidence.",
+    "max_output_tokens": 16000,
+    "method": "respond",
+    "model": "muse-wonder-1.0",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "type": "string"
+        },
+        "requirement_met": {
+          "enum": [
+            "met",
+            "not_met",
+            "cannot_tell"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence",
+        "requirement_met"
+      ],
+      "type": "object"
+    }
+  }
+}

@@ -550,11 +550,15 @@ def _check_worker(server, state, photo_id):
                 for shot in state.tour["shots"]:
                     if shot["shot_id"] == shot_id:
                         wanted = set(shot.get("item_ids", []))
+            # Checklist order, never set order: the item list goes
+            # into model requests, and set iteration order varies per
+            # process, which would make recorded requests unmatchable
+            # on replay ( Step 55).
             items = [
-                state.items_by_id[item_id] for item_id in wanted
-                if item_id in state.items_by_id
-                and state.items_by_id[item_id].key != "coverage"
-                and state.proofs[item_id].status != "proven"
+                item for item in state.checklist
+                if item.id in wanted
+                and item.key != "coverage"
+                and state.proofs[item.id].status != "proven"
             ]
         state.timeline("checks_started", photo_id=photo_id)
         if retake_items and not items:

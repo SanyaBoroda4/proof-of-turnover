@@ -1,0 +1,29 @@
+{
+  "answer": {
+    "output_text": "<0f>0<|box;x1=477;y1=721;x2=549;y2=870;w=1200;h=1600;c=0.9179486632347107|><|mask;x=0;y=0;c=0.9179486632347107;data=150,73,!!!!!rE3A^bC4ot$&S(@?'zI:L@VB9LwkgC'BeJPWh[fA8l)hO9JKUTC:Ojpqa1zuRMaH=3Nk-6Dn5@'WMd*i6HtM0j]RL50G*nu|>\n",
+    "usage": {
+      "images_processed": 1,
+      "input_tokens": 0,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 0,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 0
+    }
+  },
+  "model": "sam-3.1",
+  "purpose": "sam powder-room.hand_soap P05 (soap dispenser)",
+  "request": {
+    "image": {
+      "__redacted_sha256__": "2f3d4ec52c6573bda89b5853436388b44d9a0f383b3e8f37a38e66c861b76481",
+      "size": 277919
+    },
+    "method": "segment_image",
+    "model": "sam-3.1",
+    "prompt": "soap dispenser"
+  }
+}

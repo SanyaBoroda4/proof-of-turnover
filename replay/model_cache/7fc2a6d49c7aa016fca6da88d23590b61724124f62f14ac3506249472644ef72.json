@@ -1,0 +1,29 @@
+{
+  "answer": {
+    "output_text": "",
+    "usage": {
+      "images_processed": 1,
+      "input_tokens": 0,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 0,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 0
+    }
+  },
+  "model": "sam-3.1",
+  "purpose": "sam problem powder-room.toilet_paper P02 (roll)",
+  "request": {
+    "image": {
+      "__redacted_sha256__": "baaaee78ae64868f74fd781d5144dacfde40398d21dbb3984dc2aab66f6b9b54",
+      "size": 375083
+    },
+    "method": "segment_image",
+    "model": "sam-3.1",
+    "prompt": "roll"
+  }
+}

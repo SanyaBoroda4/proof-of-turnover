@@ -1,0 +1,101 @@
+{
+  "answer": {
+    "has_schema": true,
+    "output_text": "{\"requests\": [{\"cleaner\": \"Send a photo of the open empty washer drum with nothing inside.\", \"host\": \"Send a photo of the open empty washer drum with nothing inside.\", \"item_id\": \"laundry.machines\"}, {\"cleaner\": \"Remove the white laundry pile from the floor near the door and send a new photo of the clear clean floor.\", \"host\": \"Remove the white laundry pile from the floor near the door and send a new photo of the clear clean floor.\", \"item_id\": \"laundry.floor_clear\"}, {\"cleaner\": \"Send a photo of the pulled-out dryer lint filter with no lint layer on the screen.\", \"host\": \"Send a photo of the pulled-out dryer lint filter with no lint layer on the screen.\", \"item_id\": \"laundry.lint_filter\"}, {\"cleaner\": \"Send a photo of the open empty dryer drum with nothing inside.\", \"host\": \"Send a photo of the open empty dryer drum with nothing inside.\", \"item_id\": \"laundry.dryer\"}, {\"cleaner\": \"Remove the pile of white laundry from the floor by the door so no dirty linens remain and send a new photo.\", \"host\": \"Remove the pile of white laundry from the floor by the door so no dirty linens remain and send a new photo.\", \"item_id\": \"laundry.no_dirty_linens\"}]}",
+    "parsed": {
+      "requests": [
+        {
+          "cleaner": "Send a photo of the open empty washer drum with nothing inside.",
+          "host": "Send a photo of the open empty washer drum with nothing inside.",
+          "item_id": "laundry.machines"
+        },
+        {
+          "cleaner": "Remove the white laundry pile from the floor near the door and send a new photo of the clear clean floor.",
+          "host": "Remove the white laundry pile from the floor near the door and send a new photo of the clear clean floor.",
+          "item_id": "laundry.floor_clear"
+        },
+        {
+          "cleaner": "Send a photo of the pulled-out dryer lint filter with no lint layer on the screen.",
+          "host": "Send a photo of the pulled-out dryer lint filter with no lint layer on the screen.",
+          "item_id": "laundry.lint_filter"
+        },
+        {
+          "cleaner": "Send a photo of the open empty dryer drum with nothing inside.",
+          "host": "Send a photo of the open empty dryer drum with nothing inside.",
+          "item_id": "laundry.dryer"
+        },
+        {
+          "cleaner": "Remove the pile of white laundry from the floor by the door so no dirty linens remain and send a new photo.",
+          "host": "Remove the pile of white laundry from the floor by the door so no dirty linens remain and send a new photo.",
+          "item_id": "laundry.no_dirty_linens"
+        }
+      ]
+    },
+    "usage": {
+      "input_tokens": 476,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 1132,
+      "output_tokens_details": {
+        "reasoning_tokens": 840
+      },
+      "total_tokens": 1608
+    }
+  },
+  "model": "muse-spark-1.3-contributor",
+  "purpose": "requests (5 items)",
+  "request": {
+    "content": [
+      {
+        "text": "Write the re-cleaning requests.",
+        "type": "input_text"
+      }
+    ],
+    "effort": "low",
+    "instructions": "You write short re-cleaning requests for a cleaner. For each item below write one request.\n\nRules:\n- Write each request in English plus an English version for the host.\n- For a problem item: say what to fix and ask for a new photo afterwards.\n- For an item that needs proof: say exactly what to photograph.\n- Keep each request to one sentence.\n- Examples (in English): \"Clean the stain at the back of the microwave and send a new photo.\" / \"Send a photo of the hand towel in the guest bathroom.\"\n\nItems:\n- laundry.machines (Laundry room): Washer empty - Washer lid open: drum empty, no clothes or towels left inside [status: needs proof - No photo shows it]\n- laundry.floor_clear (Laundry room): Floor clear - Floor is clean: nothing left on it, no spots, spills or crumbs [status: problem - White laundry pile left on floor near door, floor not clear.]\n- laundry.lint_filter (Laundry room): Dryer lint filter clean - Dryer lint filter pulled out and emptied: no layer of lint on the screen (a few specks are fine) [status: needs proof - No photo shows it]\n- laundry.dryer (Laundry room): Dryer empty - Dryer door open: drum empty, no clothes or towels left inside [status: needs proof - No photo shows it]\n- laundry.no_dirty_linens (Laundry room): No dirty linens left - No dirty sheets, towels or clothes left in baskets or on the floor [status: problem - Laundry room with washer dryer visible, but pile of white laundry left on floor by door.]",
+    "max_output_tokens": 16000,
+    "method": "respond",
+    "model": "muse-spark-1.3-contributor",
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cleaner": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "item_id": {
+                "enum": [
+                  "laundry.machines",
+                  "laundry.floor_clear",
+                  "laundry.lint_filter",
+                  "laundry.dryer",
+                  "laundry.no_dirty_linens"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id",
+              "cleaner",
+              "host"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "requests"
+      ],
+      "type": "object"
+    }
+  }
+}

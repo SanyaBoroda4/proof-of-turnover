@@ -1,0 +1,29 @@
+{
+  "answer": {
+    "output_text": "<0f>0<|box;x1=480;y1=878;x2=560;y2=976;w=1200;h=1600;c=0.9375000596046448|><|mask;x=0;y=0;c=0.9375000596046448;data=99,81,!!!!!WCch[[Q.zu{L'5#V1oqR]Ko=_m3%?:LGMn%SX=qd6GM'3Ws7L{1+#uDKfo8b{!!|>\n",
+    "usage": {
+      "images_processed": 1,
+      "input_tokens": 0,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 0,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 0
+    }
+  },
+  "model": "sam-3.1",
+  "purpose": "sam powder-room.spare_toilet_paper P04 (toilet paper roll)",
+  "request": {
+    "image": {
+      "__redacted_sha256__": "50979f636b4cc0543dc57544fe24a6fc5eee4add1683bf10a7ffe1aadae192c7",
+      "size": 289119
+    },
+    "method": "segment_image",
+    "model": "sam-3.1",
+    "prompt": "toilet paper roll"
+  }
+}

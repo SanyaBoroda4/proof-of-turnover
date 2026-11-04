@@ -1,0 +1,29 @@
+{
+  "answer": {
+    "output_text": "",
+    "usage": {
+      "images_processed": 1,
+      "input_tokens": 0,
+      "input_tokens_details": {
+        "cache_write_tokens": null,
+        "cached_tokens": 0
+      },
+      "output_tokens": 0,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 0
+    }
+  },
+  "model": "sam-3.1",
+  "purpose": "sam problem laundry.no_dirty_linens P06 (sheet)",
+  "request": {
+    "image": {
+      "__redacted_sha256__": "39953a66471ff76c0b6e87a52364f5fc285c3ea6e9bf1a17e1e44279f772f87f",
+      "size": 390195
+    },
+    "method": "segment_image",
+    "model": "sam-3.1",
+    "prompt": "sheet"
+  }
+}

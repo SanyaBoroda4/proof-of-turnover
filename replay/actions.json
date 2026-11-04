@@ -1,0 +1,6 @@
+{
+  "note": "Recorded card actions (Step 55e, pass 2). The powder-room toilet paper card is deliberately left open: answer it with Can't fix -> Out of supplies. Pass 1 produced only this and the laundry card, so there are no it's-fine actions; Muse Wonder answers for the two powder items were recorded in a separate priming run (see reports/replay-recording.md).",
+  "actions": [
+    {"action": "new_photo", "item": "laundry.floor_clear", "file": "replay/photos/11.jpg"}
+  ]
+}
