@@ -231,6 +231,19 @@ def _draw_boxes(draw, boxes, color, width, y_offset=0):
         )
 
 
+def problem_draw_boxes(proof, sams, problem_sams):
+    """Boxes drawn red for a PROBLEM item: its problem-object boxes;
+    when that SAM found nothing, the item's own SAM boxes from the same
+    photo; otherwise no boxes (the caller frames the whole photo)."""
+    sam = (problem_sams or {}).get(proof.item_id)
+    if sam is not None and sam.boxes:
+        return list(sam.boxes)
+    own = (sams or {}).get(proof.item_id)
+    if own is not None and own.photo_id == proof.photo_id:
+        return list(own.boxes)
+    return []
+
+
 def card_image_bytes(check_path, boxes, frame=False):
     """One photo with red problem boxes, as JPEG bytes (phone cards).
 
@@ -307,10 +320,10 @@ def save_evidence(run_dir, proofs, items_by_id, photos_by_id, sams, problem_sams
         )
         color = (63, 111, 181) if proof.status == PROVEN else (220, 0, 0)
         if proof.status == PROBLEM:
-            sam = problem_sams.get(item_id)
+            boxes = problem_draw_boxes(proof, sams, problem_sams)
         else:
             sam = sams.get(item_id)
-        boxes = list(sam.boxes) if sam is not None else []
+            boxes = list(sam.boxes) if sam is not None else []
         box_width = BOX_WIDTH
         if proof.status == PROBLEM and not boxes:
             # A problem photo always shows red: frame the whole photo.

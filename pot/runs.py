@@ -28,6 +28,7 @@ from pot.proof import (
     PROVEN,
     ProofItem,
     card_image_bytes,
+    problem_draw_boxes,
     prove_all,
     prune_other_issues,
     save_evidence,
@@ -870,8 +871,8 @@ class RunState:
             if text and text in shown_texts:
                 continue
             if self.proofs[item_id].status == PROBLEM:
-                sam = self.problem_sams.get(item_id)
-                boxes = list(sam.boxes) if sam is not None else []
+                boxes = problem_draw_boxes(
+                    self.proofs[item_id], self.sams, self.problem_sams)
                 same_problem = any(
                     self._box_iou(box, earlier) >= 0.6
                     for earlier_boxes in shown_boxes
@@ -1397,9 +1398,8 @@ class RunState:
                 return photo.check_path.read_bytes()
             boxes = []
             for item_id in problem:
-                sam = self.problem_sams.get(item_id)
-                if sam is not None:
-                    boxes.extend(sam.boxes)
+                boxes.extend(problem_draw_boxes(
+                    self.proofs[item_id], self.sams, self.problem_sams))
             return card_image_bytes(
                 photo.check_path, boxes, frame=not boxes)
 

@@ -316,7 +316,8 @@ def test_newer_needs_proof_does_not_block_older_proven(tmp_path):
     assert state.proofs[item_id].photo_id == over.id
 
 
-def _two_problem_group(tmp_path, box_a, box_b, same_text=False):
+def _two_problem_group(tmp_path, box_a, box_b, same_text=False,
+                       own_sam_first=False):
     state = _state(tmp_path)
     bed = [i for i in state.checklist if i.room_id == "bed" and i.key != "coverage"]
     first, second = bed[0].id, bed[1].id
@@ -331,9 +332,12 @@ def _two_problem_group(tmp_path, box_a, box_b, same_text=False):
             i: SecondLook(i, photo.id, "yes", "not_done", None, "m", "m")
             for i in (first, second)
         },
-        "sams": {},
+        "sams": ({first: SamCheck(first, photo.id, "roll", 1, [box_a])}
+                 if own_sam_first else {}),
         "problem_sams": {
-            first: SamCheck(first, photo.id, "mess", 1, [box_a]),
+            first: SamCheck(first, photo.id, "mess",
+                            0 if own_sam_first else 1,
+                            [] if own_sam_first else [box_a]),
             second: SamCheck(second, photo.id, "mess", 1, [box_b]),
         },
         "issues": [], "notes": [],
@@ -375,6 +379,42 @@ def test_group_identical_request_texts_show_once(tmp_path):
         {"left": 400, "top": 400, "right": 460, "bottom": 460},
         same_text=True)
     assert group["line_item_ids"] == [first, third]
+
+
+def test_group_one_line_when_overlap_uses_own_sam_boxes(tmp_path):
+    # First item: its problem SAM found nothing, but its own SAM box on
+    # the same photo overlaps the second item's problem box.
+    box = {"left": 10, "top": 10, "right": 60, "bottom": 60}
+    group, first, second, third = _two_problem_group(
+        tmp_path, box, dict(box), own_sam_first=True)
+    assert group["line_item_ids"] == [first, third]
+
+
+def test_card_photo_falls_back_to_own_sam_boxes(tmp_path):
+    import io
+
+    state = _state(tmp_path)
+    item_id = _bed_item(state)
+    photo, _ = state.claim_photo(
+        str(_photo_file(tmp_path / "u1", "a.jpg")), "bed-1")
+    box = {"left": 40, "top": 30, "right": 55, "bottom": 44}
+    fresh = _fresh_problem(photo.id, item_id, "mess")
+    fresh["sams"] = {item_id: SamCheck(item_id, photo.id, "roll", 1, [box])}
+    state.merge_result(photo.id, fresh)
+    assert state.proofs[item_id].status == PROBLEM
+    blob = state.read_card_photo(photo.id, [item_id])
+    image = Image.open(io.BytesIO(blob)).convert("RGB")
+
+    def is_red(pixel):
+        return pixel[0] > 150 and pixel[1] < 90 and pixel[2] < 90
+
+    region = [
+        image.getpixel((x, y))
+        for x in range(box["left"], box["right"] + 1, 3)
+        for y in range(box["top"], box["bottom"] + 1, 3)
+    ]
+    assert any(is_red(p) for p in region)  # red box on the roll
+    assert not is_red(image.getpixel((1, image.height // 2)))  # no frame
 
 
 def test_concurrent_claims_get_distinct_ids_and_both_survive(tmp_path):

@@ -432,6 +432,37 @@ def test_problem_without_boxes_gets_red_frame(tmp_path):
         assert not _has_color(img, _is_red)  # proven items unchanged
 
 
+def test_problem_without_problem_boxes_uses_own_sam_boxes(tmp_path):
+    photos = make_photos(tmp_path / "photos", 1)
+    photo = photos[0]
+    from pot.proof import ProofItem
+    proofs = {
+        "bed.fallback": ProofItem("bed.fallback", PROBLEM, "bad", "P01"),
+        "bed.otherphoto": ProofItem("bed.otherphoto", PROBLEM, "bad", "P01"),
+    }
+    items = {"bed.fallback": _item(id="bed.fallback", key="fallback"),
+             "bed.otherphoto": _item(id="bed.otherphoto", key="otherphoto")}
+    sams = {
+        # The item's own SAM found the object on this photo: draw it red.
+        "bed.fallback": SamCheck(
+            "bed.fallback", "P01", "roll", 1, [_box(left=20, right=30)]),
+        # Own SAM boxes from a different photo must not be drawn here.
+        "bed.otherphoto": SamCheck(
+            "bed.otherphoto", "P02", "roll", 1, [_box(left=20, right=30)]),
+    }
+    problem_sams = {
+        "bed.fallback": SamCheck("bed.fallback", "P01", "stain", 0, []),
+        "bed.otherphoto": SamCheck("bed.otherphoto", "P01", "stain", 0, []),
+    }
+    save_evidence(tmp_path, proofs, items, {"P01": photo}, sams, problem_sams)
+    with Image.open(tmp_path / "evidence" / "bed.fallback.card.jpg") as img:
+        region = [img.getpixel((x, y)) for x in range(20, 31) for y in range(3, 8)]
+        assert any(_is_red(p) for p in region)  # red on the own box
+        assert not _is_red(img.getpixel((1, 12)))  # no whole-photo frame
+    with Image.open(tmp_path / "evidence" / "bed.otherphoto.card.jpg") as img:
+        assert any(_is_red(img.getpixel((1, y))) for y in range(img.height))
+
+
 def test_red_frame_width_scales_with_photo(tmp_path):
     from types import SimpleNamespace
 
